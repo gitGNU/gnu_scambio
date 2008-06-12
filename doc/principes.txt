@@ -1,5 +1,5 @@
-Message Storage, Access and Sharing Protocol
-============================================
+Sharing, Control and Access of Messages through Basic Inputs/Outputs (SCAMBIO)
+==============================================================================
 Cedric Cellier <rixed@free.fr>
 v0.1, Dec 2007
 
@@ -10,6 +10,16 @@ Abstract
 Empecher l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
 domaine de la messagerie et du group-ware, en proposant une alternative libre 
 pour le "social en réseau".
+
+Utiliser ou même améliorer les solutions existantes (principalement Kolab) 
+n'est suffisant, car ces solutions ne sont pas facilement extensibles. Mail, 
+calendrier et contacts unifié, voilà ce qui semble leur principal objectif.  
+Pour l'atteindre, elles se contente donc d'implémenter la tuyauterie manquante 
+aux clients et serveurs déjà existants.
+
+Si l'on ne voulait pas rfaire de compromis avec les programmes existants, il 
+semble pourtant qu'il y aurait une solution bien plus simple. C'est cette 
+nouvelle approche que l'on se propose d'essayer.
 
 C'est au niveau des clients, dans la "boucle locale" des protocoles, que se 
 situent les enjeux. Le plus important progrès possible est d'unifier et de 
@@ -83,10 +93,10 @@ Existant
 Pourquoi pas Kolab ?
 ~~~~~~~~~~~~~~~~~~~~
 
-Hétérogénéité. Met en relation des serveurs existants (LDAP, IMAP, SMTP, 
-HTTP...) Difficile à faire évoluer vers des usages nouveaux. Difficile de 
-faire communiquer les composants entre eux. Quoique fonctionnant avec Outlook, 
-pas très portable.
+Hétérogénéité, énormité. Met en relation des serveurs existants (LDAP, IMAP, 
+SMTP, HTTP...) Difficile à faire évoluer vers des usages nouveaux. Difficile 
+de faire communiquer les composants entre eux (LDAP semble le dénominateur 
+commun).
 
 Pourquoi pas IMAP pour le file-store ?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -245,8 +255,14 @@ Messagerie instantannée
 
 Garatuite avec le PUSH qui précède.
 
-Synchronisation entre plusieurs MDIR
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+VoIP/Visio
+~~~~~~~~~~
+
+A condition que les fichiers puissent être écris, envoyés, reçus et lus 
+simultanément.
+
+Synchronisation entre plusieurs serveurs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 N'est-ce que l'affaire de synchroniser le FS et le système de droits ?
 Devrait être similaire à la synchronisation server->clients. Le transfert 
