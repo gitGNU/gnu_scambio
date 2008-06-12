@@ -1,12 +1,12 @@
-AM_CPPFLAGS = -I$(top_srcdir)
+AM_CPPFLAGS = -I$(top_srcdir)/server/stribucion
 AM_CFLAGS = -std=c99 -Wall -W
 
 check_PROGRAMS = test1 test2
 
 test1_SOURCES = test1.c
-test1_LDADD = ../libaiguil.la
+test1_LDADD = ../libstribucion.la
 test2_SOURCES = test2.c
-test2_LDADD = ../libaiguil.la
+test2_LDADD = ../libstribucion.la
 
 TESTS = test1 test2
 
