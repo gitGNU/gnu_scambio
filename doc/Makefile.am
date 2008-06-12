@@ -1,4 +1,3 @@
-AUTOMAKE_OPTIONS = foreign
 doc_DATA = principes.html
 
 principes.html: principes.txt

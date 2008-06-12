@@ -1,4 +1,3 @@
-AUTOMAKE_OPTIONS = foreign
 AM_CFLAGS = -std=c99 -Wall -W -D_GNU_SOURCE
 AM_YFLAGS = -d
 

@@ -33,6 +33,9 @@ AC_CHECK_FUNCS([memset strtol])
 
 AC_CONFIG_FILES([
 	Makefile
-	checks/Makefile
+	server/Makefile
+	server/stribucion/Makefile
+	server/stribucion/checks/Makefile
+	doc/Makefile
 ])
 AC_OUTPUT
