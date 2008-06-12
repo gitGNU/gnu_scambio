@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/server/stribucion
+AM_CPPFLAGS = -I$(top_srcdir)/server/stribucion -D_GNU_SOURCE
 AM_CFLAGS = -std=c99 -Wall -W
 
 check_PROGRAMS = test1 test2

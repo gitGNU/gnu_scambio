@@ -126,7 +126,7 @@ condition:
 
 field:
 	FIELDNAME {
-		TEST.condition.field_name = copystring($1);
+		TEST.condition.field_name = strdup($1);
 		TEST.condition.field_key  = header_key(TEST.condition.field_name);
 	}
 	;
