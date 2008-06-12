@@ -1,0 +1,590 @@
+Message Storage, Access and Sharing Protocol
+============================================
+Cedric Cellier <rixed@free.fr>
+v0.1, Dec 2007
+
+
+Abstract
+--------
+
+Empecher l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
+domaine de la messagerie et du group-ware, en proposant une alternative libre 
+pour le "social en réseau".
+
+C'est au niveau des clients, dans la "boucle locale" des protocoles, que se 
+situent les enjeux. Le plus important progrès possible est d'unifier et de 
+simplifier cette "boucle locale" pour permettre d'améliorer et d'enrichir 
+l'experience utilisateur. Un seul client doit permettre de recouper toutes les 
+formes d'échanges. Toutes les suites de programmes de messagerie (par exemple 
+les interfaces utilisateurs des gadgets mobiles) s'evertuent à donner 
+l'illusion d'unité là où règne le plus grand chaos.
+
+UNIX a, en son temps, radicalement amélioré les systèmes d'exploitations 
+d'alors en se basant sur ces deux principes :
+
+- aucune structure ne doit être imposée aux fichiers ;
+- tout est assimilable à un fichier.
+
+Notre solution tente une simplification similaire :
+
+- les destinataires ne sont liés ni à une machine, ni à une personne ;
+- aucune structure ne doit être imposée aux communications ;
+- toute communication est un fichier immutable.
+
+Le premier principe comporte deux volets, dont le premier est désormais bien 
+établit : tout document échangé, tout message destiné à être conservé, ne doit 
+pas être addressé à la machine physique utilisé à un moment donné par le 
+destinataire, mais à un serveur constant qui est consulté par l'utilisateur 
+depuis la machine qu'il utilise à un moment donné. Ce que nous appelons 
+"boucle locale" consiste justement en cette consultation, et recouvre par 
+exemple l'usage que l'on fait habituellement des protocoles de consultation 
+d'email POP et IMAP ou des protocoles de partage de fichiers samba et NFS.
+
+Poser que les destinataires ne sont pas nécessairement des personnes relève de 
+l'observation : on addresse des emails à des groupes plus souvent qu'à des 
+individus. Plutôt que de faire de la communication entre deux individus la 
+norme et la communication à plus de deux individus un contournement de la 
+norme, nous préférons poser au contraire que la boucle locale doit permettre 
+d'embler à plusieurs utilisateur de partager les communications reçues 
+(supporter les communications avec plusieurs _expéditeurs_ semble par contre 
+inutile).
+
+Le second principe découle d'une observation : tout protocole de communication 
+est utilisé pour transporter autre chose que ce qui avait été prévu au départ, 
+conduisant à utiliser des contournements parfois inélégants, voire à s'écarter 
+des spécifications, ce qui affaiblit l'inter-opérabilité (et les 
+performances). Pensons aux monstrueux encodages des emails et aux formes 
+variées de violation du format des entêtes.
+
+Nous préférons un protocole souple capable de stoquer et transporter n'importe 
+quoi, quite à se reposer entièrement sur des programmes hôtes de la machine 
+cliente pour interpreter le contenu reçu ou générer le contenu envoyé.
+
+Le dernier principe, découlant des précédents, permet de simplifier à outrance 
+le protocole reliant les utilisateurs à leur serveur de messagerie. En fait, 
+il suffit plus ou moins de synchroniser les messages cachés localement avec 
+les nouveaux messages présent sur le serveur ; synchronisation à sens unique 
+et atomique, puisque les communications reçues ne sont pas modifiables par 
+l'utilisateur destinataire.
+
+Un bémol cependant : afin d'autoriser les communications en temps réels de 
+gros contenus (par exemple de la visio conférence) les fichiers doivent être 
+synchronisables par le client au fur et à mesure qu'ils sont reçus par le 
+serveur, et de même dans l'autre sens, simultanément.
+
+Par ailleurs, il peut exister un protocole de notification sur la boucle 
+locale pour avertir en temps réel un utilisateur de l'arrivé d'un message (ce 
+qui est bien sur nécessaire pour les communications en temps réel).
+
+
+Existant
+--------
+
+Pourquoi pas Kolab ?
+~~~~~~~~~~~~~~~~~~~~
+
+Hétérogénéité. Met en relation des serveurs existants (LDAP, IMAP, SMTP, 
+HTTP...) Difficile à faire évoluer vers des usages nouveaux. Difficile de 
+faire communiquer les composants entre eux. Quoique fonctionnant avec Outlook, 
+pas très portable.
+
+Pourquoi pas IMAP pour le file-store ?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- mauvaise idée du namespace, rien pour distinguer message d'emplacement 
+  (Similitudes MS-DOS plutôt qu'Unix).
+
+- répartition des tâches client/serveur inapropriée : la recherche devrait 
+  être sur le client (plus puissante, plus souple et plus simple), gestion 
+inutile d'une liste de souscription.
+
+- le protocole devrait être en UTF-8
+
+- Manque un transport binaire plus rapide (adapté aux gros messages lourds 
+  comme aux clients légers)
+
+- LIST devrait systématiquement fournir un diff.
+
+Mais en effet, pourquoi pas IMAP pour la lecture du file-store...
+
+Fonctionnalitées existantes à reprendre
+---------------------------------------
+
+Calendrier
+~~~~~~~~~~
+
+Tout répertoire contenant des messages ou attachements de type vCal ou iCal 
+sont des calendriers (ie, le client calendrier les représente d'une certaine 
+couleur). Évidemment, puisqu'un même message se retrouve dans de nombreux 
+répertoire cela fait beaucoup de calendrier. À l'utilisateur de choisir ceux 
+qu'il veut afficher ou pas. C'est une richesse importante de pouvoir utiliser 
+le même système de recherche et de rangement pour les évènements que pour les 
+messages, et il ne faut pas s'en priver.
+
+Contact
+~~~~~~~
+
+Tout répertoire contenant des messages ou attachements de type vCard, etc...
+Penser aux clefs publiques.
+
+Tasklist
+~~~~~~~~
+
+Tout répertoire contenant des messages ou attachements de type ... etc...
+
+Notification d'absence
+~~~~~~~~~~~~~~~~~~~~~~
+
+Répertoire par répertoire (et récursivement) il est possible de positionner 
+une réponse automatique. Par exemple, un utilisateur peut demander à ce que 
+tous les mails arrivant dans user/INBOX (et pas par exemple dans 
+user/subscriptions/) provoquent une réponse automatique (avec un timeout 
+configurable).  Le serveur s'occupe de gérer la petite DB par folder. Les 
+sous-répertoires héritent ou pas de cette propriété.
+
+Alternative : extention vacation de SIEVE. Cette extention a peut être le 
+defaut majeur de ne pas bien tirer parti du tri opéré par ailleurs par SIEVE.  
+Il a aussi le défaut d'agir au niveau du MDA. Or il peut être utile de 
+notifier un utilisateur qui utilise au autre moyen de communication que SMTP.
+
+Envoi différé
+~~~~~~~~~~~~~
+
+Il s'agit d'un champ du header pris en compte par l'agent qui passe les 
+messages de "a envoyer" vers "envoyé".
+
+FreeBusy lists
+~~~~~~~~~~~~~~
+
+Utilité de ce truc ?
+
+Droits
+~~~~~~
+
+Tout comme on réutilise le FS UNIX, réutiliser aussi le système de droits UNIX 
+(avec utilisateurs et groupes), au maximum. Il faut qu'un répertoire puisse 
+être lu et écrit par une liste de groupes, lu seulement par une autre liste de 
+groupes, et invisible à tous les autres groupes (ACL unix ?)
+
+Le droit en écriture mérite un développement : normalement, les protocoles 
+SMPP, SMTP, etc, ont pour destinataires des utilisateurs, pas des groupes ni 
+des boites. Les utilisateurs recoivent ensuite ces mails soit dans inbox, soit 
+ailleurs s'ils ont des filtres automatiques (SIEVE, procmail, autre...).  Mais 
+au sein des utilisateurs d'un même MDIR, on peut vouloir communiquer plus 
+directement via ajout direct d'un message à un endroit précis (oubien on peut 
+aussi créer des utilisateurs SMTP valides pour un groupe ou une boite, mais ca 
+relève alors de l'administration du SMTP et/ou du MDA). C'est dans ce cas que 
+l'on considère les droits en écriture.
+
+UTF-8
+~~~~~
+
+Autoriser l'UTF-8 dans les sujets (et autres valeurs de champ de header au cas 
+par cas).
+
+Les noms de répertoire sont aussi en UTF-8.
+
+
+Nouvelles fonctionnalitées
+--------------------------
+
+Boite "a envoyer" qui pousse un message dehors (SMTP)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Plus besoin d'envoyer deux fois le message. Feedback des tentatives de 
+livraisons.
+
+Templates de mails présents dans une boite (extention pour workflow)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Dans une boite on peut mettre une page web, un formulaire qui envoit un mail 
+en utilisant l'interface (xul?) du lecteur de mail, etc...
+
+Un mail se trouve dans plusieurs répertoires
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Remplace avantageusement les tags de google. Intégration naturelle avec le FS 
+UNIX. En gros il faut qqchose de plus simple que SIEVE.
+
+Pas besoin donc de l'extention vsearch, ni de cette de courrier qui stoque des 
+recherches sur le serveur, et ca ne consomme ipresque aucune ressource chez le 
+client ni chez le serveur (juste un lien dur).
+
+Versionning
+~~~~~~~~~~~
+
+Equivalent NNTP du remplacement, sauf que l'ancienne version est toujours 
+consultable. La synchronisation entre client et serveur (ou entre serveurs) 
+peut se voir comme l'application d'un patch entre une ancienne version du FS 
+(ou d'un seul répertoire) avec la dernière version.
+
+Je ne suis pas certain que cette fonctionnalité soit très interressante : 
+difficile à saisir (ajoute un niveau d'abstraction inhabituel dans les 
+références), et ne faisant que forcer une certaine forme de classement (toutes 
+les versions diffusées d'un document sont de toutes façon déjà présente 
+quelquepart - il suffirait éventuellement d'un header particulier : 
+"Supersedes: XXX").
+
+Annotations
+~~~~~~~~~~~
+
+En fait, cela peut se faire via une réponse au groupe référencant le mail 
+qu'on veut annoter. Le seul manque, c'est de pouvoir n'annoter qu'une partie 
+du mail, mais c'est de toute facon illusoire (si on veut annoter un .doc 
+contenu dans un message...). Le mieux que l'on puisse faire c'est étendre la 
+notation du X-Ref pour ajouter un identifiant de pièce jointe.
+
+Push de notifications
+~~~~~~~~~~~~~~~~~~~~~
+
+Si les utilisateurs sont connectés, oubien ils laissent un moyen de les 
+contacter...
+
+Messagerie instantannée
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Garatuite avec le PUSH qui précède.
+
+Synchronisation entre plusieurs MDIR
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+N'est-ce que l'affaire de synchroniser le FS et le système de droits ?
+Devrait être similaire à la synchronisation server->clients. Le transfert 
+efficace des messages (ie binaire compressés) profiterait à tous.
+
+
+Implémentation
+--------------
+
+Synchronisation
+~~~~~~~~~~~~~~~
+
+Un mdir est comme un répertoire partagé, sauf que les fichiers sont atomiques 
+c'est à dire manipulables uniquement globalement, qu'ils ont une structure 
+fixe (au moins pour le contenant), et q'ils ne sont jamais modifiés. Cela 
+simplifie beaucoup les choses. Par contre, ils ne sont pas forcément complets 
+au moment de leur transfert (penser au streaming et autres fichiers "temps 
+réel").
+
+Les clients peuvent garder un cache de la structure et du listing des 
+répertoires (ils sont même encouragé à le faire), mais peuvent demander à tout 
+moment un listing ou un message (ou seulement une partie). Contrairement à un 
+ls classique sous UNIX, ils ne voient pas les répertoires dans lesquels ils 
+n'ont pas le droit de lire. De simples requètes HTTP suffisent à cela (voir 
+séparément la question de l'authentification).
+
+En règle générale, les répertoires sont versionnés et le ls ne renvoit qu'un 
+diff entre une version antérieure N et la version courante (il est toujours 
+possible de spécifier N=0).
+
+Pour laisser au client le choix de ne pas suivre les évolutions d'une sous 
+branche, et permettre de ne mettre à jour que ce qui est utile, il est plus 
+simple de pouvoir ne demander que le diff d'un répertoire et pas de tout. Ce 
+qui n'implique pas (mais n'exclut pas non plus) que le numéro de version soit 
+propre au répertoire.  Chaque répertoire contient donc un journal des 
+modifications entre deux versions, une modification pouvant être l'ajout ou la 
+suppression d'un message ou d'un sous-répertoire.
+
+De plus, chaque message est accompagné de ses métadonnées. Certaines sont 
+implicites : identifiant (obligatoire), type (obligatoire pour les répertoire 
+pour indiquer qu'il s'agit d'un répertoire justement), taille (optionel pour 
+les messages en temps réel et les répertoires).  Ces méta données indiques par 
+exemple les mime-type, et tout autre champs du mail par exemple (mais 
+reformaté pour simplifier l'encodage des header mail, trop compliqué : mettre 
+sur une ligne, supprimer les commentaires). Ces méta-données pourraient être 
+stoquées dans des répertoire ".meta" comme il existe des ".thumbs".
+
+Les répertoires sont ajoutés et supprimés dans les répertoires comme des 
+messages. Ils doivent donc aussi avoir des noms uniques (différent du nom 
+public, la "short description"). Comme pour un message, la suppression d'un 
+répertoire n'entraîne pas sa destruction irrévocable, puisqu'il est toujours 
+présent dans une sorte d'Attic, prêt à ressurgir ailleurs.
+
+Comme un message, un répertoire peut posseder des méta données explicites. Ses 
+droits d'accès font par contre partis de ces méta données implicites.  De 
+plus, chaque répertoire contient son journal et, pour simplifier, son numéro 
+de version local (et probablement aussi, techniquement, ses locks).  Rien 
+n'interdit, à ce niveau, de "monter" un même réportoire à plusieurs endroits.  
+Comme toute méta donnée, les droits, nom public, etc, d'un répertoire sont des 
+attribus du répertoire et pas du lien vers ce répertoire (de l'inode et pas de 
+l'entrée de répertoire) ; impossible, donc, de "monter" un répertoire à divers 
+endroits avec divers droits ni divers noms.
+
+Remarque également que chaque répertoire contient ses sous-répertoires : 
+impossible de déplacer ni de partager un répertoire sans également déplacer et 
+partager ses sous-répertoires.
+
+Les listings de répertoire listent des descriptions de messages/répertoires 
+dont voici le format :
+
+	action URL
+	meta donnees
+	...
+	(ligne vide)
+
+les méta données contiennent également les méta données ajoutées par le 
+serveur : Source, Taille, Date
+
+où :
+
+- action vaut "+" pour un ajout, "-" pour un retrait de message ou répertoire.
+- URL donne l'URL du fichier ou du répertoire ;
+- source indique la provenance du fichier (eMail part, folder, ...) ;
+- taille donne la taille en octets du fichier ou le nombre d'entrées du 
+  répertoire ;
+- date donne la date d'arrivé de ce fichier ou répertoire /dans ce folder/ ;
+
+Aucune ligne ne peut commencer par "+" ou "-" sauf la ligne action. Les lignes 
+non reconnues doivent être ignorées.
+
+On remarque que les numéros de version du journal ne sont pas présent.
+
+Les fichiers sont toujours triés par ordre de réception dans un listing, et 
+pas par ordre de thread par exemple (pas par ordre lexicographique).
+
+Chaque PJ d'un email étant éclatée en autant de fichiers, il peut y avoir 
+plusieurs messages par emails. C'est le prix à payer pour avoir un protocole 
+de synchronisation généraliste et pouvoir accéder simplement aux parties d'un 
+document multi-part.
+
+Stockage des messages (serveur)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Le serveur n'est pas contraint de stoquer tous les messages dans un répertoire 
+unique. Il peut par exemple décomposer le MID en parties (par exemple, 
+préfixer par type, puis pour les emails découper suivant les "." et les "@" 
+puis inverser et joindre par des "/" par exemple).
+
+L'URL est relative à une racine connue des clients, et chaque URL est unique.  
+Les clients devraient pouvoir stoquer les messages dans leur cache de façon 
+similaire (ie, l'arborescence des messages est "suffisamment balancé").
+
+En plus du fichier pour le corp de la PJ, il faut stoquer les meta données 
+quelquepart (sur le serveur comme sur le client). Par similitude avec les 
+répertoires ".thumbnails" <<thumbs>>, on peut faire un répertoire ".meta" 
+contenant ces données par messages, avec une lib chargée de les extraire, de 
+les inventer lorsqu'elle n'y sont pas, et de les écrire. La standardisation 
+des metadonnées est d'ailleurs avancée <<meta>>, mais je ne suis pas sur de 
+vouloir suivre ce cours.
+
+Stockage des folders (serveur)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Les folders utilisés pour classer les messages sont de vrais répertoires. Ils 
+contiennent optionnellement un fichier de journal et un fichier de snapshot 
+pour une version donnée. Si le journal n'existe pas, c'est que seul une 
+resynchronisation totale du folder est possible. Si le snapshot n'existe pas, 
+c'est que seul le journal est disponible. Si aucun des deux n'existent le 
+folder est vide. Il peut y avoir plusieurs fichier de journal, chacun 
+commancant à un numéro de version donné et conduisant à un autre numéro de 
+version ; voir ceci comme une façon de parcourir plus rapidement les logs 
+(permet de sauter jusqu'au numéro de version voulu). Par contre, seul le 
+dernier snapshot est utile : il ne sert que pour les resynchronisations 
+totales, que le journal vient compléter.
+
+Lorsqu'on demande un listing depuis la version Vo, chercher le journal 
+correspondant à ce numéro de version, et en extraire tous les patchs jusqu'à 
+la version courante. Si un journal suffisament vieux n'est pas trouvé, alors 
+repartir de la version 0 avec le snapshot et les journaux récents.
+
+L'API permettant d'accéder aux journaux est la suivante :
+
+log_start(version) -> renvoie un curseur où une erreur si le log n'est pas 
+trouvé.
+
+log_next(cursor) -> renvoie le prochain patch ou EOF si c'est la fin.
+
+Si log_start renvoie une erreur, utiliser le snapshot :
+
+snapshot_open() -> renvoie un handler sur le snapshot. Tant que l'apli possède 
+ce handler le snapshot reste valide (ie, c'est le fd d'un fichier).
+
+snapshot_version(hd) -> renvoie le numéro de version du snapshot (ie. le 
+numéro de version au moment du snapshot).
+
+snapshot_content(hd) -> renvoie le contenu du snapshot. Ce contenu a la forme 
+d'un diff normal, sauf que le numéro de version n'est pas présent (ce numéro 
+propre à chaque patch qui de toute facon n'est pas communiqué au client).
+
+snapshot_close(hd);
+
+Puis enchainer avec log_start(snapshot_version(hd))...
+
+Client
+~~~~~~
+
+Plutôt que de chercher un client intégré traitant tous les types de messages 
+possibles, pourquoi ne pas faire un équivalent graphique de MH ? C'est à dire 
+un browser de message chargé de représenter la hiérarchie, de synchroniser les 
+répertoires, de déplacer les messages, etc, mais qui ne connait des messages 
+que leur header, et se reposant sur des programmes externes pour visualiser ou 
+créer de nouveaux messages pour un type mime donné ?
+
+La difficulté provient de ce que certains messages n'ont de sens qu'avec les 
+autres de la même catégorie : calendrier qui représente tous les vCal, par 
+type, et les messages qui les référencent éventuellement (en tout cas, permet 
+de lier dessus).
+
+Il faut donc permettre les deux : des programmes externes pour les type mimes 
+sans relation avec les autres (par exemple les images), et des "plugins" pour 
+les modules qui requièrent d'interroger la base de message complète. A la 
+base, il y a le browser (affiche la hiérarchie, gère une notion de répertoire 
+courant, affiche la liste des messages, permet de les modifier, etc...). Pour 
+des raisons d'efficacité, et parceque les messages sont read-only, chaque 
+plugin/programme peut travailler avec le fichier de cache directement. Ne pas 
+commettre l'erreur d'intercaler encore une couche d'abstraction à ce niveau 
+qui mimerait chichement le système de fichiers. Par contre il n'est pas 
+interdit de fournir une bibliothèque pour parser les headers et autres 
+informations additionnelles (qui ne sont pas forcément en lecture seule celles 
+là - par exemple la liste des références vers un message donné -, mais qui 
+sont gérables avec le FS - ajout des références en fin de fichier, création de 
+nouveaux inodes...)
+
+Pour le stockage des messages et folders, cela dépend du FS et de l'OS. Sous 
+Unix, on privilégiera évidement les liens durs entre un cache de messages 
+(identique au répertoire des messages du serveur, fonctionnant comme un cache 
+pour conserver les vieux messages qui ne sont plus référencés par aucun 
+folders), et une arborescence de répertoires représentant les folders.
+
+Il serait bon toutefois d'introduire dans cette arborescence une différence 
+notable : plutôt que de lier vers les fichiers Tx.My et Tx.My.Pz, on gagnerait 
+à utiliser les noms "de fichier" présents dans le descripteur MIME des PJ.  
+Deux manières de procéder :
+
+- Tx.My peut être un répertoire dans lequel on aurrait d'une part Pz et 
+  d'autre part "le nom du document" (éventuelement affecté d'une numéro pour 
+le rendre unique).
+
+- On met directement dans folder, en plus de Tx.My.Pz, "le nom du document" 
+  (il y aura plus de collisions mais on s'en moque. On peut rendre les 
+Tx.My.Pz "invisibles" en utilisant l'astuce idoïne du FS sous-jascent (par 
+exemple sous Unix, préfixer par "." les noms techniques).
+
+Cette deuxième aproche étant plus utile pour l'utilisateur sans doute (tout 
+ceci ayant pour but, on l'aura compris, de rendre possible l'exploitation du 
+répertoire local de mail via un file browser ou un shell).
+
+
+Envoi et Réception de messages
+------------------------------
+
+On appelle _connecteur_ un démon qui implémente le transport (la réception 
+et/ou l'envoi) d'un type de message. On appelle _plugin_ un programme (ou une 
+simple bibliothèque) qui gère certains types de messages au niveau du logiciel 
+client. Il peut y avoir plusieurs instances du même connecteur et plusieurs 
+instances du même plugin qui tournent en même temps.
+
+Un même utilisateur peut utiliser plusieurs clients. Chaque client tente de 
+maintenir une connection au serveur pour les notifications. Le réglage de la 
+"sensibilité" de cette connection (càd le niveau d'importance des 
+notifications que l'on souhaite recevoir) est faite client par client, de 
+manière que les clients légers ne reçoivent que les choses importante, et que 
+les clients ne reçoivent que ce qu'ils savent traiter. Ce réglage est fait 
+répertoire par répertoire (sachant que les sous-répertoires héritent de la 
+configuration de notification d'un répertoire). En d'autres termes, chaque 
+client demande au serveur d'être notifié de ce qui arrive à partir de tel ou 
+tel répertoire, et de ne pas l'être (ce qui est le comportement par défaut, 
+mais peut permettre d'annuler des sous-répertoires) dans tel et tel autres.
+
+Des notifications de présence adaptées aux connecteurs peuvent être déduites 
+simplement à partir de l'activation ou non de notification sur les répertoires 
+concernés (en simulant l'arrivée d'un message depuis le requérant et en 
+regardant si une notification serait générée pour ce répertoire destination 
+pour un client au moins).
+
+Envoi de messages
+~~~~~~~~~~~~~~~~~
+
+NB: pour un email avec PJ, le plugin qui sert d'éditeur d'email compose le 
+mail entier, qui est comme un fichier ? Oubien le composeur d'email envoie 
+plusieurs flux et c'est le transporteur SMTP qui se charge de composer un 
+email ?
+
+La deuxième solution semble inévitable car certains transport nécessiteront 
+plusieurs flux (par exemple flux et audio). Donc un message sortant est 
+composé de plusieurs fichiers ; tout comme un message entrant d'ailleurs.
+
+Mais on préfère imposer qu'un message soit un fichier.
+Donc, pour envoyer un email multipart le plugin doit composer un message 
+multipart à partir des morceaux qu'on lui donne. Pour une visio on doit 
+encoder le son et l'image dans un conteneur unique (par exemple OGG ou MPEG).
+
+
+Réception de messages
+~~~~~~~~~~~~~~~~~~~~~
+
+Lorsqu'un message est reçu par un connecteur, celui-ci fabrique un header, 
+contenant certaines données obligatoires comme par exemple le type de message.  
+Puis, il fournit ce header et le flux au mdird, qui :
+
+- détermine les répertoires de destination du message ;
+- éventuellement, crée ces répertoires et notifie les clients ;
+- commence la copie de ce flux dans le répertoire de stockage et lie ce 
+  fichier dans les répertoires destination, en mettant à jour le journal de 
+chacun de ces répertoires ;
+- notifie les clients de la modification des répertoires destination.
+
+Remarque : le flux transmis au mdird n'est pas nécessairement le flux reçu, 
+mais c'est le flux sous la forme que l'on veut le stoquer. Par exemple, pour 
+un mail, le connecteur transforme un email en autant de messages qu'il y a de 
+pièces jointes. Pour l'IM, chaque message deviens un fichier. Etc.
+
+La seule notification existante est non typé, c'est à dire qu'elle indique 
+seulement que tel répertoire n'est probablement plus à jour (sauf si le client 
+à resynchronisé indépendamment). Le client doit alors, s'il le souhaite, 
+resynchroniser ce répertoire pour découvrir les nouveautées.
+
+Le format de notification est le suivant : identifiant du nouveau message ou 
+répertoire (qui sert aussi à construire l'URL de download du message) suivit 
+d'une liste de répertoires dans lequel il se trouve (l'un au moins desquels le 
+client avait activé les notifications).
+
+Une fois mis à jour le listing des répertoires, le client peut procéder au 
+download du nouveau message oubien se contenter de mémoriser l'info pour plus 
+tard ; le choix est évidement laissé au plugin auquel le message est délégué.
+Par ailleurs, ce sont des paramètres du plugin qui indiquent s'il faut 
+conserver le fichier sur la machine cliente ou pas ; c'est le mdird client qui 
+écrit, mais le plugin peut, après lecture des headers et avant le début du 
+download, indiquer au client que la sauvegarde est inutile. Par ailleurs, ce 
+mdird client peut décider tout seul, en fonction de ses propres réglages, que 
+la sauvegarde n'est pas souhaitable (par exemple en fonction de la taille).
+
+A ce plugin il n'est fourni que l'identifiant du message et pas les 
+répertoires dans lequel des liens sont ajoutés. L'attribution des messages aux 
+plugins se fait donc sur la base du header uniquement (principalement le type 
+de message sans doute).  Le classement en répertoire sert au classement, pas 
+au choix des plugins (ou applications externes) pour ouvrir les messages.  Le 
+plugin peut ensuite demander au client d'ouvrir ce message (avec donc une 
+option pour enregistrer localement ou pas) ce qui peut provoquer son download, 
+et sa copie locale. Il serait bien que le client commence le download pendant 
+que les programmes externes se lancent.
+
+Compatibilité ascendante
+------------------------
+
+Comment permettre d'utiliser des clients traditionnels avec mdird ? Par 
+exemple, un client Outlook ?
+
+Rien n'empèche d'implémenter des serveurs IMAP/POP3 par dessus mdird.
+Toutes les fonctions ne seront pas rendues mais le mail pourrait fonctionner.
+
+
+Migrations
+----------
+
+Depuis IMAP classique
+~~~~~~~~~~~~~~~~~~~~~
+
+Depuis Exchange
+~~~~~~~~~~~~~~~
+
+
+References
+----------
+
++ [[[thumbs]]] http://jens.triq.net/thumbnail-spec/index.html[Thumbnail Managing Standard]
+  (idéalement il faudrait seulement un ".thumbnail" par répertoire du cache)
++ [[[meta]]] 
+http://freedesktop.org/wiki/Specifications/shared-filemetadata-spec[Specifications/shared-filemetadata-spec]
+  (pas très utile)
+// vim: syntax=asciidoc

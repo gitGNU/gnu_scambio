@@ -1,0 +1,57 @@
+On a un programme qui tourne en permanence (pour ne pas avoir a reinterpréter
+ni relire les configurations), a qui on soummet des descriptions de fichier et
+qui donne comme resultat la liste des emplacements correspondants, déterminée
+par un ensemble de fichiers de configuration (relus lorsqu'ils sont modifiés).
+
+Les fichiers de configuration étant nécessairement distribués selon la même
+hiérarchie que celle qui servira ensuite pour exploiter le résultat, il ne sert
+à rien d'utiliser un protocole réseau pour communiquer avec le démon. Par
+contre il faut une API client/serveur avec un serveur multi-threadé. Unix
+domain socket semble bien : chaque client envoie un message et attend la
+réponse.
+
+Et on peut tester avec socat.
+
+Pour les fichiers de conf, il suffit d'une liste de conditions avec action.
+Chaque condition remplie entraine l'exécution de l'action. Certaines actions
+mettent fin à la recherche.
+
+La condition est toujours "champ" "opérateur" "valeur immédiate", oubien
+"champ" "present", oubien "champ" "absent", oubien "always".
+
+Il serait bon de prévoir un mécanisme d'extention de ces opérateurs. Donc, la
+syntax serait à revoir en faveur d'une syntaxe plus lispienne, où les
+opérateurs seraient des plugins.
+
+L'action peut être : "moveto", "copyto", "discard". Seule "copyto" n'entraîne
+pas l'arrêt des tests. En gros, moveto sert à trier, alors que copyto sert à
+tagger (catégoriser).
+
+Exemple :
+
+Content-Length > 100000 : discard
+From unset : discard
+allways : copyto !From
+From =~ titi@grandmere.org : copyto cartoon
+From =~ grosminet@acme.org : copyto cartoon
+From =~ jery@tom.org : copyto cartoon
+Subject =~ TODO : moveto work
+
+On remarque le "!From" qui permet de reprendre une valeur d'un champ (la
+création de folder veillera à ce que le nom ne soit pas dangereux).
+
+On remarque aussi que il n'y a pas d'ensemble, et on doit tester tous nos amis
+cartoon les uns après les autres ; ce qui pourrait avoir l'effet de copier le
+fichier plusieurs fois dans le répertoire cartoon ! Heureusement, une règle
+stipule qu'une destination ne peut apparaître qu'une seule fois.
+
+Le résultat du passage d'un folder est une liste, éventuellement vide, de
+destinations uniques, dont la dernière est éventuellement un moveto. Dans ce
+cas, il faut continuer dans ce répertoire, càd remplacer cette destination par
+la liste des destinations obtenues par la traversée du répertoire en question.
+A la fin, on n'a plus qu'une liste de copyto, où il faut placer des copies du
+fichier.
+
+Ne pas se laisser tromper par la simplicité du format : utiliser lex/bison pour
+se réserver le droit de modifier facilement cette syntaxe par la suite.
+

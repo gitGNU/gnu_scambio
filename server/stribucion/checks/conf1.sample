@@ -1,0 +1,7 @@
+Content-Length > 100000 : discard
+From unset : discard
+always : copyto ! From
+From =~ "titi@grandmere.org" : copyto "cartoon"
+From =~ "grosminet@acme.org" : copyto "cartoon"
+From =~ "jery@tom.org" : copyto "cartoon"
+Subject =~ "TODO" : moveto "work"
