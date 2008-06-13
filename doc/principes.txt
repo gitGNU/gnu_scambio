@@ -7,9 +7,9 @@ v0.1, Dec 2007
 Résumé
 ------
 
-Empecher l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
+Gêner l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
 domaine de la messagerie et du group-ware, en proposant une alternative libre 
-pour le "social en réseau".
+et facilement extensible pour la communication inter-individuelle/groupes.
 
 Utiliser ou même améliorer les solutions existantes (principalement Kolab) 
 n'est suffisant, car ces solutions ne sont pas facilement extensibles. Mail, 
