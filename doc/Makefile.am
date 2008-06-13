@@ -1,7 +1,9 @@
-doc_DATA = principes.html
+doc_DATA = principes.html smtp.html files.html
 
-principes.html: principes.txt
+SUFFIXES = html txt
+
+.txt.html:
 	asciidoc -a encoding=ISO-8859-1 -o $@ $<
 
 clean:
-	rm -f principes.html
+	rm -f $(doc_DATA)
