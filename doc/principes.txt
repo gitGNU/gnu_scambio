@@ -4,12 +4,12 @@ Cedric Cellier <rixed@free.fr>
 v0.1, Dec 2007
 
 
-Abstract
---------
+Résumé
+------
 
-Empecher l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
+Gêner l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
 domaine de la messagerie et du group-ware, en proposant une alternative libre 
-pour le "social en réseau".
+et facilement extensible pour la communication inter-individuelle/groupes.
 
 Utiliser ou même améliorer les solutions existantes (principalement Kolab) 
 n'est suffisant, car ces solutions ne sont pas facilement extensibles. Mail, 
@@ -152,10 +152,7 @@ user/subscriptions/) provoquent une réponse automatique (avec un timeout
 configurable).  Le serveur s'occupe de gérer la petite DB par folder. Les 
 sous-répertoires héritent ou pas de cette propriété.
 
-Alternative : extention vacation de SIEVE. Cette extention a peut être le 
-defaut majeur de ne pas bien tirer parti du tri opéré par ailleurs par SIEVE.  
-Il a aussi le défaut d'agir au niveau du MDA. Or il peut être utile de 
-notifier un utilisateur qui utilise au autre moyen de communication que SMTP.
+Ceci est implémenté directement au niveau du serveur, donc.
 
 Envoi différé
 ~~~~~~~~~~~~~
@@ -194,6 +191,12 @@ par cas).
 
 Les noms de répertoire sont aussi en UTF-8.
 
+Disponibilité de l'utilisateur (par client)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Chaque client renseigne le serveur sur la disponibilité de l'utilisateur. Les 
+clients non connectés sont évidement automatiquement _absents_. autres status 
+possibles : les classiques _away_ et _connected_.
 
 Nouvelles fonctionnalitées
 --------------------------
@@ -259,7 +262,7 @@ VoIP/Visio
 ~~~~~~~~~~
 
 A condition que les fichiers puissent être écris, envoyés, reçus et lus 
-simultanément.
+simultanément. Possibilité de conserver une copie des échanges sur le serveur.
 
 Synchronisation entre plusieurs serveurs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -274,6 +277,22 @@ Implémentation
 
 Synchronisation
 ~~~~~~~~~~~~~~~
+
+On appelle mdir la hiérarchie de répertoires contenant les liens vers les 
+messages. Rien à voir avec les format mdir et mdir++.
+
+Par ailleurs, il nous faut un identifiant de fichier unique, similaire à 
+l'inode, pour que le client et le serveur ne transfèrent le même fichier 
+qu'une seule fois plutôt qu'une fois par répertoire. Pour simplifier le 
+serveur et le client, et pour permettre d'utiliser un système de fichier sans 
+liens durs, les messages sont également stoqués dans une seconde arborescence, 
+de manière unique cette fois ; et cette seconde arborescence sera appelée 
+mstore. Ainsi par exemple un simple lookup de fichier dans le mstore permet au 
+client de savoir s'il connait déjà tel message ou pas.
+
+Le nom unique du fichier de message dans le mstore est appelé le MID. C'est 
+l'URL sans le "http://", c'est à dire uniquement composé du hostname et du 
+chemin.
 
 Un mdir est comme un répertoire partagé, sauf que les fichiers sont atomiques 
 c'est à dire manipulables uniquement globalement, qu'ils ont une structure 
@@ -304,8 +323,8 @@ suppression d'un message ou d'un sous-répertoire.
 De plus, chaque message est accompagné de ses métadonnées. Certaines sont 
 implicites : identifiant (obligatoire), type (obligatoire pour les répertoire 
 pour indiquer qu'il s'agit d'un répertoire justement), taille (optionel pour 
-les messages en temps réel et les répertoires).  Ces méta données indiques par 
-exemple les mime-type, et tout autre champs du mail par exemple (mais 
+les messages en temps réel et les répertoires).  Ces méta données indiquent 
+par exemple les mime-type, et tout autre champs du mail par exemple (mais 
 reformaté pour simplifier l'encodage des header mail, trop compliqué : mettre 
 sur une ligne, supprimer les commentaires). Ces méta-données pourraient être 
 stoquées dans des répertoire ".meta" comme il existe des ".thumbs".
@@ -338,6 +357,8 @@ dont voici le format :
 	...
 	(ligne vide)
 
+La liste se termine avec la réponse du serveur.
+
 les méta données contiennent également les méta données ajoutées par le 
 serveur : Source, Taille, Date
 
@@ -353,35 +374,43 @@ où :
 Aucune ligne ne peut commencer par "+" ou "-" sauf la ligne action. Les lignes 
 non reconnues doivent être ignorées.
 
-On remarque que les numéros de version du journal ne sont pas présent.
+On remarque que les numéros de version du journal ne sont pas présents.
 
 Les fichiers sont toujours triés par ordre de réception dans un listing, et 
 pas par ordre de thread par exemple (pas par ordre lexicographique).
 
-Chaque PJ d'un email étant éclatée en autant de fichiers, il peut y avoir 
-plusieurs messages par emails. C'est le prix à payer pour avoir un protocole 
-de synchronisation généraliste et pouvoir accéder simplement aux parties d'un 
-document multi-part.
+Note concernant les emails : Chaque PJ d'un email étant éclatée en autant de 
+fichiers, il peut y avoir plusieurs messages par emails. C'est le prix à payer 
+pour avoir un protocole de synchronisation généraliste et pouvoir accéder 
+simplement aux parties d'un document multi-part.
 
 Stockage des messages (serveur)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Le serveur n'est pas contraint de stoquer tous les messages dans un répertoire 
-unique. Il peut par exemple décomposer le MID en parties (par exemple, 
-préfixer par type, puis pour les emails découper suivant les "." et les "@" 
-puis inverser et joindre par des "/" par exemple).
+unique du mstore (ni même sur une seule machine).
 
-L'URL est relative à une racine connue des clients, et chaque URL est unique.  
-Les clients devraient pouvoir stoquer les messages dans leur cache de façon 
-similaire (ie, l'arborescence des messages est "suffisamment balancé").
+Dans le cas des emails, le MID peut être par exemple composé de 
+"email.domain.com" suivit du Message-Id découpé suivant les "." et les "@" 
+puis inversé, le tout séparés par des "/".
 
-En plus du fichier pour le corp de la PJ, il faut stoquer les meta données 
-quelquepart (sur le serveur comme sur le client). Par similitude avec les 
-répertoires ".thumbnails" <<thumbs>>, on peut faire un répertoire ".meta" 
-contenant ces données par messages, avec une lib chargée de les extraire, de 
-les inventer lorsqu'elle n'y sont pas, et de les écrire. La standardisation 
-des metadonnées est d'ailleurs avancée <<meta>>, mais je ne suis pas sur de 
-vouloir suivre ce cours.
+L'URL permetant de downloader un message est absolue, afin de pouvoir répartir 
+le mstore sur plusieurs machines. Les clients devraient pouvoir stoquer les 
+messages dans leur cache de façon similaire (ie, l'arborescence des messages 
+est "suffisamment balancé").
+
+En plus de l'URL le serveur de mdir doit stoquer les meta données quelquepart 
+(le client aussi). Par similitude avec les répertoires ".thumbnails" 
+<<thumbs>>, on peut faire un répertoire ".meta" contenant ces données par 
+messages, avec une lib chargée de les extraire, de les inventer lorsqu'elle 
+n'y sont pas, et de les écrire. La standardisation des metadonnées est 
+d'ailleurs avancée <<meta>>, mais je ne suis pas sur de vouloir suivre ce 
+cours.
+
+Le plus simple c'est que le serveur de mdir, privé conceptuellement d'un accès 
+au mstore, stoque dans les répertoires du mdir des fichiers dont le contenu 
+donne l'URL et les méta données (liens durs si stoqués dans plusieurs 
+répertoires, car jamais modifié).
 
 Stockage des folders (serveur)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -392,7 +421,7 @@ pour une version donnée. Si le journal n'existe pas, c'est que seul une
 resynchronisation totale du folder est possible. Si le snapshot n'existe pas, 
 c'est que seul le journal est disponible. Si aucun des deux n'existent le 
 folder est vide. Il peut y avoir plusieurs fichier de journal, chacun 
-commancant à un numéro de version donné et conduisant à un autre numéro de 
+commencant à un numéro de version donné et conduisant à un autre numéro de 
 version ; voir ceci comme une façon de parcourir plus rapidement les logs 
 (permet de sauter jusqu'au numéro de version voulu). Par contre, seul le 
 dernier snapshot est utile : il ne sert que pour les resynchronisations 
@@ -405,12 +434,12 @@ repartir de la version 0 avec le snapshot et les journaux récents.
 
 L'API permettant d'accéder aux journaux est la suivante :
 
-log_start(version) -> renvoie un curseur où une erreur si le log n'est pas 
+jnl_start(version) -> renvoie un curseur où une erreur si le journal n'est pas 
 trouvé.
 
-log_next(cursor) -> renvoie le prochain patch ou EOF si c'est la fin.
+jnl_next(cursor) -> renvoie le prochain patch ou EOF si c'est la fin.
 
-Si log_start renvoie une erreur, utiliser le snapshot :
+Si jnl_start renvoie une erreur, utiliser le snapshot :
 
 snapshot_open() -> renvoie un handler sur le snapshot. Tant que l'apli possède 
 ce handler le snapshot reste valide (ie, c'est le fd d'un fichier).
@@ -424,30 +453,32 @@ propre à chaque patch qui de toute facon n'est pas communiqué au client).
 
 snapshot_close(hd);
 
-Puis enchainer avec log_start(snapshot_version(hd))...
+Puis enchainer avec jnl_start(snapshot_version(hd))...
 
 Client
 ~~~~~~
 
 Plutôt que de chercher un client intégré traitant tous les types de messages 
 possibles, pourquoi ne pas faire un équivalent graphique de MH ? C'est à dire 
-un browser de message chargé de représenter la hiérarchie, de synchroniser les 
-répertoires, de déplacer les messages, etc, mais qui ne connait des messages 
-que leur header, et se reposant sur des programmes externes pour visualiser ou 
-créer de nouveaux messages pour un type mime donné ?
+un browser de messages chargé de représenter la hiérarchie, de synchroniser 
+les répertoires, de déplacer les messages, etc, mais qui ne connait des 
+messages que leur header, et se reposant sur des programmes externes pour 
+visualiser ou créer de nouveaux messages pour un type mime donné ?
 
-La difficulté provient de ce que certains messages n'ont de sens qu'avec les 
-autres de la même catégorie : calendrier qui représente tous les vCal, par 
-type, et les messages qui les référencent éventuellement (en tout cas, permet 
-de lier dessus).
+Deux difficultés :
 
-Il faut donc permettre les deux : des programmes externes pour les type mimes 
-sans relation avec les autres (par exemple les images), et des "plugins" pour 
-les modules qui requièrent d'interroger la base de message complète. A la 
-base, il y a le browser (affiche la hiérarchie, gère une notion de répertoire 
-courant, affiche la liste des messages, permet de les modifier, etc...). Pour 
-des raisons d'efficacité, et parceque les messages sont read-only, chaque 
-plugin/programme peut travailler avec le fichier de cache directement. Ne pas 
+- les fichiers "temps-réel" qui impose à ce browser d'écrire alors le message 
+  dans un fifo.
+
+- certains messages n'ont de sens qu'avec les autres de la même catégorie : 
+  par exemple le calendrier qui représente tous les vCal, par type, et les 
+messages qui les référencent éventuellement (en tout cas, permet de lier 
+dessus).
+
+A la base, il y a donc le browser qui affiche la hiérarchie, gère une notion 
+de répertoire courant, affiche la liste des messages, permet de les modifier, 
+etc... Pour des raisons d'efficacité, et parceque les messages sont read-only, 
+chaque programme externe peut travailler directement avec le fichier.  Ne pas 
 commettre l'erreur d'intercaler encore une couche d'abstraction à ce niveau 
 qui mimerait chichement le système de fichiers. Par contre il n'est pas 
 interdit de fournir une bibliothèque pour parser les headers et autres 
@@ -458,37 +489,37 @@ nouveaux inodes...)
 
 Pour le stockage des messages et folders, cela dépend du FS et de l'OS. Sous 
 Unix, on privilégiera évidement les liens durs entre un cache de messages 
-(identique au répertoire des messages du serveur, fonctionnant comme un cache 
-pour conserver les vieux messages qui ne sont plus référencés par aucun 
-folders), et une arborescence de répertoires représentant les folders.
+(identique au mstore du serveur, fonctionnant comme un cache pour conserver 
+les vieux messages qui ne sont plus référencés par aucun folders), et le mdir 
+(restreint en fonction des droits).
 
 Il serait bon toutefois d'introduire dans cette arborescence une différence 
-notable : plutôt que de lier vers les fichiers Tx.My et Tx.My.Pz, on gagnerait 
-à utiliser les noms "de fichier" présents dans le descripteur MIME des PJ.  
-Deux manières de procéder :
+notable : plutôt que de lier en dur vers les fichiers on gagnerait à utiliser 
+les noms "de fichier" qui peuvent être suggérés par le transports (par 
+exemple, par le descripteur MIME des pièces jointes d'un email).  Deux 
+manières de procéder :
 
-- Tx.My peut être un répertoire dans lequel on aurrait d'une part Pz et 
-  d'autre part "le nom du document" (éventuelement affecté d'une numéro pour 
-le rendre unique).
+- Le browser de fichier affiche simplement le "suggested name" des méta 
+  données s'il est présent. L'ennuis c'est qu'on n'y comprend plus rien avec 
+un explorateur de fichier ou un shell.
 
-- On met directement dans folder, en plus de Tx.My.Pz, "le nom du document" 
-  (il y aura plus de collisions mais on s'en moque. On peut rendre les 
-Tx.My.Pz "invisibles" en utilisant l'astuce idoïne du FS sous-jascent (par 
-exemple sous Unix, préfixer par "." les noms techniques).
+- On stoque les fichiers directement avec leurs suggested names dans le cache, 
+  dans un répertoire du nom du MID, comme ceci l'unicité du cache est 
+garantie. Par contre l'unicité dans le mdir peut poser problème.  On peut 
+mettre un lien symbolique à la place du lien dur en cas de conflit, avec un 
+numéro ajouté ?
 
-Cette deuxième aproche étant plus utile pour l'utilisateur sans doute (tout 
-ceci ayant pour but, on l'aura compris, de rendre possible l'exploitation du 
-répertoire local de mail via un file browser ou un shell).
+Dans un premier temps la première solution est suffisante.
 
 
 Envoi et Réception de messages
-------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 On appelle _connecteur_ un démon qui implémente le transport (la réception 
-et/ou l'envoi) d'un type de message. On appelle _plugin_ un programme (ou une 
-simple bibliothèque) qui gère certains types de messages au niveau du logiciel 
-client. Il peut y avoir plusieurs instances du même connecteur et plusieurs 
-instances du même plugin qui tournent en même temps.
+et/ou l'envoi) d'un type de message. On appelle _délégué_ un programme qui gère 
+certains types de messages au niveau du logiciel client. Il peut y avoir 
+plusieurs instances du même connecteur et plusieurs instances du même délégué 
+qui tournent en même temps.
 
 Un même utilisateur peut utiliser plusieurs clients. Chaque client tente de 
 maintenir une connection au serveur pour les notifications. Le réglage de la 
@@ -502,16 +533,16 @@ client demande au serveur d'être notifié de ce qui arrive à partir de tel ou
 tel répertoire, et de ne pas l'être (ce qui est le comportement par défaut, 
 mais peut permettre d'annuler des sous-répertoires) dans tel et tel autres.
 
-Des notifications de présence adaptées aux connecteurs peuvent être déduites 
+Des indications de présence adaptées aux connecteurs peuvent être déduites 
 simplement à partir de l'activation ou non de notification sur les répertoires 
 concernés (en simulant l'arrivée d'un message depuis le requérant et en 
 regardant si une notification serait générée pour ce répertoire destination 
 pour un client au moins).
 
 Envoi de messages
-~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^
 
-NB: pour un email avec PJ, le plugin qui sert d'éditeur d'email compose le 
+NB: pour un email avec PJ, le délégué qui sert d'éditeur d'email compose le 
 mail entier, qui est comme un fichier ? Oubien le composeur d'email envoie 
 plusieurs flux et c'est le transporteur SMTP qui se charge de composer un 
 email ?
@@ -521,13 +552,13 @@ plusieurs flux (par exemple flux et audio). Donc un message sortant est
 composé de plusieurs fichiers ; tout comme un message entrant d'ailleurs.
 
 Mais on préfère imposer qu'un message soit un fichier.
-Donc, pour envoyer un email multipart le plugin doit composer un message 
+Donc, pour envoyer un email multipart le délégué doit composer un message 
 multipart à partir des morceaux qu'on lui donne. Pour une visio on doit 
 encoder le son et l'image dans un conteneur unique (par exemple OGG ou MPEG).
 
 
 Réception de messages
-~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^
 
 Lorsqu'un message est reçu par un connecteur, celui-ci fabrique un header, 
 contenant certaines données obligatoires comme par exemple le type de message.  
@@ -545,35 +576,86 @@ mais c'est le flux sous la forme que l'on veut le stoquer. Par exemple, pour
 un mail, le connecteur transforme un email en autant de messages qu'il y a de 
 pièces jointes. Pour l'IM, chaque message deviens un fichier. Etc.
 
-La seule notification existante est non typé, c'est à dire qu'elle indique 
-seulement que tel répertoire n'est probablement plus à jour (sauf si le client 
-à resynchronisé indépendamment). Le client doit alors, s'il le souhaite, 
-resynchroniser ce répertoire pour découvrir les nouveautées.
+La seule notification existante est globale et non pas propre à un répertoire 
+particulier du mdir. Elle indique seulement que tel ensemble de répertoires 
+n'est probablement plus à jour (sauf si le client à resynchronisé 
+indépendamment).  Le client doit alors, s'il le souhaite, resynchroniser ce(s) 
+répertoire(s) pour découvrir les nouveautées.
 
-Le format de notification est le suivant : identifiant du nouveau message ou 
-répertoire (qui sert aussi à construire l'URL de download du message) suivit 
-d'une liste de répertoires dans lequel il se trouve (l'un au moins desquels le 
-client avait activé les notifications).
+Le format de notification est le suivant : chemin du répertoire modifié.
 
 Une fois mis à jour le listing des répertoires, le client peut procéder au 
 download du nouveau message oubien se contenter de mémoriser l'info pour plus 
-tard ; le choix est évidement laissé au plugin auquel le message est délégué.
-Par ailleurs, ce sont des paramètres du plugin qui indiquent s'il faut 
-conserver le fichier sur la machine cliente ou pas ; c'est le mdird client qui 
-écrit, mais le plugin peut, après lecture des headers et avant le début du 
-download, indiquer au client que la sauvegarde est inutile. Par ailleurs, ce 
-mdird client peut décider tout seul, en fonction de ses propres réglages, que 
-la sauvegarde n'est pas souhaitable (par exemple en fonction de la taille).
+tard ; ce choix est fait par répertoire oubien globalement.
 
-A ce plugin il n'est fourni que l'identifiant du message et pas les 
-répertoires dans lequel des liens sont ajoutés. L'attribution des messages aux 
-plugins se fait donc sur la base du header uniquement (principalement le type 
-de message sans doute).  Le classement en répertoire sert au classement, pas 
-au choix des plugins (ou applications externes) pour ouvrir les messages.  Le 
-plugin peut ensuite demander au client d'ouvrir ce message (avec donc une 
-option pour enregistrer localement ou pas) ce qui peut provoquer son download, 
-et sa copie locale. Il serait bien que le client commence le download pendant 
-que les programmes externes se lancent.
+Lorsqu'un nouveau message est downloadé le browser doit choisir :
+
+- a quel programme externe livrer ce message ;
+- et en fonction de cela, s'il doit le stoquer dans un fichier ou un fifo ;
+
+Ceci est déterminé par les headers en fonction d'une configuration locale 
+similaire, voire identique, à celle des mime-types.
+
+A ce programme externe il n'est fourni que le chemin du message dans le cache 
+et pas les répertoires dans lequel des liens sont ajoutés. Le classement en 
+répertoire sert au classement, pas au choix des applications externes 
+auxquelles sont délégués les messages.
+
+
+Architecture (serveur)
+~~~~~~~~~~~~~~~~~~~~~~
+
+Le serveur se compose, à l'entrée, d'une myriade de connecteurs. L'interface 
+entre ceux-ci et le mdir se limite à :
+
+- ajouter une URL et des headers au mdir (sans préciser exactement où, c'est 
+  au mdird d'en décider) ;
+- de connaître le statut de disponibilité d'un utilisateur ;
+
+Chaque connecteur écrit ses fichiers et génère ses MID, et donne chaque MID 
+accompagné des headers au démon du mdir (mdird) qui ajoute le message au mdir 
+en tenant compte du journal et en enregistrant les headers.
+
+Tout ceci implique d'adjoindre aux clients classiques du code pour 
+l'interfacer avec scambio.
+
+Ensuite, il faut un serveur http permettant de lire et d'écrire le mstore 
+(réfléchir à la confidentialité).
+
+Il faut aussi mdird, le programme qui gère le mdir et centralise les 
+connections aux clients (et donc, gère les disponibilités).
+
+Utiliser donc un protocole réseau entre connecteurs et mdird, du genre HTTP 
+POST avec comme contenu les headers et url du message, oubien encore plus 
+simple une connection avec un flux continu de blocs "URL+headers" similaire à 
+celui employé pour la synchronisation des répertoires. Il faut aussi, par 
+ailleurs, pouvoir interroger le status d'un utilisateurs.
+
+Voir les docs spécifiques aux connecteurs et à mdird pour plus de détails.
+
+Architecture (client)
+~~~~~~~~~~~~~~~~~~~~~
+
+Le client est le seul programme qui tourne en permanence. Il ne traite aucune 
+forme de message lui même. Il communique avec les délégués uniquement par 
+fichiers, en réception comme en création : les délégués déposent le message à 
+transmettre dans le mdir et le browser uploade ces nouveaux messages qu'il 
+découvre de lui même (FAM oubien polling des dates de modification des 
+répertoires ?).
+
+Le client se compose de :
+
+- un browser de messages (facultatif car le browser de fichiers du système 
+  peut faire l'affaire dans une certaine mesure) ;
+
+- un downloader, qui synchronise du serveur vers le client et notifie 
+  l'utilisateur de l'arrivée d'un nouveau message et propose de l'ouvrir. S'il 
+ne sait pas à qui déléguer le message il peut ouvrir le browser (les deux 
+communiquent avec dbus). C'est aussi lui qui se connecte au cannal de 
+notifications du serveur, et met à jour le status de disponibilité du client ;
+
+- un uploader, qui scanne le mdir à la recherche de messages à envoyer ;
+
 
 Compatibilité ascendante
 ------------------------

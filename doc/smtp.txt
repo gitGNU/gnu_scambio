@@ -1,0 +1,22 @@
+Connecteur SMTP
+===============
+Cedric Cellier <rixed@free.fr>
+v0.1, Juin 2008
+
+Résumé
+------
+
+La plupart des serveurs SMTP savent livrer un mail sur stdin à un programme 
+externe. On exploite ceci pour la réception d'emails. Pour l'envoit, on 
+utilise un programme qui scanne une outbox et manipule sendmail (ou commande 
+compatible livrée par le serveur SMTP).
+
+Le connecteur doit, en réception, décomposer l'email en fichiers, et pour 
+chacun l'ajouter à son mstore et construire un header. Le MID et le header 
+sont ensuite donnés au gestionnaire du mdir pour classement (et 
+notifications).
+
+
+
+
+// vim: syntax=asciidoc

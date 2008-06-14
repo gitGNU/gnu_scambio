@@ -1,0 +1,15 @@
+Connecteur FICHIERS
+===================
+Cedric Cellier <rixed@free.fr>
+v0.1, Juin 2008
+
+Résumé
+------
+
+Tout simplement pour servir de répertoire partagé de fichiers non modifiables 
+(photos, films, documents 'publics' versionnés...).
+
+Le plus simple des connecteurs et des clients, à faire en premier pour mettre 
+en place la tuyauterie.
+
+// vim: syntax=asciidoc
