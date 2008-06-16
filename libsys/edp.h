@@ -47,6 +47,11 @@ LIST_HEAD(edp_modules, edp_module) edp_modules;
 int edp_module_ctor(struct edp_module *mod, char const *name);	// Called by arch specific module registering function
 void edp_module_dtor(struct edp_module *mod);
 
+typedef void edp_callback(void *result, void *data);
+// Events are sent at the end of event loop
+void *edp_push_event(edp_callback *cb, size_t size, void *data);
+
+
 // Arch specific must implement this
 
 int edp_arch_init(void);	// called by edp_init()

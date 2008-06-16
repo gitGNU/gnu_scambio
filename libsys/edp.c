@@ -33,6 +33,12 @@ int edp_run(void)
 {
 	while (! exit_asked) {
 		edp_arch_service();
+		struct edp_event *ev;
+		while (NULL != (ev = LIST_FIRST(edp_events))) {
+			// TODO: Send all events
+
+			LIST_REMOVE(ev, entry);
+		}
 	}
 	return exit_code;
 }
