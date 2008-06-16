@@ -1,10 +1,5 @@
 Connecteur SMTP
 ===============
-Cedric Cellier <rixed@free.fr>
-v0.1, Juin 2008
-
-Résumé
-------
 
 La plupart des serveurs SMTP savent livrer un mail sur stdin à un programme 
 externe. On exploite ceci pour la réception d'emails. Pour l'envoit, on 

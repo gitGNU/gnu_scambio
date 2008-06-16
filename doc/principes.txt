@@ -1,11 +1,5 @@
 Sharing, Control and Access of Messages through Basic Inputs/Outputs (SCAMBIO)
 ==============================================================================
-Cedric Cellier <rixed@free.fr>
-v0.1, Dec 2007
-
-
-Résumé
-------
 
 Gêner l'emmergeance de nouveaux protocoles réseaux propriétaires dans le 
 domaine de la messagerie et du group-ware, en proposant une alternative libre 

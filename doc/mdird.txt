@@ -1,0 +1,39 @@
+démon MDIR
+==========
+
+Essayer d'abstraire les aspects non fonctionnels dans des modules compilables 
+séparément ou même chargeables dynamiquement (pour les aspects visuels 
+surtout, donc pas utile pour mdird). Privilégier une approche complètement 
+assynchrone par évènements.
+
+Connexions réseaux
+------------------
+
+Choix du transport.
+
+Commandes nécéssaire :
+
+- connect(flux/messages)
+- disconnect
+- receive
+- send
+
+Sauvegardes de données
+----------------------
+
+Pour le journal et les méta données uniquement. Choix du stockage fichiers, 
+base de donnée ou autre.
+
+- sauver un buffer avec une clef ;
+- retrouver un buffer avec une clef ;
+
+Fondements systèmes
+-------------------
+
+Choix de l'OS. C'est la "main-loop".
+
+- configuration (envvar sous unix) ;
+- démonisation ;
+- gestion des évènements (fd + select sous unix) ;
+
+
