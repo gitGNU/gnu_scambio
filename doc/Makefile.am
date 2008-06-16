@@ -1,4 +1,4 @@
-doc_DATA = principes.html smtp.html files.html
+doc_DATA = principes.html smtp.html files.html mdird.html
 
 SUFFIXES = html txt
 

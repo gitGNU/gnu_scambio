@@ -6,8 +6,8 @@ séparément ou même chargeables dynamiquement (pour les aspects visuels
 surtout, donc pas utile pour mdird). Privilégier une approche complètement 
 assynchrone par évènements.
 
-Connexions réseaux
-------------------
+Connexions réseaux (libcnx)
+---------------------------
 
 Choix du transport.
 
@@ -18,22 +18,24 @@ Commandes nécéssaire :
 - receive
 - send
 
-Sauvegardes de données
-----------------------
+Sauvegarde du journal (libjnl)
+------------------------------
 
 Pour le journal et les méta données uniquement. Choix du stockage fichiers, 
 base de donnée ou autre.
 
-- sauver un buffer avec une clef ;
-- retrouver un buffer avec une clef ;
-
-Fondements systèmes
--------------------
+Fondements systèmes (libsys)
+----------------------------
 
 Choix de l'OS. C'est la "main-loop".
 
-- configuration (envvar sous unix) ;
+- configuration (envvar sous unix pour la partie RO et fichier relu pour la 
+partie modifiable en vol) ;
 - démonisation ;
 - gestion des évènements (fd + select sous unix) ;
 
+
+Les lib se trouvent donc dans module/type
+par exemple libcnx/libcnxraw, libcnx/libcnxhttp, libjnl/libjnlfile, 
+libsys/libsys, etc... L'OS étant choisi par autoconf.
 
