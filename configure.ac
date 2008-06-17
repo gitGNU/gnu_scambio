@@ -8,13 +8,13 @@ AC_CONFIG_HEADER([config.h])
 AM_INIT_AUTOMAKE
 
 # Checks for programs.
-AC_PROG_CC
 AM_PROG_LEX
 AC_PROG_YACC
 AM_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_LIB([rixed], [error])
+AC_CHECK_PTH(2.0.0)
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -33,6 +33,7 @@ AC_CHECK_FUNCS([memset strtol])
 
 AC_CONFIG_FILES([
 	Makefile
+	libsys/Makefile
 	server/Makefile
 	server/stribucion/Makefile
 	server/stribucion/checks/Makefile

@@ -4,38 +4,39 @@ démon MDIR
 Essayer d'abstraire les aspects non fonctionnels dans des modules compilables 
 séparément ou même chargeables dynamiquement (pour les aspects visuels 
 surtout, donc pas utile pour mdird). Privilégier une approche complètement 
-assynchrone par évènements.
+assynchrone par évènements. Utiliser libpth qui fait ça très bien et est très
+portable.
 
-Connexions réseaux (libcnx)
----------------------------
+Modules de la lib générale (libsys)
+-----------------------------------
 
-Choix du transport.
+Réseaux :
+~~~~~~~~~
 
-Commandes nécéssaire :
-
-- connect(flux/messages)
+- connect(flux/messages, address)
 - disconnect
 - receive
 - send
+- serve(flux/message, address, thread)
 
-Sauvegarde du journal (libjnl)
-------------------------------
+Concerver le fait qu'adresse soit une abstraction (par exemple, ce serait bien 
+de pouvoir mettre u fichier).
+
+connect renvoie un fichier.
+
+Système :
+~~~~~~~~~
+
+- configuration (envvar sous unix pour la partie RO et fichier relu pour la 
+  partie modifiable en vol) ;
+- commandes (console) ;
+- démonisation ;
+
+
+Journal du mdir (libjnl)
+------------------------
 
 Pour le journal et les méta données uniquement. Choix du stockage fichiers, 
 base de donnée ou autre.
 
-Fondements systèmes (libsys)
-----------------------------
-
-Choix de l'OS. C'est la "main-loop".
-
-- configuration (envvar sous unix pour la partie RO et fichier relu pour la 
-partie modifiable en vol) ;
-- démonisation ;
-- gestion des évènements (fd + select sous unix) ;
-
-
-Les lib se trouvent donc dans module/type
-par exemple libcnx/libcnxraw, libcnx/libcnxhttp, libjnl/libjnlfile, 
-libsys/libsys, etc... L'OS étant choisi par autoconf.
 

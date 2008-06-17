@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = server doc
+SUBDIRS = libsys server doc
 
 .PHONY: cscope
 
