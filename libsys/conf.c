@@ -9,8 +9,8 @@
  * Data Definition
  */
 
-struct exception conf_no_such_param = { "NoSuchConfParam" };
-struct exception conf_bad_integer_format = { "BadIntegerFormat" };
+struct exception conf_no_such_param      = { .id = 806170, .str = "NoSuchConfParam" };
+struct exception conf_bad_integer_format = { .id = 806171, .str = "BadIntegerFormat" };
 
 
 void conf_set_default_str(char const *name, char const *value)
@@ -33,7 +33,7 @@ void conf_set_default_int(char const *name, long long value)
 char const *conf_get_str(char const *name)
 {
 	char const *value = getenv(name);
-	if (! value) THROW(&conf_no_such_param);
+	if (! value) THROW(conf_no_such_param);
 	return value;
 }
 
@@ -42,7 +42,7 @@ long long conf_get_int(char const *name)
 	char const *value = conf_get_str(name);
 	char *end;
 	long long i = strtoll(value, &end, 0);
-	if (*end != '\0') THROW(&conf_bad_integer_format);
+	if (*end != '\0') THROW(conf_bad_integer_format);
 	return i;
 }
 
