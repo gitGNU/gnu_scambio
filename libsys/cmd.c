@@ -1,3 +1,7 @@
+#include <stdarg.h>
+#include <string.h>
+#include <miscmac.h>
+#include <exception.h>
 #include "cmd.h"
 
 /*
@@ -5,7 +9,7 @@
  */
 
 struct cmd {
-	LIST_ENTRY(cmd_keyword) entry;
+	LIST_ENTRY(cmd) entry;
 	char const *keyword;
 	unsigned nb_arg_min, nb_arg_max;
 	cmd_callback *cb;
@@ -42,17 +46,40 @@ static void cmd_dtor(struct cmd *cmd)
 
 static struct cmd *cmd_new(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, va_list ap)
 {
-	struct cmd *cmd = malloc(sizeof(*cmd));
+	struct cmd *cmd = malloc_uwprotect(sizeof(*cmd));
 	if (! cmd) THROW(OOM);
-	unwindb();
-	atunwind(free, cmd);
 	cmd_ctor(cmd, keyword, nb_arg_min, nb_arg_max, cb, ap);
-
+	// Should we keep initializing stuff with functions that could trigger an exception, we would add :
+	// atunwind(cmd_dtor, cmd)
+	// so that the exception would both destruct and free the cmd.
+	dewind;
+	return cmd;
 }
 
-int cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, ...);
-void cmd_unregister_keyword(char const *keyword);
+static void cmd_del(struct cmd *cmd)
+{
+	cmd_dtor(cmd);
+	free(cmd);
+}
 
+void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, ...)
+{
+	va_list ap;
+	va_start(ap, cb);
+	// FIXME: check that keyword is not already registered ?
+	(void)cmd_new(keyword, nb_arg_min, nb_arg_max, cb, ap);
+	va_end(ap);
+}
+
+void cmd_unregister_keyword(char const *keyword)
+{
+	struct cmd *cmd, *tmp;
+	LIST_FOREACH_SAFE(cmd, &cmds, entry, tmp) {
+		if (0 == strcmp(cmd->keyword, keyword)) {
+			cmd_del(cmd);
+		}
+	}
+}
 
 /*
  * (De)Initialization

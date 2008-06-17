@@ -20,14 +20,14 @@ void conf_set_default_str(char const *name, char const *value)
 
 void conf_set_default_int(char const *name, long long value)
 {
-	unwindb();
 	int len = snprintf(NULL, 0, "%lld", value);
 	char *str = malloc(len+1);
-	atunwind(str, free);	// is the string copied into the environment ?
+	atunwind(free, str);	// is the string copied into the environment ?
 	if (! str) THROW(OOM);
 	snprintf(str, len+1, "%lld", value);
 	conf_set_default_str(name, str);
-	unwind();
+	free(str);
+	dewind;
 }
 
 char const *conf_get_str(char const *name)

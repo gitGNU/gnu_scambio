@@ -21,7 +21,8 @@ typedef void cmd_callback(char const *keyword, unsigned nb_args, union cmd_arg *
 #define CMD_MAX_ARGS 8
 
 void cmd_begin(int textfd);
-int cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, ...);
+// keyword is not copied. Should be a static constant.
+void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, ...);
 void cmd_unregister_keyword(char const *keyword);
 void cmd_end(void);
 
