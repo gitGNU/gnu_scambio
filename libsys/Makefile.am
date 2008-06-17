@@ -5,5 +5,4 @@ noinst_LTLIBRARIES = libsys.la
 
 libsys_la_SOURCES = \
 	cmd.c \
-	conf.c \
-	loger.c
+	conf.c

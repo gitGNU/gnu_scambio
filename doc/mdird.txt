@@ -10,8 +10,8 @@ portable.
 Modules de la lib générale (libsys)
 -----------------------------------
 
-Réseaux :
-~~~~~~~~~
+Communication :
+~~~~~~~~~~~~~~~
 
 - connect(flux/messages, address)
 - disconnect
@@ -19,16 +19,15 @@ Réseaux :
 - send
 - serve(flux/message, address, thread)
 
-Concerver le fait qu'adresse soit une abstraction (par exemple, ce serait bien 
-de pouvoir mettre u fichier).
+Concerver l'abstraction des adresses (par exemple, ce serait bien de pouvoir 
+mettre un fichier).
 
-connect renvoie un fichier.
+connect renvoie un fildesc.
 
 Système :
 ~~~~~~~~~
 
-- configuration (envvar sous unix pour la partie RO et fichier relu pour la 
-  partie modifiable en vol) ;
+- configuration (envvar sous unix) ;
 - commandes (console) ;
 - démonisation ;
 
