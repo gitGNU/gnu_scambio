@@ -16,31 +16,22 @@
 
 struct enoparam {
 	struct exception exception;
-	char *name;
 };
 
 static void enoparam_del(struct exception *e)
 {
 	struct enoparam *enp = DOWNCAST(e, exception, enoparam);
-	free(enp->name);
 	free(enp);
 }
 
-static char const *enoparam_name(struct exception *e, size_t size, char *buf)
-{
-	struct enoparam *enp = DOWNCAST(e, exception, enoparam);
-	snprintf(buf, size, "NoSuchParam : %s", enp->name);
-	return buf;
-}
-
-struct exception_ops const conf_no_such_param_ops = { .del = enoparam_del, .name = enoparam_name };
+struct exception_ops const conf_no_such_param_ops = { .del = enoparam_del };
 
 struct exception *conf_no_such_param(char const *param)
 {
 	struct enoparam *enp = malloc(sizeof(*enp));
 	assert(enp);
 	enp->exception.ops = &conf_no_such_param_ops;
-	enp->name = strdup(param);
+	snprintf(enp->exception.name, sizeof(enp->exception.name), "NoSuchParam : %s", param);
 	return &enp->exception;
 }
 
@@ -50,32 +41,22 @@ struct exception *conf_no_such_param(char const *param)
 
 struct ebadint {
 	struct exception exception;
-	char *name, *format;
 };
 
 static void ebadint_del(struct exception *e)
 {
 	struct ebadint *ebi = DOWNCAST(e, exception, ebadint);
-	free(ebi->name);
-	free(ebi->format);
+	free(ebi);
 }
 
-static char const *ebadint_name(struct exception *e, size_t size, char *buf)
-{
-	struct ebadint *ebi = DOWNCAST(e, exception, ebadint);
-	snprintf(buf, size, "BadIntegerFormat : %s for parameter %s", ebi->format, ebi->name);
-	return buf;
-}
-
-struct exception_ops const conf_bad_integer_format_ops = { .del = ebadint_del, .name = ebadint_name };
+struct exception_ops const conf_bad_integer_format_ops = { .del = ebadint_del };
 
 struct exception *conf_bad_integer_format(char const *param, char const *format)
 {
 	struct ebadint *ebi = malloc(sizeof(*ebi));
 	assert(ebi);
 	ebi->exception.ops = &conf_bad_integer_format_ops;
-	ebi->name = strdup(param);
-	ebi->format = strdup(format);
+	snprintf(ebi->exception.name, sizeof(ebi->exception.name), "BadIntegerFormat : %s for parameter %s", format, param);
 	return &ebi->exception;
 }
 
