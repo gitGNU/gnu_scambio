@@ -33,7 +33,7 @@ static void cmd_ctor(struct cmd *cmd, char const *keyword, unsigned nb_arg_min, 
 	cmd->nb_types = 0;
 	enum cmd_type type;
 	while (CMD_EOA != (type = va_arg(ap, enum cmd_type))) {
-		if (cmd->nb_types >= sizeof_array(cmd->types)) THROW(BAD_PARAMETER);
+		if (cmd->nb_types >= sizeof_array(cmd->types)) THROW(exception_bad_param("too many types"));
 		cmd->types[ cmd->nb_types++ ] = type;
 	}
 	LIST_INSERT_HEAD(&cmds, cmd, entry);
@@ -46,8 +46,7 @@ static void cmd_dtor(struct cmd *cmd)
 
 static struct cmd *cmd_new(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, va_list ap)
 {
-	struct cmd *cmd = malloc_uwprotect(sizeof(*cmd));
-	if (! cmd) THROW(OOM);
+	struct cmd *cmd = malloc_or_throw_uwprotect(sizeof(*cmd));
 	cmd_ctor(cmd, keyword, nb_arg_min, nb_arg_max, cb, ap);
 	// Should we keep initializing stuff with functions that could trigger an exception, we would add :
 	// atunwind(cmd_dtor, cmd)

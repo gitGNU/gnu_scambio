@@ -5,14 +5,18 @@
  * for configuration purpose, so that configuration can be change in real time
  * while the system is running.
  */
-#include <exception.h>
+#ifndef CONF_H_080617
+#define CONF_H_080617
 
 void conf_set_default_str(char const *name, char const *value);
 
 void conf_set_default_int(char const *name, long long value);
 
-struct exception conf_no_such_param, conf_bad_integer_format;
+#include <exception.h>
+DEFINE_EXCEPTION(conf_no_such_param,      char const *name);
+DEFINE_EXCEPTION(conf_bad_integer_format, char const *name, char const *format);
 
 char const *conf_get_str(char const *name);
 long long conf_get_int(char const *name);
 
+#endif
