@@ -5,8 +5,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <log.h>
-#include <miscmac.h>
-#include "conf.h"
+#include "scambio.h"
+#include "stribution.h"
 #include "header.h"
  
 extern int lineno;
@@ -14,19 +14,19 @@ void yyerror(char const *);
 extern int yylex();
 extern FILE *yyin;
 
-static struct conf *conf;
-#define TEST (conf->tests[conf->nb_tests])
+static struct stribution *stribution;
+#define TEST (stribution->tests[stribution->nb_tests])
 
 #define YYSTYPE char *
 
 extern YYSTYPE yytext;
 
-static enum conf_op str2binaryop(char const *str)
+static enum strib_op str2binaryop(char const *str)
 {
 	static struct {
 		char const *str;
 		size_t len;
-		enum conf_op op;
+		enum strib_op op;
 	} const binaryops[] = {	// Put longest string first !
 		{ ">=", 2, OP_GE }, { "<=", 2, OP_LE }, { "=~", 2, OP_RE },
 		{ "=", 1, OP_EQ }, { ">", 1, OP_GT }, { "<", 1, OP_LT },
@@ -38,12 +38,12 @@ static enum conf_op str2binaryop(char const *str)
 	return -1;
 }
 
-static enum conf_op str2unaryop(char const *str)
+static enum strib_op str2unaryop(char const *str)
 {
 	static struct {
 		char const *str;
 		size_t len;
-		enum conf_op op;
+		enum strib_op op;
 	} const unaryops[] = {
 		{ "unset", 5, OP_UNSET }, { "set", 3, OP_SET },
 	};
@@ -89,7 +89,7 @@ static char *copystring(char const *str)
 
 tests:
 	tests test {
-		if (++ conf->nb_tests >= NB_MAX_TESTS) {
+		if (++ stribution->nb_tests >= NB_MAX_TESTS) {
 			yyerror("Too many tests (max is "TOSTR(NB_MAX_TESTS)")");
 			return -1;
 		}
@@ -183,9 +183,9 @@ int yywrap()
 	return 1;
 } 
 
-int conf_parse(char const *filename, struct conf *c)
+int strib_parse(char const *filename, struct stribution *c)
 {
-	conf = c;
+	stribution = c;
 	FILE *file = fopen(filename, "r");
 	if (! file) {
 		error("Cannot open configuration file '%s' : %s", filename, strerror(errno));

@@ -1,7 +1,7 @@
 %{
 #include <stdio.h>
 #include "config.h"
-#include "conf_parser.h"
+#include "strib_parser.h"
 
 static void __attribute__((unused)) yyunput (int,char *);	// Avoids a warning
 int lineno;

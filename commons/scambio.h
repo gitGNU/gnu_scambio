@@ -6,5 +6,6 @@
  */
 
 #include "config.h"
+#include "miscmac.h"
 
 #endif

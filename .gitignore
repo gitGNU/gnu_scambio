@@ -17,3 +17,4 @@ libtool
 stamp-h1
 build/
 cscope.out
+config.h.in~

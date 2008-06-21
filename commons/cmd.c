@@ -2,8 +2,9 @@
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
-#include <miscmac.h>
+#include "scambio.h"
 #include "cmd.h"
+#include "varbuf.h"
 
 /*
  * Data Definitions
@@ -104,14 +105,13 @@ void cmd_end(void)
  * Eval a line
  */
 
-void cmd_eval(int fd)
+int cmd_eval(int fd)
 {
+	int err;
 	struct varbuf varbuf;
 	union cmd_arg *tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
-	unsigned nb_tokens;
 	varbuf_ctor(&varbuf, 1024, true);
-	atunwind(varbuf_dtor, &varbuf);
-	varbuf_gets(&varbuf, fd);
+	if (0 != (err = varbuf_gets(&varbuf, fd))) return err;
 	unsigned nb_tokens = tokenize(&varbuf, tokens);
 	if (nb_tokens) {
 		char const *const keyword = tokens[0]->string;
@@ -126,6 +126,6 @@ void cmd_eval(int fd)
 			}
 		}
 	}
-	unwind;
+	varbuf_dtor(&varbuf);
 }
 

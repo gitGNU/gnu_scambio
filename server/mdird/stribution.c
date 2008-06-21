@@ -3,20 +3,20 @@
 #include <string.h>
 #include <log.h>
 #include <assert.h>
-#include "conf.h"
+#include "stribution.h"
 #include "header.h"
 
 /*
  * Data Definitions
  */
 
-int conf_parse(char const *filename, struct conf *c);
+int strib_parse(char const *filename, struct stribution *c);
 
 /*
  * Private Functions
  */
 
-static char const *op2str(enum conf_op op)
+static char const *op2str(enum strib_op op)
 {
 	switch (op) {
 		case OP_ALWAYS: return "always";
@@ -42,17 +42,17 @@ static char const *action2str(enum action_type type)
 	return "INVALID";
 }
 
-static bool is_constant(enum conf_op op)
+static bool is_constant(enum strib_op op)
 {
 	return op == OP_ALWAYS;
 }
 
-static bool is_unary(enum conf_op op)
+static bool is_unary(enum strib_op op)
 {
 	return op == OP_SET || op == OP_UNSET;
 }
 
-static bool is_binary(enum conf_op op)
+static bool is_binary(enum strib_op op)
 {
 	return op == OP_GT || op == OP_GE || op == OP_LT || op == OP_LE || op == OP_EQ || op == OP_RE;
 }
@@ -62,7 +62,7 @@ static bool has_dest(enum action_type type)
 	return type != ACTION_DISCARD;
 }
 
-static void test_dump(struct conf_test *test, void (*printer)(char const *fmt, ...))
+static void test_dump(struct strib_test *test, void (*printer)(char const *fmt, ...))
 {
 	if (is_constant(test->condition.op)) {
 		printer("%s", op2str(test->condition.op));
@@ -86,7 +86,7 @@ static void test_dump(struct conf_test *test, void (*printer)(char const *fmt, .
 	printer("\n");
 }
 
-static void conf_condition_dtor(struct conf_condition *cond)
+static void strib_condition_dtor(struct strib_condition *cond)
 {
 	// Destruct condition
 	switch (cond->op) {
@@ -118,7 +118,7 @@ static void conf_condition_dtor(struct conf_condition *cond)
 	}
 }
 
-static void conf_action_dtor(struct conf_action *a)
+static void strib_action_dtor(struct strib_action *a)
 {
 	switch (a->type) {
 		case ACTION_DISCARD:
@@ -137,20 +137,20 @@ static void conf_action_dtor(struct conf_action *a)
 	}
 }
 
-static void test_dtor(struct conf_test *t)
+static void test_dtor(struct strib_test *t)
 {
-	conf_condition_dtor(&t->condition);
-	conf_action_dtor(&t->action);
+	strib_condition_dtor(&t->condition);
+	strib_action_dtor(&t->action);
 }
 
-static void conf_dtor(struct conf *c)
+static void strib_dtor(struct stribution *c)
 {
 	for (unsigned t=0; t<c->nb_tests; t++) {
 		test_dtor(c->tests+t);
 	}
 }
 
-static bool binary_op_num(enum conf_op op, long long a, long long b)
+static bool binary_op_num(enum strib_op op, long long a, long long b)
 {
 	switch (op) {
 		case OP_GT: return a > b;
@@ -164,7 +164,7 @@ static bool binary_op_num(enum conf_op op, long long a, long long b)
 	return false;
 }
 
-static bool binary_op_str(enum conf_op op, char const *a, char const *b)
+static bool binary_op_str(enum strib_op op, char const *a, char const *b)
 {
 	int cmp = strcmp(a, b);
 	switch (op) {
@@ -196,7 +196,7 @@ static bool field_is_set(char const *field_name, unsigned field_key, struct head
 	return NULL != header_search(head, field_name, field_key);
 }
 
-static bool condition_eval(struct conf_condition *cond, struct header const *head)
+static bool condition_eval(struct strib_condition *cond, struct header const *head)
 {
 	switch (cond->op) {
 		case OP_ALWAYS: return true;
@@ -243,45 +243,45 @@ static bool condition_eval(struct conf_condition *cond, struct header const *hea
  * Public Functions
  */
 
-struct conf *conf_new(char const *filename)
+struct stribution *strib_new(char const *filename)
 {
-	struct conf *c = calloc(1, sizeof(*c) + NB_MAX_TESTS*sizeof(c->tests[0]));
+	struct stribution *c = calloc(1, sizeof(*c) + NB_MAX_TESTS*sizeof(c->tests[0]));
 	if (! c) {
-		error("Cannot alloc a conf for '%s'", filename);
+		error("Cannot alloc a stribution for '%s'", filename);
 		return NULL;
 	}
-	if (0 != conf_parse(filename, c)) {
+	if (0 != strib_parse(filename, c)) {
 		free(c);
 		return NULL;
 	}
-	struct conf *smaller_c = realloc(c, sizeof(*c) + c->nb_tests*sizeof(c->tests[0]));
+	struct stribution *smaller_c = realloc(c, sizeof(*c) + c->nb_tests*sizeof(c->tests[0]));
 	if (! smaller_c) {
-		warning("Cannot resize conf for '%s'", filename);
+		warning("Cannot resize stribution for '%s'", filename);
 		return c;
 	}
 	return smaller_c;
 }
 
-void conf_del(struct conf *conf)
+void strib_del(struct stribution *stribution)
 {
-	conf_dtor(conf);
-	free(conf);
+	strib_dtor(stribution);
+	free(stribution);
 }
 
-void conf_dump(struct conf *conf, void (*printer)(char const *fmt, ...))
+void strib_dump(struct stribution *stribution, void (*printer)(char const *fmt, ...))
 {
 	printer("Configuration :\n");
-	for (unsigned t=0; t<conf->nb_tests; t++) {
-		test_dump(conf->tests+t, printer);
+	for (unsigned t=0; t<stribution->nb_tests; t++) {
+		test_dump(stribution->tests+t, printer);
 	}
 }
 
-unsigned conf_eval(struct conf *conf, struct header const *head, struct conf_action const *actions[])
+unsigned strib_eval(struct stribution *stribution, struct header const *head, struct strib_action const *actions[])
 {
 	unsigned nb_actions = 0;
-	for (unsigned t=0; t<conf->nb_tests; t++) {
-		if (condition_eval(&conf->tests[t].condition, head)) {
-			actions[nb_actions++] = &conf->tests[t].action;
+	for (unsigned t=0; t<stribution->nb_tests; t++) {
+		if (condition_eval(&stribution->tests[t].condition, head)) {
+			actions[nb_actions++] = &stribution->tests[t].action;
 		}
 	}
 	return nb_actions;

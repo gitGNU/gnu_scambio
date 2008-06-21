@@ -5,16 +5,16 @@
 #include <sys/types.h>
 #include <regex.h>
 
-struct conf_test {
-	struct conf_condition {
-		enum conf_op { OP_ALWAYS, OP_SET, OP_UNSET, OP_GT, OP_GE, OP_LT, OP_LE, OP_EQ, OP_RE } op;
+struct strib_test {
+	struct strib_condition {
+		enum strib_op { OP_ALWAYS, OP_SET, OP_UNSET, OP_GT, OP_GE, OP_LT, OP_LE, OP_EQ, OP_RE } op;
 		char *field_name;
 		unsigned field_key;
 		enum value_type { TYPE_STRING, TYPE_NUMBER, TYPE_DEREF } value_type;
-		union conf_value {
+		union strib_value {
 			long long number;
 			char *string;
-			struct conf_deref {
+			struct strib_deref {
 				char *name;
 				unsigned key;
 			} deref;
@@ -22,28 +22,28 @@ struct conf_test {
 		bool re_match_set;
 		regex_t re_match;
 	} condition;
-	struct conf_action {
+	struct strib_action {
 		enum action_type { ACTION_DISCARD, ACTION_COPY, ACTION_MOVE } type;
 		enum dest_type { DEST_STRING, DEST_DEREF } dest_type;
-		union conf_dest {
+		union strib_dest {
 			char *string;
-			struct conf_deref deref;
+			struct strib_deref deref;
 		} dest;
 	} action;
 };
 
 #define NB_MAX_TESTS 1000	// FIXME: resizeable
 
-struct conf {
+struct stribution {
 	unsigned nb_tests;
-	struct conf_test tests[];	// Variable size
+	struct strib_test tests[];	// Variable size
 };
 
-struct conf *conf_new(char const *path);
-void conf_del(struct conf *);
-void conf_dump(struct conf *, void (*printer)(char const *fmt, ...));
+struct stribution *strib_new(char const *path);
+void strib_del(struct stribution *);
+void strib_dump(struct stribution *, void (*printer)(char const *fmt, ...));
 // Returns the length of actions
 struct header;
-unsigned conf_eval(struct conf *, struct header const *, struct conf_action const *actions[]);
+unsigned strib_eval(struct stribution *, struct header const *, struct strib_action const *actions[]);
 
 #endif

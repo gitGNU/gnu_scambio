@@ -1,2 +1,2 @@
-SUBDIRS = stribucion
+SUBDIRS = mdird
 

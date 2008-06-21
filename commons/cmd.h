@@ -28,6 +28,6 @@ void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_
 void cmd_unregister_keyword(char const *keyword);
 void cmd_end(void);
 
-void cmd_eval(int fd);
+int cmd_eval(int fd);
 
 #endif

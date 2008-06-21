@@ -36,7 +36,9 @@ traitées sans configuration, et ensuite des commande utiles pour questionner
 le statut oubien modifier des paramètres runtime.
 
 - démonisation ;
-  Mise en background du process et configuration des logs
+  Mise en background du process
+
+- logs ;
 
 
 Journal du mdir (libjnl)

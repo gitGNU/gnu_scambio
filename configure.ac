@@ -4,7 +4,7 @@
 AC_PREREQ(2.61)
 AC_INIT(scambio, 0, rixed@free.fr)
 AC_CONFIG_SRCDIR([server])
-AC_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADER([commons/config.h])
 AM_INIT_AUTOMAKE
 
 # Checks for programs.
@@ -13,7 +13,6 @@ AC_PROG_YACC
 AM_PROG_LIBTOOL
 
 # Checks for libraries.
-AC_CHECK_LIB([rixed], [error])
 AC_CHECK_PTH(2.0.0)
 
 # Checks for header files.
@@ -33,10 +32,10 @@ AC_CHECK_FUNCS([memset strtol])
 
 AC_CONFIG_FILES([
 	Makefile
-	libsys/Makefile
+	commons/Makefile
 	server/Makefile
-	server/stribucion/Makefile
-	server/stribucion/checks/Makefile
+	server/mdird/Makefile
+	server/mdird/checks/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

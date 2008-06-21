@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <unistd.h>
-#include <miscmac.h>
+#include "scambio.h"
 #include "config.h"
 #include "header.h"
 #include "log.h"

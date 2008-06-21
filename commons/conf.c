@@ -3,7 +3,7 @@
 #include <log.h>
 #include <string.h>
 #include <errno.h>
-#include <object.h>
+#include "scambio.h"
 #include "conf.h"
 
 /*
