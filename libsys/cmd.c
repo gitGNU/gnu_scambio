@@ -98,4 +98,32 @@ void cmd_end(void)
 	}
 }
 
+/*
+ * Eval a line
+ */
+
+void cmd_eval(int fd)
+{
+	struct varbuf varbuf;
+	union cmd_arg *tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
+	unsigned nb_tokens;
+	varbuf_ctor(&varbuf, 1024, true);
+	atunwind(varbuf_dtor, &varbuf);
+	varbuf_gets(&varbuf, fd);
+	unsigned nb_tokens = tokenize(&varbuf, tokens);
+	if (nb_tokens) {
+		char const *const keyword = tokens[0]->string;
+		unsigned nb_args = nb_tokens - 1;
+		union cmd_arg *const args = tokens+1;
+		struct cmd *cmd;
+		LIST_FOREACH(cmd, &cmds, entry) {
+			if (same_keyword(cmd->keyword, keyword)) {
+				check_args(cmd, nb_args, args);	// will also convert some args from string to integer
+				cmd->cb(keyword, nb_args, args);
+				break;
+			}
+		}
+	}
+	unwind;
+}
 

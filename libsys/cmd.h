@@ -4,6 +4,8 @@
  * word being a keyword that allows a minimal syntax check.
  *
  * Commands are entered in a text file.
+ *
+ * May evolve into a lisp.
  */
 
 #ifndef CMD_H_080616
@@ -25,5 +27,7 @@ void cmd_begin(int textfd);
 void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, ...);
 void cmd_unregister_keyword(char const *keyword);
 void cmd_end(void);
+
+void cmd_eval(int fd);
 
 #endif
