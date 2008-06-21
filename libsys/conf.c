@@ -11,86 +11,37 @@
  */
 
 /*
- * Exceptions for requesting an unknown parameter
- */
-
-struct enoparam {
-	struct exception exception;
-};
-
-static void enoparam_del(struct exception *e)
-{
-	struct enoparam *enp = DOWNCAST(e, exception, enoparam);
-	free(enp);
-}
-
-struct exception_ops const conf_no_such_param_ops = { .del = enoparam_del };
-
-struct exception *conf_no_such_param(char const *param)
-{
-	struct enoparam *enp = malloc(sizeof(*enp));
-	assert(enp);
-	enp->exception.ops = &conf_no_such_param_ops;
-	snprintf(enp->exception.name, sizeof(enp->exception.name), "NoSuchParam : %s", param);
-	return &enp->exception;
-}
-
-/*
- * Exceptions for requesting an integer value from a non-int string
- */
-
-struct ebadint {
-	struct exception exception;
-};
-
-static void ebadint_del(struct exception *e)
-{
-	struct ebadint *ebi = DOWNCAST(e, exception, ebadint);
-	free(ebi);
-}
-
-struct exception_ops const conf_bad_integer_format_ops = { .del = ebadint_del };
-
-struct exception *conf_bad_integer_format(char const *param, char const *format)
-{
-	struct ebadint *ebi = malloc(sizeof(*ebi));
-	assert(ebi);
-	ebi->exception.ops = &conf_bad_integer_format_ops;
-	snprintf(ebi->exception.name, sizeof(ebi->exception.name), "BadIntegerFormat : %s for parameter %s", format, param);
-	return &ebi->exception;
-}
-
-/*
  * Configuration queries
  */
 
-void conf_set_default_str(char const *name, char const *value)
+int conf_set_default_str(char const *name, char const *value)
 {
-	if (0 != setenv(name, value, 0)) THROW(exception_sys(errno));
+	if (0 != setenv(name, value, 0)) return -errno;
+	return 0;
 }
 
-void conf_set_default_int(char const *name, long long value)
+int conf_set_default_int(char const *name, long long value)
 {
 	int len = snprintf(NULL, 0, "%lld", value);
-	char *str = malloc_or_throw_uwprotect(len+1);	// is the string _copied_ into the environment ?
+	char *str = malloc(len+1);	// is the string _copied_ into the environment ?
+	if (! str) return -ENOMEM;
 	snprintf(str, len+1, "%lld", value);
-	conf_set_default_str(name, str);
-	unwind;
+	int ret = conf_set_default_str(name, str);
+	free(str);
+	return ret;
 }
 
 char const *conf_get_str(char const *name)
 {
-	char const *value = getenv(name);
-	if (! value) THROW(conf_no_such_param(name));
-	return value;
+	return getenv(name);
 }
 
-long long conf_get_int(char const *name)
+int conf_get_int(long long *value, char const *name)
 {
-	char const *value = conf_get_str(name);
+	char const *str = conf_get_str(name);
+	if (! str) return -ENOENT;
 	char *end;
-	long long i = strtoll(value, &end, 0);
-	if (*end != '\0') THROW(conf_bad_integer_format(name, value));
-	return i;
+	*value = strtoll(str, &end, 0);
+	return *end == '\0' ? 0 : -EINVAL;
 }
 

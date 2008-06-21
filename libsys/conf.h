@@ -8,15 +8,9 @@
 #ifndef CONF_H_080617
 #define CONF_H_080617
 
-void conf_set_default_str(char const *name, char const *value);
-
-void conf_set_default_int(char const *name, long long value);
-
-#include <exception.h>
-DEFINE_EXCEPTION(conf_no_such_param,      char const *name);
-DEFINE_EXCEPTION(conf_bad_integer_format, char const *name, char const *format);
-
+int conf_set_default_str(char const *name, char const *value);
+int conf_set_default_int(char const *name, long long value);
 char const *conf_get_str(char const *name);
-long long conf_get_int(char const *name);
+int conf_get_int(long long *value, char const *name);
 
 #endif

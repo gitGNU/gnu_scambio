@@ -1,7 +1,8 @@
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <errno.h>
 #include <miscmac.h>
-#include <exception.h>
 #include "cmd.h"
 
 /*
@@ -24,7 +25,7 @@ static int textfd;
  * Command (un)registration
  */
 
-static void cmd_ctor(struct cmd *cmd, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, va_list ap)
+static int cmd_ctor(struct cmd *cmd, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, va_list ap)
 {
 	cmd->keyword = keyword;
 	cmd->nb_arg_min = nb_arg_min;
@@ -33,10 +34,11 @@ static void cmd_ctor(struct cmd *cmd, char const *keyword, unsigned nb_arg_min, 
 	cmd->nb_types = 0;
 	enum cmd_type type;
 	while (CMD_EOA != (type = va_arg(ap, enum cmd_type))) {
-		if (cmd->nb_types >= sizeof_array(cmd->types)) THROW(exception_bad_param("too many types"));
+		if (cmd->nb_types >= sizeof_array(cmd->types)) return -E2BIG;
 		cmd->types[ cmd->nb_types++ ] = type;
 	}
 	LIST_INSERT_HEAD(&cmds, cmd, entry);
+	return 0;
 }
 
 static void cmd_dtor(struct cmd *cmd)
@@ -46,12 +48,12 @@ static void cmd_dtor(struct cmd *cmd)
 
 static struct cmd *cmd_new(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, cmd_callback *cb, va_list ap)
 {
-	struct cmd *cmd = malloc_or_throw_uwprotect(sizeof(*cmd));
-	cmd_ctor(cmd, keyword, nb_arg_min, nb_arg_max, cb, ap);
-	// Should we keep initializing stuff with functions that could trigger an exception, we would add :
-	// atunwind(cmd_dtor, cmd)
-	// so that the exception would both destruct and free the cmd.
-	dewind;
+	struct cmd *cmd = malloc(sizeof(*cmd));
+	if (! cmd) return NULL;
+	if (0 != cmd_ctor(cmd, keyword, nb_arg_min, nb_arg_max, cb, ap)) {
+		free(cmd);
+		return NULL;
+	}
 	return cmd;
 }
 

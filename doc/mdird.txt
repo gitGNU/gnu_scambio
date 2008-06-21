@@ -28,8 +28,15 @@ Système :
 ~~~~~~~~~
 
 - configuration (envvar sous unix) ;
+
 - commandes (console) ;
+  L'idée ici c'est d'avoir une config de démarrage qui se termine par une 
+commande pour ouvrir le service (pour éviter que les requetes ne soient 
+traitées sans configuration, et ensuite des commande utiles pour questionner 
+le statut oubien modifier des paramètres runtime.
+
 - démonisation ;
+  Mise en background du process et configuration des logs
 
 
 Journal du mdir (libjnl)
