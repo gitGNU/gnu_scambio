@@ -12,7 +12,8 @@ mdird_SOURCES = \
 	strib_lexer.l \
 	stribution.c \
 	strib_cache.c \
-	mdird.c
+	mdird.c \
+	message.c
 
 mdird_LDADD = @LEXLIB@ ../../commons/libcommons.la
 

@@ -6,8 +6,8 @@
 #include "scambio.h"
 #include "conf.h"
 #include "daemon.h"
+#include "cnx.h"
 #include "varbuf.h"
-#include "url.h"
 #include "message.h"
 
 /*
@@ -101,21 +101,28 @@ static struct cnx_env *cnx_env_new(int fd)
 static void *serve_cnx(void *arg)
 {
 	struct cnx_env *env = arg;
-	struct varbuf vbuf;
-	struct header *header = NULL;
+	struct varbuf vb_url, vb_head;
 	if (! pth_cleanup_push(cnx_env_del, env)) {
 		th_error("Cannot add cleanup function");
 		cnx_env_del(env);
 		return NULL;
 	}
-	varbuf_ctor(&vbuf, 2000, true);
+	if (0 != varbuf_ctor(&vb_url, 2000, true)) goto err0;
+	if (0 != varbuf_ctor(&vb_head, 5000, true)) goto err1;
 	do {	// read a message, each error cutting the cnx (should we ?)
-		if (0 != read_url(&vbuf, env->fd)) break;
-		if (NULL == (header = header_new_from_file(env->fd))) break;
-		insert_message(&vbuf, header);
+		if (0 != read_url(&vb_url, env->fd)) break;
+		if (0 != read_header(&vb_head, env->fd)) break;
+		struct header *header = header_new(vb_head.buf);
+		if (! header) break;
+		insert_message(&vb_url, header);
 		header_del(header);
+		varbuf_clean(&vb_head);
+		varbuf_clean(&vb_url);
 	} while (1);
-	varbuf_dtor(&vbuf);
+	varbuf_dtor(&vb_head);
+err1:
+	varbuf_dtor(&vb_url);
+err0:
 	return NULL;
 }
 

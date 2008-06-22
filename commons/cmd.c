@@ -110,7 +110,7 @@ int cmd_eval(int fd)
 	int err;
 	struct varbuf varbuf;
 	union cmd_arg *tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
-	varbuf_ctor(&varbuf, 1024, true);
+	if (0 != (err = varbuf_ctor(&varbuf, 1024, true))) return err;
 	if (0 != (err = varbuf_gets(&varbuf, fd))) return err;
 	unsigned nb_tokens = tokenize(&varbuf, tokens);
 	if (nb_tokens) {
