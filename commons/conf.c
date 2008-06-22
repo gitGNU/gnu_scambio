@@ -6,6 +6,8 @@
 #include "scambio.h"
 #include "conf.h"
 
+/* NOTICE: this should not log anything since log depends on conf */
+
 /*
  * Data Definition
  */

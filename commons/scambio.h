@@ -7,5 +7,6 @@
 
 #include "config.h"
 #include "miscmac.h"
+#include "log.h"
 
 #endif
