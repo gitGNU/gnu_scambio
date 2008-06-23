@@ -55,3 +55,4 @@ fichier.
 Ne pas se laisser tromper par la simplicité du format : utiliser lex/bison pour
 se réserver le droit de modifier facilement cette syntaxe par la suite.
 
+// vim: syntax=asciidoc

@@ -44,9 +44,41 @@ provenant des clients de mdird.
 Journal du mdir (libjnl)
 ------------------------
 
-Pour le journal et les méta données uniquement. Choix du stockage fichiers, 
-base de donnée ou autre. Peut être utilisé par les clients.
+On raison répertoire par répertoire.
 
+Chaque répertoire contient des journaux, chacun couvrant une plage de numéro 
+de versions. La première version du premier journal est la version la plus 
+ancienne à laquelle on puisse accéder.  Le dernier numéro de version du 
+dernier journal est le numéro de version courant du répertoire.  Les journaux 
+servent pour générer un diff depuis Vi, suivant l'algorithme : on ouvre le 
+journal contenant Vi. Si Vi est antérieur à la première version du plus vieux 
+journal on considère qu'on nous demande ce numéro à la place (ceci permet aux 
+nouveaux client de demander le diff depuis 0, sans se demander quel est le bon 
+premier numéro de version) ; mais si Vi est postérieur à la version finale du 
+plus récent journal, le diff est terminé.  On le lit jusqu'à la version Vi.  
+On écrit tout son contenu, ce qui nous amène à la version Vf.  On recommance, 
+avec Vi=Vf+1 (la condition d'arrêt a déjà été donnée).
+
+Lorsqu'un répertoire ne contient pas de journal, il doit être vide.
+
+On voit qu'il est intéressant de ne pas avoir trop de versions par journal car 
+ainsi on n'est pas obligé de parcourir pour rien trop de patchs au début, sauf 
+pour le premier journal qui sert aux nouveaux clients à ce mettre à jour 
+initialement.
+
+L'algorithme donné plus haut est simpliste : de nombreuses modifications vont 
+se contredire (ajout suivi de suppression, suivi d'ajout...). Il serait utile 
+d'optimiser les journaux (parcourir les patchs à la recherche de 
+contre-ordres) ; ceci peut-être réalisé par un outils externe puisque les 
+journeaux, une fois bouclés, sont en lecture seule (un journal est bouclé 
+lorsqu'il est suivi chronologiquement d'un autre).
+
+La taille des journeaux non optimisés devrait être configurable.
+De plus, les premiers journaux devraient être plus gros. En fait, les tailles 
+devraient être décroissantes (l'optimiseur de journaux peut aussi changer les 
+tailles - d'ailleurs il n'est pas interdit que plusieurs journaux se 
+chevauchent, ce qui facilite son travail (il peut ne réécrire qu'un seul 
+journal à la fois).
 
 Commandes de mdird
 ------------------
@@ -127,4 +159,4 @@ REM
 Format semblable à PUT, mais signifiant au contraire que tout fichier 
 possédant ces headers doit être retiré.
 
-
+// vim: syntax=asciidoc
