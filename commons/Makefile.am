@@ -8,4 +8,5 @@ libcommons_la_SOURCES = \
 	conf.c \
 	log.c \
 	cnx.c \
+	cmd.c \
 	daemon.c

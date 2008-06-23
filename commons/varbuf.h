@@ -28,8 +28,9 @@ static inline void varbuf_dtor(struct varbuf *vb)
 	free(vb->buf);
 }
 
-int varbuf_makeroom(struct varbuf *vb, size_t new_size);
+int varbuf_make_room(struct varbuf *vb, size_t new_size);
 int varbuf_append(struct varbuf *vb, size_t size, void *buf);
+// returns 0 on EOF
 ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen);
 void varbuf_clean(struct varbuf *vb);
 

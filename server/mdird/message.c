@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include "message.h"
+#include "log.h"
 
 /*
  * URL
@@ -51,5 +52,6 @@ int read_header(struct varbuf *vb, int fd)
 
 void insert_message(struct varbuf *vb, struct header *head)
 {
+	debug("insert message ... TODO");
 }
 

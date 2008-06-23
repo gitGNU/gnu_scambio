@@ -9,6 +9,8 @@
 #include "cnx.h"
 #include "varbuf.h"
 #include "message.h"
+#include "cmd.h"
+#include "mdird.h"
 
 /*
  * Data Definitions
@@ -17,9 +19,10 @@
 static struct cnx_server server;
 static sig_atomic_t terminate = 0;
 
-struct cnx_env {
-	int fd;
-};
+char const *const kw_diff  = "diff";
+char const *const kw_put   = "put";
+char const *const kw_class = "class";
+char const *const kw_rem   = "rem";
 
 /*
  * Init functions
@@ -38,6 +41,17 @@ static int init_log(void)
 	int err;
 	if (0 != (err = log_begin(conf_get_str("SCAMBIO_LOG_DIR"), "mdird.log"))) return err;
 	if (0 != atexit(log_end)) return -1;
+	return 0;
+}
+
+static int init_cmd(void)
+{
+	cmd_begin();
+	if (0 != atexit(cmd_end)) return -1;
+	cmd_register_keyword(kw_diff,  2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
+	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_class, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
 	return 0;
 }
 
@@ -63,6 +77,7 @@ static int init(void)
 	int err;
 	if (0 != (err = init_conf())) return err;
 	if (0 != (err = init_log())) return err;
+	if (0 != (err = init_cmd())) return err;
 	if (0 != (err = daemonize())) return err;
 	if (! pth_init()) return err;
 	if (0 != (err = init_server())) return err;
@@ -101,28 +116,21 @@ static struct cnx_env *cnx_env_new(int fd)
 static void *serve_cnx(void *arg)
 {
 	struct cnx_env *env = arg;
-	struct varbuf vb_url, vb_head;
 	if (! pth_cleanup_push(cnx_env_del, env)) {
 		th_error("Cannot add cleanup function");
 		cnx_env_del(env);
 		return NULL;
 	}
-	if (0 != varbuf_ctor(&vb_url, 2000, true)) goto err0;
-	if (0 != varbuf_ctor(&vb_head, 5000, true)) goto err1;
-	do {	// read a message, each error cutting the cnx (should we ?)
-		if (0 != read_url(&vb_url, env->fd)) break;
-		if (0 != read_header(&vb_head, env->fd)) break;
-		struct header *header = header_new(vb_head.buf);
-		if (! header) break;
-		insert_message(&vb_url, header);
-		header_del(header);
-		varbuf_clean(&vb_head);
-		varbuf_clean(&vb_url);
+	int err = 0;
+	do {	// read a command and exec it
+		struct cmd cmd;
+		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
+		if (! cmd.keyword) break;
+		if (kw_diff == cmd.keyword) {
+			err = exec_diff(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
+		}
+		cmd_dtor(&cmd);
 	} while (1);
-	varbuf_dtor(&vb_head);
-err1:
-	varbuf_dtor(&vb_url);
-err0:
 	return NULL;
 }
 

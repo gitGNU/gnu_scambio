@@ -1,4 +1,6 @@
 #include <string.h>
+#include <inttypes.h>
+#include <assert.h>
 #include <pth.h>
 #include "varbuf.h"
 
@@ -17,7 +19,7 @@
 extern inline int varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocatable);
 extern inline void varbuf_dtor(struct varbuf *vb);
 
-int varbuf_makeroom(struct varbuf *vb, size_t new_size)
+int varbuf_make_room(struct varbuf *vb, size_t new_size)
 {
 	if (vb->actual >= new_size) return 0;
 	void *new_buf = realloc(vb->buf, new_size);
@@ -36,7 +38,7 @@ int varbuf_append(struct varbuf *vb, size_t size, void *buf)
 	int err;
 	if (vb->used + size > vb->actual) {
 		size_t inc = vb->used + size - vb->actual;
-		if (0 != (err = varbuf_makeroom(vb, vb->actual + inc + (inc + 1)/2))) return err;
+		if (0 != (err = varbuf_make_room(vb, vb->actual + inc + (inc + 1)/2))) return err;
 	}
 	memcpy(vb->buf+vb->used, buf, size);
 	vb->used += size;
@@ -51,8 +53,23 @@ void varbuf_clean(struct varbuf *vb)
 
 ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen)
 {
-	ssize_t ret = pth_read(fd, vb->buf+vb->used, vb->actual-vb->used);
-	// TODO
-	return ret;
+	int err = 0;
+	varbuf_clean(vb);
+	while (vb->used < maxlen) {
+		int8_t byte;
+		ssize_t ret = pth_read(fd, &byte, 1);	// "If in doubt, use brute force"
+		if (ret < 0) {
+			if (errno == EINTR) continue;
+			err = ret;
+			break;
+		} else if (ret == 0) {
+			break;
+		}
+		assert(ret == 1);
+		varbuf_append(vb, 1, &byte);
+		if (byte == '\n') break;
+	}
+	varbuf_append(vb, 1, "");	// always null-term the string
+	return err;
 }
 

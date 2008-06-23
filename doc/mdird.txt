@@ -7,8 +7,8 @@ surtout, donc pas utile pour mdird). Privilégier une approche complètement
 assynchrone par évènements. Utiliser libpth qui fait ça très bien et est très
 portable.
 
-Modules de la lib générale (libsys)
------------------------------------
+Modules de la lib générale (libcommons)
+---------------------------------------
 
 Communication :
 ~~~~~~~~~~~~~~~
@@ -30,10 +30,10 @@ Système :
 - configuration (envvar sous unix) ;
 
 - commandes (console) ;
-  L'idée ici c'est d'avoir une config de démarrage qui se termine par une 
-commande pour ouvrir le service (pour éviter que les requetes ne soient 
-traitées sans configuration, et ensuite des commande utiles pour questionner 
-le statut oubien modifier des paramètres runtime.
+  L'idée ici est double : avoir une console de configuration/administration 
+(avec une commande pour ouvrir le service pour éviter que les requetes ne 
+soient traitées sans configuration), et pouvoir interpréter les ordres 
+provenant des clients de mdird.
 
 - démonisation ;
   Mise en background du process
@@ -45,6 +45,86 @@ Journal du mdir (libjnl)
 ------------------------
 
 Pour le journal et les méta données uniquement. Choix du stockage fichiers, 
-base de donnée ou autre.
+base de donnée ou autre. Peut être utilisé par les clients.
+
+
+Commandes de mdird
+------------------
+
+Le mdir gère la présence de fichiers, dont il ne connait que les headers 
+(l'url étant une méta-donnée facultative mais généralement présente qui peu t 
+permettre de distinguer des fichiers sinon différetns ou de récupérer un 
+contenu), dans des répertoires. Il permet à ses clients d'ajouter des fichiers 
+à des endroits précis oubien de les classer à partir d'un endroit précis 
+(généralement à la racine) ou de les retirer (rappel : on retire les headers, 
+pas le contenu, qui est toujours disponible dans le msgstore avec ses 
+headers).
+
+Les commandes entre client et serveur sont assynchrones et incenssible à la 
+casse (sauf pour leurs éventuels arguments).  Par ailleurs, il n'y a pas 
+vraiment de différence entre client et serveur, puisque chacune des partie 
+doit être en mesure de répondre aux requètes de l'autres.  Le client est 
+simplement ici le host qui a pris l'initiative du connect().
+
+Les requètes sont donc préfixées d'un numéro unique servant à les associer 
+avec leur réponse (par exemple une séquence mais ce n'est pas obligé). Ce 
+numéro ne doit pas excéder 64 bits, ce qui est amplement suffisant pour une 
+session. Les réponse commencent par ce numéro, puis le nom de la commande, 
+puis un status. Le nom de la commande est utile dans le cas où un client 
+voudrait "skipper" une réponse sans le souvenir de ce qu'il avait demandé.
+
+Les status sont inspirés du HTTP (2XX pour OK, 5XX pour erreurs...)
+
+Les commandes sont les suivantes :
+
+DIFF
+~~~~
+
+Arguments : _repertoire_ et _version_
+où version est un entier sur 64 bits.
+
+Par exemple : "4012 DIFF /emails/Joe/work 746231"
+
+Réponse du serveur : Une liste de headers séparés par des lignes d'action (ie 
+ne contenant que '%+' ou '%-') et terminée par une ligne ne contenant que 
+'%%'.
+
+Si l'action est '%+', un fichier représenté par ce header doit être ajouté 
+s'il n'existe pas déjà et si c'est '%-' tout fichiers possédant ce header 
+devra être effacé (les headers sont donc uniques par répertoire, par 
+construction).
+
+C'est pour répondre au DIFF qu'un mdird (client ou serveur) à besoin du 
+journal (et des snapshots).
+
+On utilise '%+', '%-' et '%%' pour minimiser le risque d'avoir un non de 
+champs commencant par le délimiteur (ce qui est interdit) et facilité le 
+dialogue manuel avec un mdird. Par ailleurs, et pour cette dernière raison, on 
+ignorera toujours les espaces en fin de ligne.
+
+Code de retours : 200 pour OK, 5XX pour erreurs, et 201 pour signifier que le 
+DIFF est en fait un FULL (depuis la version 0), ie tous les messages qui ne 
+seront pas explicitement ajoutés doivent être effacés.
+
+PUT
+~~~
+
+Arguments : _repertoire_
+puis les headers terminés par une ligne ne contenant que '%%'.
+
+Cela place de fichier dans le répertoire.
+
+Réponse : PUTRESP _repertoire_ _status_
+
+CLASS
+~~~~~
+
+Semblable à PUT, mais le fichier est soumis au classement automatique.
+
+REM
+~~~
+
+Format semblable à PUT, mais signifiant au contraire que tout fichier 
+possédant ces headers doit être retiré.
 
 
