@@ -172,7 +172,7 @@ static int read_seq(long long *seq, char const *str)
 static int parse_line(struct cmd *cmd, bool with_seq, struct varbuf *vb, int fd)
 {
 	int err = 0;
-	if (0 >= (err = varbuf_read_line(vb, fd, MAX_CMD_LINE))) return err;
+	if (0 != (err = varbuf_read_line(vb, fd, MAX_CMD_LINE))) return err;
 	struct cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
 	if (nb_tokens <= 0) return nb_tokens;	// Ignore blank lines

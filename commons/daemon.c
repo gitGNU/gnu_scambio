@@ -5,6 +5,5 @@
 
 int daemonize(void)
 {
-	// TODO
-	return -1;
+	return 0;
 }

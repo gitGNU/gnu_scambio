@@ -31,6 +31,7 @@ char const *const kw_rem   = "rem";
 static int init_conf(void)
 {
 	int err;
+	debug("init conf");
 	if (0 != (err = conf_set_default_str("SCAMBIO_LOG_DIR", "/var/log"))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_PORT", 21654))) return err;
 	return 0;
@@ -39,6 +40,7 @@ static int init_conf(void)
 static int init_log(void)
 {
 	int err;
+	debug("init log");
 	if (0 != (err = log_begin(conf_get_str("SCAMBIO_LOG_DIR"), "mdird.log"))) return err;
 	if (0 != atexit(log_end)) return -1;
 	return 0;
@@ -46,12 +48,14 @@ static int init_log(void)
 
 static int init_cmd(void)
 {
+	debug("init cmd");
 	cmd_begin();
 	if (0 != atexit(cmd_end)) return -1;
-	cmd_register_keyword(kw_diff,  2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
+	// Put most used commands at end, so that they end up at the beginning of the commands list
+	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_class, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_diff,  2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
 	return 0;
 }
 
@@ -64,6 +68,7 @@ static int init_server(void)
 {
 	int err;
 	long long port;
+	debug("init server");
 	if (0 != (err = cnx_begin())) return err;
 	if (0 != atexit(cnx_end)) return -1;
 	if (0 != (err = conf_get_int(&port, "SCAMBIO_PORT"))) return err;
@@ -142,12 +147,17 @@ int main(void)
 {
 	int err;
 	if (0 != (err = init())) {
-		fprintf(stderr, "Init error : %s\n", strerror(err));
+		fprintf(stderr, "Init error : %s\n", strerror(-err));
 		return EXIT_FAILURE;
 	}
 	// Run server
 	while (! terminate) {
 		int fd = cnx_server_accept(&server);
+		if (fd < 0) {
+			error("Cannot accept connection on fd %d, pausing for 5s", server.sock_fd);
+			(void)pth_sleep(5);
+			continue;
+		}
 		struct cnx_env *env = cnx_env_new(fd);	// will be destroyed by sub-thread
 		if (env) {
 			(void)pth_spawn(PTH_ATTR_DEFAULT, serve_cnx, env);
