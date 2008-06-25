@@ -17,7 +17,8 @@ struct jnl {
 	struct dir *dir;
 };
 
-int jnl_begin(char const *rootdir);
+// max size is given in number of versions
+int jnl_begin(char const *rootdir, unsigned max_jnl_size);
 void jnl_end(void);
 
 // Gives a ref to a journal containing the given version, and returns its offset

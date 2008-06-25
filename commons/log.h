@@ -14,6 +14,7 @@ void log_end(void);
 	time_t t = time(NULL); \
 	(void)strftime(buf, sizeof(buf), "%F %T", localtime(&t)); \
 	fprintf(log_file, "%s: "fmt "\n", buf, ##__VA_ARGS__); \
+	fflush(log_file); \
 } while(0)
 
 #define error(...)      do if (log_level > 0) log_print("ERR: " __VA_ARGS__); while(0)

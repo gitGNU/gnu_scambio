@@ -10,7 +10,10 @@
 
 int conf_set_default_str(char const *name, char const *value);
 int conf_set_default_int(char const *name, long long value);
+
+// abort if not found !
+// set default values first !
 char const *conf_get_str(char const *name);
-int conf_get_int(long long *value, char const *name);
+long long conf_get_int(char const *name);
 
 #endif

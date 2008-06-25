@@ -25,6 +25,7 @@
  */
 
 static char *rootdir;
+static unsigned max_jnl_size;
 
 struct dir {
 	LIST_ENTRY(dir) entry;	// entry in the list of cached dirs (FIXME: hash this!)
@@ -82,18 +83,23 @@ static int jnl_ctor(struct jnl *jnl, struct dir *dir, char const *filename)
 	int err = 0;
 	if (0 != parse_version(filename, &jnl->first_version, &jnl->last_version)) return -EINVAL;
 	if (0 != (err = append_to_dir_path(dir, filename))) return err;
-	if (0 > (jnl->fd = open(dir->path, O_RDWR|O_APPEND))) {
+	if (0 > (jnl->fd = open(dir->path, O_RDWR|O_APPEND|O_CREAT, 0660))) {
 		err = -errno;
 	} else {	// All is OK, insert it as a journal
 		if (STAILQ_EMPTY(&dir->jnls)) {
 			STAILQ_INSERT_HEAD(&dir->jnls, jnl, entry);
 		} else {	// insert in first_version order
-			struct jnl **prevptr = &dir->jnls.stqh_first;
-			while (prevptr != dir->jnls.stqh_last) {
-				struct jnl *j = *prevptr;
+			struct jnl *j, *prev = NULL;
+			STAILQ_FOREACH(j, &dir->jnls, entry) {
+				assert(j->first_version != jnl->first_version);
 				if (j->first_version > jnl->first_version) break;
+				prev = j;
 			}
-			STAILQ_INSERT_AFTER(&dir->jnls, *prevptr, jnl, entry);
+			if (prev) {
+				STAILQ_INSERT_AFTER(&dir->jnls, prev, jnl, entry);
+			} else {
+				STAILQ_INSERT_HEAD(&dir->jnls, jnl, entry);
+			}
 		}
 		jnl->dir = dir;
 	}
@@ -190,10 +196,11 @@ static void dir_del(struct dir *dir)
  * (De)Initialization
  */
 
-int jnl_begin(char const *rootdir_)
+int jnl_begin(char const *rootdir_, unsigned max_jnl_size_)
 {
 	LIST_INIT(&dirs);
 	rootdir = strdup(rootdir_);
+	max_jnl_size = max_jnl_size_;
 	return 0;
 }
 
@@ -338,18 +345,18 @@ static int write_action(struct header *header, char action, long long version, i
 	return header_write(header, fd);
 }
 
-static int add_first_action(struct dir *dir, char action, struct header *header)
+// first action of a new journal, starting at given version
+static int add_action_new_jnl(struct dir *dir, char action, struct header *header, long long version)
 {
-	char newname[PATH_MAX];
-	// We create first the file, then the jnl
-	if (action != '+') return -EINVAL;
-	(void)snprintf(newname, sizeof(newname), "%s/"JNL_FILE_FIRST, dir->path);
-	int fd = open(newname, O_CREAT|O_EXCL|O_WRONLY, 0660);
-	if (fd < 0) return -errno;
-	int err = write_action(header, action, 0, fd);
-	(void)close(fd);
-	if (err) return err;
-	if (NULL == jnl_new(dir, JNL_FILE_FIRST)) return -1;	// FIXME
+	int err = 0;
+	char filename[PATH_MAX];
+	(void)snprintf(filename, sizeof(filename), JNL_FILE_FORMAT, version, version);
+	struct jnl *jnl = jnl_new(dir, filename);
+	if (! jnl) return -1;	// FIXME
+	if (0 != (err = write_action(header, action, version, jnl->fd))) {
+		jnl_del(jnl);
+		return err;
+	}
 	return 0;
 }
 
@@ -367,6 +374,12 @@ static int add_action_to_jnl(struct jnl *jnl, char action, struct header *header
 	return 0;
 }
 
+static unsigned jnl_size(struct jnl *jnl)
+{
+	assert(jnl->last_version >= jnl->first_version);
+	return jnl->last_version - jnl->first_version;
+}
+
 int jnl_add_action(char const *path, char action, struct header *header)
 {
 	int err = 0;
@@ -375,7 +388,9 @@ int jnl_add_action(char const *path, char action, struct header *header)
 	(void)pth_mutex_acquire(&dir->mutex, FALSE, NULL);
 	struct jnl *jnl = STAILQ_LAST(&dir->jnls, jnl, entry);
 	if (! jnl) {
-		err = add_first_action(dir, action, header);
+		err = add_action_new_jnl(dir, action, header, 0);
+	} else if (jnl_size(jnl) > max_jnl_size) {
+		err = add_action_new_jnl(dir, action, header, jnl->last_version+1);
 	} else {
 		err = add_action_to_jnl(jnl, action, header);
 	}

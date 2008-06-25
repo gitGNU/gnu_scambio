@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <log.h>
+#include <assert.h>
 #include <string.h>
 #include <errno.h>
 #include "scambio.h"
@@ -38,12 +38,14 @@ char const *conf_get_str(char const *name)
 	return getenv(name);
 }
 
-int conf_get_int(long long *value, char const *name)
+long long conf_get_int(char const *name)
 {
 	char const *str = conf_get_str(name);
+	assert(str);
 	if (! str) return -ENOENT;
 	char *end;
-	*value = strtoll(str, &end, 0);
-	return *end == '\0' ? 0 : -EINVAL;
+	long long value = strtoll(str, &end, 0);
+	assert(*end == '\0');
+	return value;
 }
 

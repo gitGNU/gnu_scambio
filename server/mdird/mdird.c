@@ -36,6 +36,7 @@ static int init_conf(void)
 	if (0 != (err = conf_set_default_int("SCAMBIO_LOG_LEVEL", 3))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_PORT", 21654))) return err;
 	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp"))) return err;
+	if (0 != (err = conf_set_default_int("SCAMBIO_MAX_JNL_SIZE", 2000))) return err;
 	return 0;
 }
 
@@ -45,10 +46,8 @@ static int init_log(void)
 	debug("init log");
 	if (0 != (err = log_begin(conf_get_str("SCAMBIO_LOG_DIR"), "mdird.log"))) return err;
 	if (0 != atexit(log_end)) return -1;
-	long long ll;
-	conf_get_int(&ll, "SCAMBIO_LOG_LEVEL");
-	log_level = ll;
-	debug("Seting log level to %lld", ll);
+	log_level = conf_get_int("SCAMBIO_LOG_LEVEL");
+	debug("Seting log level to %d", log_level);
 	return 0;
 }
 
@@ -77,13 +76,9 @@ static int init_server(void)
 	int err;
 	debug("init server");
 	if (0 != (err = cnx_begin())) return err;
-	long long port;
-	if (0 != (err = conf_get_int(&port, "SCAMBIO_PORT"))) return err;
-	if (0 != (err = cnx_server_ctor(&server, port))) return err;
+	if (0 != (err = cnx_server_ctor(&server, conf_get_int("SCAMBIO_PORT")))) return err;
 	if (0 != atexit(deinit_server)) return -1;
-	char const *rootdir = conf_get_str("SCAMBIO_ROOT_DIR");;
-	if (! rootdir) return -1;
-	if (0 != (err = jnl_begin(rootdir))) return err;
+	if (0 != (err = jnl_begin(conf_get_str("SCAMBIO_ROOT_DIR"), conf_get_int("SCAMBIO_MAX_JNL_SIZE")))) return err;
 	return 0;
 }
 
