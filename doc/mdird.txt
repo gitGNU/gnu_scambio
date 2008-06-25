@@ -46,14 +46,17 @@ Chaque répertoire contient des journaux, chacun couvrant une plage de numéro
 de versions. La première version du premier journal est la version la plus 
 ancienne à laquelle on puisse accéder.  Le dernier numéro de version du 
 dernier journal est le numéro de version courant du répertoire.  Les journaux 
-servent pour générer un diff depuis Vi, suivant l'algorithme : on ouvre le 
-journal contenant Vi. Si Vi est antérieur à la première version du plus vieux 
-journal on considère qu'on nous demande ce numéro à la place (ceci permet aux 
-nouveaux client de demander le diff depuis 0, sans se demander quel est le bon 
-premier numéro de version) ; mais si Vi est postérieur à la version finale du 
-plus récent journal, le diff est terminé.  On le lit jusqu'à la version Vi.  
-On écrit tout son contenu, ce qui nous amène à la version Vf.  On recommance, 
-avec Vi=Vf+1 (la condition d'arrêt a déjà été donnée).
+servent pour générer un diff depuis Vi, suivant l'algorithme :
+
+- si Vi est antérieur à la première version du plus vieux journal on considère 
+qu'on nous demande ce numéro à la place (ceci permet aux nouveaux clients de 
+demander le diff depuis 0, sans connaitre le premier numéro de version) ;
+- si Vi est postérieur à la version finale du plus récent journal, le diff est 
+terminé.
+- ouvrir le journal contenant Vi.
+- on le lit jusqu'à la version Vi.
+- on écrit tout son contenu, ce qui nous amène à la version Vf.
+- on recommance, avec Vi=Vf+1 (la condition d'arrêt a déjà été donnée).
 
 Lorsqu'un répertoire ne contient pas de journal, il doit être vide.
 
@@ -69,7 +72,7 @@ contre-ordres) ; ceci peut-être réalisé par un outils externe puisque les
 journeaux, une fois bouclés, sont en lecture seule (un journal est bouclé 
 lorsqu'il est suivi chronologiquement d'un autre).
 
-La taille des journeaux non optimisés devrait être configurable.
+La taille des journaux non optimisés devrait être configurable.
 De plus, les premiers journaux devraient être plus gros. En fait, les tailles 
 devraient être décroissantes (l'optimiseur de journaux peut aussi changer les 
 tailles - d'ailleurs il n'est pas interdit que plusieurs journaux se 

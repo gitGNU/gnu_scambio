@@ -8,6 +8,7 @@
 #include "config.h"
 #include "header.h"
 #include "log.h"
+#include "misc.h"
 
 /*
  * Data Definitions
@@ -144,5 +145,23 @@ char const *header_search(struct header const *h, char const *name, unsigned key
 		f = h->fields[f].hash_next;
 	}
 	return NULL;
+}
+
+static int field_write(struct head_field const *f, int fd)
+{
+	if (0 != Write(fd, f->name, strlen(f->name))) return -1;
+	if (0 != Write(fd, ": ", 2)) return -1;
+	if (0 != Write(fd, f->value, strlen(f->value))) return -1;
+	if (0 != Write(fd, "\n", 1)) return -1;
+	return 0;
+}
+
+int header_write(struct header const *h, int fd)
+{
+	for (int f=0; f<h->nb_fields; f++) {
+		int err;
+		if (0 != (err = field_write(h->fields+f, fd))) return err;
+	}
+	return 0;
 }
 

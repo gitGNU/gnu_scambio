@@ -60,7 +60,7 @@ ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen)
 		ssize_t ret = pth_read(fd, &byte, 1);	// "If in doubt, use brute force"
 		if (ret < 0) {
 			if (errno == EINTR) continue;
-			err = ret;
+			err = -errno;
 			break;
 		} else if (ret == 0) {
 			break;
@@ -71,5 +71,27 @@ ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen)
 	}
 	varbuf_append(vb, 1, "");	// always null-term the string
 	return err;
+}
+
+off_t varbuf_read_line_off(struct varbuf *vb, int fd, size_t maxlen, off_t offset)
+{
+	varbuf_clean(vb);
+	while (vb->used < maxlen) {
+		int8_t byte;
+		ssize_t ret = pth_pread(fd, &byte, 1, offset);	// "If in doubt, use brute force"
+		if (ret < 0) {
+			if (errno == EINTR) continue;
+			offset = -errno;
+			break;
+		} else if (ret == 0) {
+			break;
+		}
+		assert(ret == 1);
+		offset += 1;
+		varbuf_append(vb, 1, &byte);
+		if (byte == '\n') break;
+	}
+	varbuf_append(vb, 1, "");	// always null-term the string
+	return offset;
 }
 

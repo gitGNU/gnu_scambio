@@ -29,7 +29,8 @@
 
 #ifndef QUEUE_H_061229
 #define QUEUE_H_061229
-#include <stddef.h>
+#include <stddef.h>	// NULL
+#include <stdarg.h>	// offsetof
 
 /*
  * This file defines four types of data structures: singly-linked lists,
@@ -271,7 +272,7 @@ struct {								\
 	(STAILQ_EMPTY((head)) ?						\
 		NULL :							\
 	        ((struct type *)					\
-		((char *)((head)->stqh_last) - __offsetof(struct type, field))))
+		((char *)((head)->stqh_last) - offsetof(struct type, field))))
 
 #define	STAILQ_NEXT(elm, field)	((elm)->field.stqe_next)
 

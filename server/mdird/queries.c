@@ -5,25 +5,34 @@
 #include <pth.h>
 #include "mdird.h"
 #include "log.h"
+#include "misc.h"
+
+/*
+ * Misc
+ */
+
+static int read_header(struct varbuf *vb, int fd)
+{
+	int err = 0;
+	int nb_lines = 0;
+	while (0 < (err = varbuf_read_line(vb, fd, MAX_HEADLINE_LENGTH))) {
+		if (++ nb_lines > MAX_HEADER_LINES) {
+			err = -E2BIG;
+			break;
+		}
+	}
+	if (nb_lines == 0) {
+		err = -EINVAL;
+	}
+	if (err < 0) {
+		varbuf_clean(vb);
+	}
+	return err;
+}
 
 /*
  * Answers
  */
-
-static int Write(int fd, void const *buf, size_t len)
-{
-	size_t done = 0;
-	while (done < len) {
-		ssize_t ret = pth_write(fd, buf, len);
-		if (ret < 0) {
-			if (errno != EINTR) return ret;
-			continue;
-		}
-		done += ret;
-	}
-	assert(done == len);
-	return 0;
-}
 
 static int answer(struct cnx_env *env, long long seq, char const *cmd_name, int status)
 {

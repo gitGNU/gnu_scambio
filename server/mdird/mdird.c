@@ -8,7 +8,6 @@
 #include "daemon.h"
 #include "cnx.h"
 #include "varbuf.h"
-#include "message.h"
 #include "cmd.h"
 #include "mdird.h"
 

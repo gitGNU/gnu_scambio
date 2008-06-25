@@ -37,4 +37,8 @@ unsigned header_key(char const *name);
 // or NULL if undefined.
 char const *header_search(struct header const *h, char const *name, unsigned key);
 
+// Write a header onto a filedescr
+// Beware : file is written to on error
+int header_write(struct header const *h, int fd);
+
 #endif

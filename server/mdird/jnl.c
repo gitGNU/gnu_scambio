@@ -1,12 +1,21 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <limits.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <dirent.h>
+#include <pth.h>
 #include "scambio.h"
+#include "varbuf.h"
 #include "log.h"
 #include "jnl.h"
+#include "header.h"
+#include "misc.h"
 
 /*
  * Data Definitions
@@ -15,14 +24,17 @@
  * scheduler point.
  */
 
-static char const *rootdir;
+static char *rootdir;
 
 struct dir {
 	LIST_ENTRY(dir) entry;	// entry in the list of cached dirs (FIXME: hash this!)
 	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
 	char path[PATH_MAX];
+	dev_t st_dev;	// st_dev and st_ino are used to identify directories
+	ino_t st_ino;
 	size_t path_len;
 	int count;	// number of jnl_find using this dir
+	pth_mutex_t mutex;
 };
 
 static LIST_HEAD(dirs, dir) dirs;
@@ -31,18 +43,50 @@ static LIST_HEAD(dirs, dir) dirs;
  * Jnls
  */
 
+#define JNL_FILE_FORMAT "%lld_%lld.jnl"
+#define JNL_FILE_FIRST "0_0.jnl"
+
+#define PRIjnl "s/%lld_%lld.jnl"
+#define PRIJNL(j) (j)->dir->path, (j)->first_version, (j)->last_version
+
+static int parse_version(char const *filename, long long *first, long long *last)
+{
+	if (2 != sscanf(filename, JNL_FILE_FORMAT, first, last)) {	// as we try any file in the directorym this will happen
+		debug("'%s' is not a journal file", filename);
+		return -1;
+	}
+	if (*first > *last) {
+		error("Bad journal versions : (first, last) = (%lld, %lld)", *first, *last);
+		return -1;
+	}
+	return 0;
+}
+
+static void restore_dir_path(struct dir *dir)
+{
+	dir->path[dir->path_len] = '\0';
+}
+
+static int append_to_dir_path(struct dir *dir, char const *filename)
+{
+	size_t len = snprintf(dir->path+dir->path_len, sizeof(dir->path)-dir->path_len, "/%s", filename);
+	if (len >= sizeof(dir->path)-dir->path_len) {
+		restore_dir_path(dir);
+		return -ENAMETOOLONG;
+	}
+	return 0;
+}
+
 static int jnl_ctor(struct jnl *jnl, struct dir *dir, char const *filename)
 {
 	int err = 0;
 	if (0 != parse_version(filename, &jnl->first_version, &jnl->last_version)) return -EINVAL;
-	size_t len = snprintf(dir->path+dir->path_len, sizeof(dir->path)-dir->path_len, "/%s", filename);
-	if (len < sizeof(dir->path)-dir->path_len) {
-		err = -ENAMETOOLONG;
-	} else if (0 > (jnl->fd = open(dir->path, O_APPEND))) {
+	if (0 != (err = append_to_dir_path(dir, filename))) return err;
+	if (0 > (jnl->fd = open(dir->path, O_APPEND))) {
 		err = -errno;
 	} else {	// All is OK, insert it as a journal
-		if (STAILQ_EMPTY(&dir->jnl)) {
-			STAILQ_INSERT_HEAD(&dir->jnl, jnl, entry);
+		if (STAILQ_EMPTY(&dir->jnls)) {
+			STAILQ_INSERT_HEAD(&dir->jnls, jnl, entry);
 		} else {	// insert in first_version order
 			struct jnl **prevptr = &dir->jnls.stqh_first;
 			while (prevptr != dir->jnls.stqh_last) {
@@ -51,20 +95,21 @@ static int jnl_ctor(struct jnl *jnl, struct dir *dir, char const *filename)
 			}
 			STAILQ_INSERT_AFTER(&dir->jnls, *prevptr, jnl, entry);
 		}
+		jnl->dir = dir;
 	}
-	dir->path[dir->path_len] = '\0';
+	restore_dir_path(dir);
 	return err;
 }
 
-static void jnl_dtor(struct jnl *jnl, struct dir *dir)
+static void jnl_dtor(struct jnl *jnl)
 {
-	STAILQ_REMOVE(&dir->jnl, jnl, jnl, entry);
+	STAILQ_REMOVE(&jnl->dir->jnls, jnl, jnl, entry);
 	if (0 != close(jnl->fd)) {
-		error("Cannot close journal for %lld->%lld in '%s'", jnl->first_version, jnl->last_version, dir->path);
+		error("Cannot close journal %"PRIjnl, PRIJNL(jnl));
 	}
 }
 
-static jnl *jnl_new(struct dir *dir, char const *filename)
+static struct jnl *jnl_new(struct dir *dir, char const *filename)
 {
 	struct jnl *jnl = malloc(sizeof(*jnl));
 	if (jnl && 0 != jnl_ctor(jnl, dir, filename)) {
@@ -72,6 +117,12 @@ static jnl *jnl_new(struct dir *dir, char const *filename)
 		jnl = NULL;
 	}
 	return jnl;
+}
+
+static void jnl_del(struct jnl *jnl)
+{
+	jnl_dtor(jnl);
+	free(jnl);
 }
 
 /*
@@ -87,16 +138,20 @@ static int dir_ctor(struct dir *dir, char const *path)
 		dir->path[--dir->path_len] = '\0';
 	}
 	if (strstr(path, "/../")) return -EACCES;
+	struct stat statbuf;
+	if (0 != (err = stat(dir->path, &statbuf))) return err;
+	dir->st_dev = statbuf.st_dev;
+	dir->st_ino = statbuf.st_ino;
 	dir->count = 0;
+	(void)pth_mutex_init(&dir->mutex);	// always returns 0
 	STAILQ_INIT(&dir->jnls);
 	// Find journals
 	DIR *d = opendir(path);
 	if (! d) return -errno;
 	struct dirent *dirent;
 	while (NULL != (dirent = readdir(d))) {
-		int err;
-		if (0 != (err = jnl_new(dir, dirent->d_name))) {
-			warning("Cannot add journal '%s/%s' : %s", dir->path, dirent->d_name, strerror(-err));
+		if (! jnl_new(dir, dirent->d_name)) {
+			warning("Cannot add journal '%s/%s'", dir->path, dirent->d_name);
 		}
 	}
 	if (errno) err = -errno;
@@ -113,6 +168,7 @@ static void dir_dtor(struct dir *dir)
 		jnl_del(jnl);
 	}
 	LIST_REMOVE(dir, entry);
+	pth_mutex_release(&dir->mutex);
 }
 
 static struct dir *dir_new(char const *path)
@@ -138,7 +194,8 @@ static void dir_del(struct dir *dir)
 int jnl_begin(char const *rootdir_)
 {
 	LIST_INIT(&dirs);
-	rootdir = strdup(rootdir);
+	rootdir = strdup(rootdir_);
+	return 0;
 }
 
 void jnl_end(void)
@@ -148,5 +205,174 @@ void jnl_end(void)
 		dir_del(dir);
 	}
 	free(rootdir);
+}
+
+/*
+ * Searching for a version
+ */
+
+struct dir *dir_get(char const *path)
+{
+	int err;
+	struct stat statbuf;
+	if (0 != (err = stat(path, &statbuf))) {
+		error("Cannot stat '%s' : %s", path, strerror(errno));
+		return NULL;
+	}
+	struct dir *dir;
+	LIST_FOREACH(dir, &dirs, entry) {
+		if (dir->st_dev == statbuf.st_dev && dir->st_ino == statbuf.st_ino) {
+			return dir;
+		}
+	}
+	// FIXME: delete some unused old dir maybe ?
+	return dir_new(path);
+}
+
+static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
+{
+	// We use our own on-stack offset for scanning the file to achieve reentrance with same jnl
+	struct varbuf vb;
+	int err = 0;
+	if (0 != (err = varbuf_ctor(&vb, MAX_HEADLINE_LENGTH, true))) return err;
+	off_t offset = 0, new_offset;
+	while (0 <= (new_offset = varbuf_read_line_off(&vb, jnl->fd, MAX_HEADLINE_LENGTH, offset))) {
+		char action;
+		long long this_version;
+		if (2 == sscanf(vb.buf, "%%%c %lld", &action, &this_version)) {
+			if (action != '+' && action != '-') {
+				error("Invalid action in journal %"PRIjnl" at version %lld : %c", PRIJNL(jnl), this_version, action);
+				err = -EINVAL;
+				break;
+			}
+			if (this_version > version) {
+				error("Cannot find version %lld in jounral %"PRIjnl, version, PRIJNL(jnl));
+				err = -ENOMSG;
+				break;
+			}
+			if (version == this_version) {
+				debug("Found version %lld at offset %llu", version, (unsigned long long)offset);
+				err = offset;
+				break;
+			}
+			debug("Skip version %lld (offset %llu)", this_version, (unsigned long long) offset);
+		}
+		if (new_offset == offset) {	// EOF
+			// We should not reach EOF without having found what we are looking for : complains loudly
+			error("Cannot find version %lld in journal %"PRIjnl" (up to offset %llu)",
+				version, PRIJNL(jnl), (unsigned long long)offset);
+			err = -ENOENT;
+			break;
+		}
+		offset = new_offset;
+	}
+	varbuf_dtor(&vb);
+	return err;
+}
+
+ssize_t jnl_find(struct jnl **jnlp, char const *path, long long version)
+{
+	struct dir *dir = dir_get(path);
+	if (! dir) return -ENOENT;
+	struct jnl *jnl = STAILQ_FIRST(&dir->jnls);
+	if (! jnl) return -ENOMSG;
+	if (version < jnl->first_version) version = jnl->first_version;
+	jnl = STAILQ_LAST(&dir->jnls, jnl, entry);
+	if (version > jnl->last_version) return -ENOMSG;
+	STAILQ_FOREACH(jnl, &dir->jnls, entry) {
+		if (jnl->first_version <= version && jnl->last_version >= version) {
+			if (jnlp) {
+				*jnlp = jnl;
+				dir->count ++;
+			}
+			return jnl_offset_of(jnl, version);
+		}
+	}
+	return -ENOMSG;
+}
+
+void jnl_release(struct jnl *jnl)
+{
+	jnl->dir->count --;
+}
+
+int jnl_copy(struct jnl *jnl, off_t offset, int fd)
+{
+	int err = 0;
+	char copybuf[1024];
+	do {
+		ssize_t inbytes = pth_pread(jnl->fd, copybuf, sizeof(copybuf), offset);
+		if (inbytes < 0) {
+			if (errno == EINTR) continue;
+			err = -errno;
+			break;
+		} else if (inbytes == 0) break;
+		offset += inbytes;
+		err = Write(fd, copybuf, inbytes);
+	} while (1);
+	return err;
+}
+
+/*
+ * Append an action into the journal.
+ * The write itself is (supposed to be) atomic, but may schedule another thread
+ * *before* the write syscall is started. The scheduled thread may also want to add a message.
+ * We then need a mutex on this directory.
+ */
+
+// FIXME: on error, truncate the file so its unchanged !
+static int write_action(struct header *header, char action, long long version, int fd)
+{
+	int err = 0;
+	char action_str[32];
+	size_t const len = snprintf(action_str, sizeof(action_str), "%%%c %lld\n", action, version);
+	assert(len < sizeof(action_str));
+	if (0 != (err = Write(fd, action_str, len))) return err;
+	return header_write(header, fd);
+}
+
+static int add_first_action(struct dir *dir, char action, struct header *header)
+{
+	char newname[PATH_MAX];
+	// We create first the file, then the jnl
+	if (action != '+') return -EINVAL;
+	(void)snprintf(newname, sizeof(newname), "%s/"JNL_FILE_FIRST, dir->path);
+	int fd = open(newname, O_CREAT|O_EXCL|O_WRONLY);
+	if (fd < 0) return -errno;
+	int err = write_action(header, action, 0, fd);
+	(void)close(fd);
+	if (err) return err;
+	if (NULL == jnl_new(dir, JNL_FILE_FIRST)) return -1;	// FIXME
+	return 0;
+}
+
+static int add_action_to_jnl(struct jnl *jnl, char action, struct header *header)
+{
+	int err;
+	if (0 != (err = write_action(header, action, jnl->last_version+1, jnl->fd))) return err;
+	// Rename
+	char oldname[PATH_MAX];
+	char newname[PATH_MAX];
+	snprintf(oldname, sizeof(oldname), "%s/"JNL_FILE_FORMAT, jnl->dir->path, jnl->first_version, jnl->last_version);
+	jnl->last_version++;
+	snprintf(newname, sizeof(newname), "%s/"JNL_FILE_FORMAT, jnl->dir->path, jnl->first_version, jnl->last_version);
+	if (0 != rename(oldname, newname)) return -errno;
+	return 0;
+}
+
+int jnl_add_action(char const *path, char action, struct header *header)
+{
+	int err = 0;
+	struct dir *dir = dir_get(path);
+	if (! dir) return -ENOENT;
+	(void)pth_mutex_acquire(&dir->mutex, FALSE, NULL);
+	struct jnl *jnl = STAILQ_LAST(&dir->jnls, jnl, entry);
+	if (! jnl) {
+		err = add_first_action(dir, action, header);
+	} else {
+		err = add_action_to_jnl(jnl, action, header);
+	}
+	(void)pth_mutex_release(&dir->mutex);
+	return err;
 }
 

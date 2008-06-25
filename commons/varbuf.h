@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 struct varbuf {
 	size_t used, actual;	// used <= actual !
@@ -32,6 +34,7 @@ int varbuf_make_room(struct varbuf *vb, size_t new_size);
 int varbuf_append(struct varbuf *vb, size_t size, void *buf);
 // returns 0 on EOF
 ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen);
+off_t varbuf_read_line_off(struct varbuf *vb, int fd, size_t maxlen, off_t offset);
 void varbuf_clean(struct varbuf *vb);
 
 #endif
