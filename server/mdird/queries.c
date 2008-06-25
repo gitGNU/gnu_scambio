@@ -82,12 +82,12 @@ int exec_diff(struct cnx_env *env, long long seq, char const *dir, long long ver
 }
 
 /*
- * PUT
+ * PUT/REM
  */
 
-int exec_put(struct cnx_env *env, long long seq, char const *dir)
+static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, long long seq, char const *dir)
 {
-	debug("doing PUT in '%s'", dir);
+	debug("doing %s in '%s'", cmdtag, dir);
 	struct varbuf vb;
 	int err = varbuf_ctor(&vb, 10000, true);
 	if (! err) {
@@ -97,7 +97,7 @@ int exec_put(struct cnx_env *env, long long seq, char const *dir)
 			if (! h) {
 				err = -1;	// FIXME
 			} else {
-				err = jnl_add_action(dir, '+', h);
+				err = jnl_add_action(dir, action, h);
 				header_del(h);
 			}
 		}
@@ -105,7 +105,17 @@ int exec_put(struct cnx_env *env, long long seq, char const *dir)
 	varbuf_dtor(&vb);
 	int status = 200;
 	if (err < 0) status = 500;
-	return answer(env, seq, "PUT", status, err < 0 ? strerror(-err):"OK");
+	return answer(env, seq, cmdtag, status, err < 0 ? strerror(-err):"OK");
+}
+
+int exec_put(struct cnx_env *env, long long seq, char const *dir)
+{
+	return exec_putrem("PUT", '+', env, seq, dir);
+}
+
+int exec_rem(struct cnx_env *env, long long seq, char const *dir)
+{
+	return exec_putrem("REM", '-', env, seq, dir);
 }
 
 /*
@@ -116,15 +126,5 @@ int exec_class(struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing CLASS in '%s'", dir);
 	return answer(env, seq, "CLASS", 500, "OK");
-}
-
-/*
- * REM
- */
-
-int exec_rem(struct cnx_env *env, long long seq, char const *dir)
-{
-	debug("doing REM in '%s'", dir);
-	return answer(env, seq, "REM", 500, "OK");
 }
 
