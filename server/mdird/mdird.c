@@ -10,6 +10,7 @@
 #include "varbuf.h"
 #include "cmd.h"
 #include "mdird.h"
+#include "jnl.h"
 
 /*
  * Data Definitions
@@ -32,7 +33,9 @@ static int init_conf(void)
 	int err;
 	debug("init conf");
 	if (0 != (err = conf_set_default_str("SCAMBIO_LOG_DIR", "/var/log"))) return err;
+	if (0 != (err = conf_set_default_int("SCAMBIO_LOG_LEVEL", 3))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_PORT", 21654))) return err;
+	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp"))) return err;
 	return 0;
 }
 
@@ -42,6 +45,10 @@ static int init_log(void)
 	debug("init log");
 	if (0 != (err = log_begin(conf_get_str("SCAMBIO_LOG_DIR"), "mdird.log"))) return err;
 	if (0 != atexit(log_end)) return -1;
+	long long ll;
+	conf_get_int(&ll, "SCAMBIO_LOG_LEVEL");
+	log_level = ll;
+	debug("Seting log level to %lld", ll);
 	return 0;
 }
 
@@ -60,19 +67,23 @@ static int init_cmd(void)
 
 static void deinit_server(void)
 {
+	jnl_end();
 	cnx_server_dtor(&server);
+	cnx_end();
 }
 
 static int init_server(void)
 {
 	int err;
-	long long port;
 	debug("init server");
 	if (0 != (err = cnx_begin())) return err;
-	if (0 != atexit(cnx_end)) return -1;
+	long long port;
 	if (0 != (err = conf_get_int(&port, "SCAMBIO_PORT"))) return err;
 	if (0 != (err = cnx_server_ctor(&server, port))) return err;
 	if (0 != atexit(deinit_server)) return -1;
+	char const *rootdir = conf_get_str("SCAMBIO_ROOT_DIR");;
+	if (! rootdir) return -1;
+	if (0 != (err = jnl_begin(rootdir))) return err;
 	return 0;
 }
 
@@ -130,8 +141,14 @@ static void *serve_cnx(void *arg)
 		struct cmd cmd;
 		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
 		if (! cmd.keyword) break;
-		if (kw_diff == cmd.keyword) {
+		if (cmd.keyword == kw_diff) {
 			err = exec_diff(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
+		} else if (cmd.keyword == kw_put) {
+			err = exec_put(env, cmd.seq, cmd.args[0].val.string);
+		} else if (cmd.keyword == kw_class) {
+			err = exec_class(env, cmd.seq, cmd.args[0].val.string);
+		} else if (cmd.keyword == kw_rem) {
+			err = exec_rem(env, cmd.seq, cmd.args[0].val.string);
 		}
 		cmd_dtor(&cmd);
 	} while (1);

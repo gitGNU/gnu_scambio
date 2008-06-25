@@ -51,11 +51,23 @@ void varbuf_clean(struct varbuf *vb)
 	// TODO: realloc buf toward initial guess ?
 }
 
-ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen)
+static int stringifies(struct varbuf *vb)
+{
+	if (! vb->used || vb->buf[vb->used-1] != '\0') {	// if this is a new varbuf, start with an empty string
+		int err;
+		if (0 != (err = varbuf_append(vb, 1, ""))) return err;
+	}
+	return 0;
+}
+
+ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
 	int err = 0;
-	varbuf_clean(vb);
-	while (vb->used < maxlen) {
+	if (0 != (err = stringifies(vb))) return err;
+	vb->used--;	// chop nul char
+	size_t prev_used = vb->used;
+	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
+	while (vb->used - prev_used < maxlen) {
 		int8_t byte;
 		ssize_t ret = pth_read(fd, &byte, 1);	// "If in doubt, use brute force"
 		if (ret < 0) {
@@ -63,35 +75,39 @@ ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen)
 			err = -errno;
 			break;
 		} else if (ret == 0) {
+			err = 0;
 			break;
 		}
+		err ++;	// count read bytes
 		assert(ret == 1);
-		varbuf_append(vb, 1, &byte);
+		if (byte != '\r') varbuf_append(vb, 1, &byte);	// we just ignore them
 		if (byte == '\n') break;
 	}
-	varbuf_append(vb, 1, "");	// always null-term the string
+	stringifies(vb);
 	return err;
 }
 
-off_t varbuf_read_line_off(struct varbuf *vb, int fd, size_t maxlen, off_t offset)
+off_t varbuf_read_line_off(struct varbuf *vb, int fd, size_t maxlen, off_t offset, char **new)
 {
-	varbuf_clean(vb);
-	while (vb->used < maxlen) {
+	int err = 0;
+	if (0 != (err = stringifies(vb))) return err;
+	vb->used--;	// chop nul char
+	size_t prev_used = vb->used;
+	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
+	while (vb->used - prev_used < maxlen) {
 		int8_t byte;
-		ssize_t ret = pth_pread(fd, &byte, 1, offset);	// "If in doubt, use brute force"
+		ssize_t ret = pth_pread(fd, &byte, 1, offset);
 		if (ret < 0) {
 			if (errno == EINTR) continue;
 			offset = -errno;
 			break;
-		} else if (ret == 0) {
-			break;
-		}
+		} else if (ret == 0) break;
 		assert(ret == 1);
 		offset += 1;
-		varbuf_append(vb, 1, &byte);
+		if (byte != '\r') varbuf_append(vb, 1, &byte);
 		if (byte == '\n') break;
 	}
-	varbuf_append(vb, 1, "");	// always null-term the string
+	stringifies(vb);
 	return offset;
 }
 

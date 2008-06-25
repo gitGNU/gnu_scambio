@@ -37,6 +37,7 @@ static ssize_t parse(char *msg, char **ptr, bool (*is_delimiter)(char const *))
 			return -1;	// we are supposed to reach the delimiter first
 		}
 		if (isspace(*src)) {
+			*src = ' ';	// simplify by using only one kind of space char
 			if (rem_space) {
 				// just ignore this char
 			} else {

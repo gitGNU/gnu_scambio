@@ -29,12 +29,12 @@ static char *rootdir;
 struct dir {
 	LIST_ENTRY(dir) entry;	// entry in the list of cached dirs (FIXME: hash this!)
 	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
-	char path[PATH_MAX];
 	dev_t st_dev;	// st_dev and st_ino are used to identify directories
 	ino_t st_ino;
-	size_t path_len;
 	int count;	// number of jnl_find using this dir
 	pth_mutex_t mutex;
+	size_t path_len;
+	char path[PATH_MAX];
 };
 
 static LIST_HEAD(dirs, dir) dirs;
@@ -82,7 +82,7 @@ static int jnl_ctor(struct jnl *jnl, struct dir *dir, char const *filename)
 	int err = 0;
 	if (0 != parse_version(filename, &jnl->first_version, &jnl->last_version)) return -EINVAL;
 	if (0 != (err = append_to_dir_path(dir, filename))) return err;
-	if (0 > (jnl->fd = open(dir->path, O_APPEND))) {
+	if (0 > (jnl->fd = open(dir->path, O_RDWR|O_APPEND))) {
 		err = -errno;
 	} else {	// All is OK, insert it as a journal
 		if (STAILQ_EMPTY(&dir->jnls)) {
@@ -129,15 +129,11 @@ static void jnl_del(struct jnl *jnl)
  * Cached dir
  */
 
-static int dir_ctor(struct dir *dir, char const *path)
+static int dir_ctor(struct dir *dir, size_t path_len, char const *path)
 {
 	int err = 0;
-	dir->path_len = snprintf(dir->path, sizeof(dir->path), "%s/%s", rootdir, path);
-	if (dir->path_len >= sizeof(dir->path)) return -ENAMETOOLONG;
-	while (dir->path_len > 1 && dir->path[dir->path_len-1] == '/') {	// removes unnecessary slashes
-		dir->path[--dir->path_len] = '\0';
-	}
-	if (strstr(path, "/../")) return -EACCES;
+	dir->path_len = path_len;
+	memcpy(dir->path, path, path_len+1);
 	struct stat statbuf;
 	if (0 != (err = stat(dir->path, &statbuf))) return err;
 	dir->st_dev = statbuf.st_dev;
@@ -146,9 +142,10 @@ static int dir_ctor(struct dir *dir, char const *path)
 	(void)pth_mutex_init(&dir->mutex);	// always returns 0
 	STAILQ_INIT(&dir->jnls);
 	// Find journals
-	DIR *d = opendir(path);
+	DIR *d = opendir(dir->path);
 	if (! d) return -errno;
 	struct dirent *dirent;
+	errno = 0;
 	while (NULL != (dirent = readdir(d))) {
 		if (! jnl_new(dir, dirent->d_name)) {
 			warning("Cannot add journal '%s/%s'", dir->path, dirent->d_name);
@@ -171,14 +168,16 @@ static void dir_dtor(struct dir *dir)
 	pth_mutex_release(&dir->mutex);
 }
 
-static struct dir *dir_new(char const *path)
+static int dir_new(struct dir **dir, size_t path_len, char const *path)
 {
-	struct dir *dir = malloc(sizeof(*dir));
-	if (dir && 0 != dir_ctor(dir, path)) {
-		free(dir);
-		dir = NULL;
+	int err = 0;
+	*dir = malloc(sizeof(**dir));
+	if (! *dir) return -ENOMEM;
+	if (0 != (err = dir_ctor(*dir, path_len, path))) {
+		free(*dir);
+		*dir = NULL;
 	}
-	return dir;
+	return err;
 }
 
 static void dir_del(struct dir *dir)
@@ -211,22 +210,28 @@ void jnl_end(void)
  * Searching for a version
  */
 
-struct dir *dir_get(char const *path)
+static int dir_get(struct dir **dir, char const *path)
 {
 	int err;
-	struct stat statbuf;
-	if (0 != (err = stat(path, &statbuf))) {
-		error("Cannot stat '%s' : %s", path, strerror(errno));
-		return NULL;
+	char abspath[PATH_MAX];
+	if (strstr(path, "/../")) return -EACCES;
+	size_t path_len = snprintf(abspath, sizeof(abspath), "%s/%s", rootdir, path);
+	if (path_len >= sizeof(abspath)) return -ENAMETOOLONG;
+	while (path_len > 1 && abspath[path_len-1] == '/') {	// removes unnecessary slashes
+		abspath[--path_len] = '\0';
 	}
-	struct dir *dir;
-	LIST_FOREACH(dir, &dirs, entry) {
-		if (dir->st_dev == statbuf.st_dev && dir->st_ino == statbuf.st_ino) {
-			return dir;
+	// We compare inodes, which is faster than to compare paths
+	struct stat statbuf;
+	if (0 != (err = stat(abspath, &statbuf))) {
+		return -errno;
+	}
+	LIST_FOREACH(*dir, &dirs, entry) {
+		if ((*dir)->st_dev == statbuf.st_dev && (*dir)->st_ino == statbuf.st_ino) {
+			return 0;
 		}
 	}
 	// FIXME: delete some unused old dir maybe ?
-	return dir_new(path);
+	return dir_new(dir, path_len, abspath);
 }
 
 static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
@@ -235,11 +240,12 @@ static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
 	struct varbuf vb;
 	int err = 0;
 	if (0 != (err = varbuf_ctor(&vb, MAX_HEADLINE_LENGTH, true))) return err;
+	char *line;
 	off_t offset = 0, new_offset;
-	while (0 <= (new_offset = varbuf_read_line_off(&vb, jnl->fd, MAX_HEADLINE_LENGTH, offset))) {
+	while (0 <= (new_offset = varbuf_read_line_off(&vb, jnl->fd, MAX_HEADLINE_LENGTH, offset, &line))) {
 		char action;
 		long long this_version;
-		if (2 == sscanf(vb.buf, "%%%c %lld", &action, &this_version)) {
+		if (2 == sscanf(line, "%%%c %lld", &action, &this_version)) {
 			if (action != '+' && action != '-') {
 				error("Invalid action in journal %"PRIjnl" at version %lld : %c", PRIJNL(jnl), this_version, action);
 				err = -EINVAL;
@@ -272,8 +278,9 @@ static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
 
 ssize_t jnl_find(struct jnl **jnlp, char const *path, long long version)
 {
-	struct dir *dir = dir_get(path);
-	if (! dir) return -ENOENT;
+	int err = 0;
+	struct dir *dir;
+	if (0 != (err = dir_get(&dir, path))) return err;
 	struct jnl *jnl = STAILQ_FIRST(&dir->jnls);
 	if (! jnl) return -ENOMSG;
 	if (version < jnl->first_version) version = jnl->first_version;
@@ -337,7 +344,7 @@ static int add_first_action(struct dir *dir, char action, struct header *header)
 	// We create first the file, then the jnl
 	if (action != '+') return -EINVAL;
 	(void)snprintf(newname, sizeof(newname), "%s/"JNL_FILE_FIRST, dir->path);
-	int fd = open(newname, O_CREAT|O_EXCL|O_WRONLY);
+	int fd = open(newname, O_CREAT|O_EXCL|O_WRONLY, 0660);
 	if (fd < 0) return -errno;
 	int err = write_action(header, action, 0, fd);
 	(void)close(fd);
@@ -363,8 +370,8 @@ static int add_action_to_jnl(struct jnl *jnl, char action, struct header *header
 int jnl_add_action(char const *path, char action, struct header *header)
 {
 	int err = 0;
-	struct dir *dir = dir_get(path);
-	if (! dir) return -ENOENT;
+	struct dir *dir;
+	if (0 != (err = dir_get(&dir, path))) return err;
 	(void)pth_mutex_acquire(&dir->mutex, FALSE, NULL);
 	struct jnl *jnl = STAILQ_LAST(&dir->jnls, jnl, entry);
 	if (! jnl) {
