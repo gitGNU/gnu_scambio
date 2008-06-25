@@ -321,7 +321,7 @@ les messages en temps réel et les répertoires).  Ces méta données indiquent
 par exemple les mime-type, et tout autre champs du mail par exemple (mais 
 reformaté pour simplifier l'encodage des header mail, trop compliqué : mettre 
 sur une ligne, supprimer les commentaires). Ces méta-données pourraient être 
-stoquées dans des répertoire ".meta" comme il existe des ".thumbs".
+stoquées dans des répertoires ".meta" comme il existe des ".thumbs".
 
 Les répertoires sont ajoutés et supprimés dans les répertoires comme des 
 messages. Ils doivent donc aussi avoir des noms uniques (différent du nom 
