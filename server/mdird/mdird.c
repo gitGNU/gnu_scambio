@@ -19,7 +19,8 @@
 static struct cnx_server server;
 static sig_atomic_t terminate = 0;
 
-char const *const kw_diff  = "diff";
+char const *const kw_sub   = "sub";
+char const *const kw_unsub = "unsub";
 char const *const kw_put   = "put";
 char const *const kw_class = "class";
 char const *const kw_rem   = "rem";
@@ -60,7 +61,8 @@ static int init_cmd(void)
 	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_class, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_diff,  2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
+	cmd_register_keyword(kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
 	return 0;
 }
 
@@ -120,6 +122,7 @@ static struct cnx_env *cnx_env_new(int fd)
 		return NULL;
 	}
 	env->fd = fd;
+	LIST_INIT(&env->subscriptions);
 	return env;
 }
 
@@ -136,8 +139,10 @@ static void *serve_cnx(void *arg)
 		struct cmd cmd;
 		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
 		if (! cmd.keyword) break;
-		if (cmd.keyword == kw_diff) {
-			err = exec_diff(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
+		if (cmd.keyword == kw_sub) {
+			err = exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
+		} else if (cmd.keyword == kw_unsub) {
+			err = exec_unsub(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_put) {
 			err = exec_put(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_class) {

@@ -79,8 +79,85 @@ tailles - d'ailleurs il n'est pas interdit que plusieurs journaux se
 chevauchent, ce qui facilite son travail (il peut ne réécrire qu'un seul 
 journal à la fois).
 
-Commandes de mdird
-------------------
+Modèle du protocole
+~~~~~~~~~~~~~~~~~~~
+
+Les contraintes à respecter sont :
+
+- il faut pouvoir envoyer des notifications ou des patchs complets aux clients 
+  en temps réel (push) ;
+- il ne faut pas maintenir une connection TCP en permanence pour ne pas obligé 
+  le kernel à maintenir un contexte par client ;
+- il faut que la communication soit le plus efficace possible - critère 
+  particulièrement important pour la mobilité ;
+
+Pour les notifications, deux approches sont possibles :
+
+- soit on utilie un second canal de communication pour les notifications, et 
+  dans ce cas les notifications ne contiennent que les nom de répertoires à 
+ressynchroniser ;
+- soit on utilise le même canal que celui de la synchronisation, et dans ce 
+  cas la synchronisation est simplement permanente ;
+
+La première solution est moins élégante, pose le problème de l'accessibilité 
+du client pour le serveur, et est moins efficace. La seconde à les qualités 
+inverses, mais nous force à établir un dialogue UDP entre le client et le 
+serveur.
+
+Dans ce second scénario, on procèderait comme suit :
+
+- le client se "connecte" en UDP, et envoit des commandes pour ajouter ou 
+  supprimer des répertoires de la liste des répertoires qu'il souhaite 
+synchroniser accompagné du dernier numéro de version connu (plusieurs 
+commandes par paquets mais gare au MTU).
+
+- le serveur spawn un client pour cette socket, dont l'environnement contient 
+  tous ces détails. Il ajoute ce listener à chaque répertoire signalé, et 
+répond OK ou pas à ces demandes de synchronisation (encore une fois, un seul 
+paquet suffit).
+
+- Le serveur envoie alors un flux de commandes de synchronisation (plusieurs 
+  commandes par paquets éventuellement).
+
+- Le numéro de version de répertoire d'un client est connu par le serveur, 
+  donc celui-ci le met dans la commande qui patch cette version dans la 
+version suivante (les numéros de versions ne sont pas obligés de ce suivre 
+(*)) de telel sorte que le client puisse détecter une perte de paquet et la 
+signaler au serveur en se réinscrivant comme listener de ce répertoire avec le 
+numéro de version connu.
+
+(*) du fait de l'optimisation des journaux.
+
+- lorsqu'un nouveau message arrive dans un répertoire écouté par un client, 
+  son thread (bloqué en lecture sur la socket ou sur un évènement consacré) se 
+réveille et lui envoit le patch.
+
+- le client peut envoyer ses propres patchs au serveur sauf qu'alors la 
+  version n'est pas renseignée (il redownloadera ce patch plus tard dans le 
+cadre de la synchronisation s'il lit ce répertoire). Il a besoin de recevoir 
+une confirmation du serveur. C'est donc bien un type de message spécial.
+
+Il n'est pas interdit par ailleurs d'implémenter aussi un listener TCP, plus 
+facile pour les tests, mais qui ne permet pas au client de rester connecté 
+trop longtemps.
+
+On a donc comme requètes :
+
+- PUT/REM/CLASS suivit d'un répertoire et d'un header, auxquels le serveur 
+  répond par une ligne avec status ;
+- (UN)SUBSCRIBE suivit d'un répertoire et de la dernière version connue, 
+auxquels le serveur répond encore par une ligne avec status ;
+
+Et des messages de synchronisation à l'initiative du serveur :
+
+- des patchs suivis du nom de répertoire, de l'ancienne version (-1 si 
+  absente) et de la nouvelle, puis d'un header. Le client ne répond pas 
+autrement qu'en détectant les erreurs de transmission comme vu ci-dessus.
+
+Et bien sur les commandes de politesse : QUIT/AUTH/etc...
+
+Commandes du protocole
+----------------------
 
 Le mdir gère la présence de fichiers, dont il ne connait que les headers 
 (l'url étant une méta-donnée facultative mais généralement présente qui peu t 
@@ -95,7 +172,7 @@ Les commandes entre client et serveur sont assynchrones et incenssibles à la
 casse (sauf pour leurs éventuels arguments). Le protocole est assymétrique : 
 le client pose les questions et le serveur y répond. Le serveur mdird ne peut 
 se transformer en client. Pour la synchronisation entre différents serveurs 
-mdird, on utilisera un autre protocoles (copie des snapshots). Cela simplifie 
+mdird, on utilisera un autre protocoles (copie des journaux). Cela simplifie 
 _beaucoup_.
 
 Les requètes sont donc préfixées d'un numéro unique servant à les associer 
@@ -109,47 +186,23 @@ Les status sont inspirés du HTTP (2XX pour OK, 5XX pour erreurs...)
 
 Les commandes sont les suivantes :
 
-DIFF
-~~~~
+SUB
+~~~
 
-Arguments : *répertoire* et *version*
-où version est un entier sur 64 bits.
+Arguments : *répertoire* ainsi que le dernier numéro de *version* connu.
 
-Par exemple : "4012 DIFF /emails/Joe/work 746231"
+UNSUB
+~~~~~
 
-Réponse du serveur : Une liste de headers séparés par des lignes d'action (ie 
-ne contenant que '%+ *version*' ou '%- *version*') et terminée par une ligne 
-ne contenant que '%%'.
-
-Si l'action est '%+', un fichier représenté par ce header doit être ajouté 
-s'il n'existe pas déjà et si c'est '%-' tout fichiers possédant ce header 
-devra être effacé (les headers sont donc uniques par répertoire, par 
-construction). La dernière commande reçue et comprise par le client lui permet
-d'accéder à la version indiquée. C'est plus verbeux qu'une seule version 
-figurant à la fin de la liste, mais cela peut permettre au client de se 
-rattraper partiellement en cas de transfert incomplet.
-
-C'est pour répondre au DIFF qu'un mdird à besoin du journal (et des 
-snapshots).
-
-On utilise '%+', '%-' et '%%' pour minimiser le risque d'avoir un non de 
-champs commencant par le délimiteur (ce qui est interdit) et facilité le 
-dialogue manuel avec un mdird. Par ailleurs, et pour cette dernière raison, on 
-ignorera toujours les espaces en fin de ligne.
-
-Code de retours : 200 pour OK, 5XX pour erreurs, et 201 pour signifier que le 
-DIFF est en fait un FULL (depuis la version 0), ie tous les messages qui ne 
-seront pas explicitement ajoutés doivent être effacés.
+Arguments : *répertoire* (en toutes lettres)
 
 PUT
 ~~~
 
-Arguments : *répertoire*
-puis les headers terminés par une ligne ne contenant que '%%'.
+Arguments : *répertoire* puis les headers terminés par une ligne ne contenant 
+que '%%'.
 
 Cela place de fichier dans le répertoire.
-
-Réponse : PUTRESP *répertoire* *status*
 
 CLASS
 ~~~~~
@@ -161,5 +214,30 @@ REM
 
 Format semblable à PUT, mais signifiant au contraire que tout fichier 
 possédant ces headers doit être retiré.
+
+%+/%-
+~~~~~
+
+Jusqu'ici toutes les commandes étaient des requètes : à l'initiative du client 
+et attendant une réponse du serveur.  Cette commande en revanche provient du 
+serveur, ne tient pas sur une ligne car elle est suivit d'un header, et reste 
+sans réponse.
+
+Arguments : *répertoire* puis *ancienne version* et *nouvelle version*, suivit 
+d'une *action* (+ ou -), et d'un header terminé par '%%'.
+
+Si l'action est '%+', un fichier représenté par ce header doit être ajouté 
+s'il n'existe pas déjà et si c'est '%-' tout fichier possédant ce header devra 
+être effacé (les headers sont donc uniques par répertoire, par construction).  
+La dernière commande reçue et comprise par le client lui permet d'accéder à la 
+version indiquée. C'est plus verbeux qu'une seule version figurant à la fin de 
+la liste (ou en début) mais cela peut permettre au client de se rattraper 
+partiellement en cas de transfert incomplet et c'est plus simple pour le 
+serveur qui ne fait que recopier son journal.
+
+On utilise '%+', '%-' et '%%' pour minimiser le risque d'avoir un nom de 
+champs commencant par le délimiteur (ce qui est interdit) et faciliter le 
+dialogue manuel avec un mdird. Par ailleurs, et pour cette dernière raison, on 
+ignorera toujours les espaces en fin de ligne.
 
 // vim: syntax=asciidoc

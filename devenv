@@ -1,0 +1,4 @@
+export SCAMBIO_LOG_DIR=/tmp
+export SCAMBIO_LOG_LEVEL=5
+export SCAMBIO_ROOT_DIR=/tmp/mdir
+export SCAMBIO_MAX_JNL_SIZE=10

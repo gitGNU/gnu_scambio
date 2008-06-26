@@ -75,10 +75,74 @@ static int answer(struct cnx_env *env, long long seq, char const *cmd_name, int 
  * DIFF
  */
 
+#if 0
 int exec_diff(struct cnx_env *env, long long seq, char const *dir, long long version)
 {
 	debug("doing DIFF for '%s' from version %lld", dir, version);
-	return answer(env, seq, "DIFF", 500, "OK");
+	version ++;	// look for next version.
+	// find where this version lies
+	int err = 0;
+	struct jnl *jnl;
+	do {
+		ssize_t offset = jnl_find(&jnl, dir, version);
+		if (offset  < 0) {
+			err = offset;
+			break;
+		}
+		err = jnl_copy(jnl, offset, env->fd, &version);
+		jnl_release(jnl);
+	} while (! err);
+	if (err == -ENOMSG) err = 0;
+	return answer(env, seq, "DIFF", err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
+}
+#endif
+
+/*
+ * Subscriptions
+ */
+
+static struct subscription *find_subscription(struct cnx_env *env, char const *dir)
+{
+	struct subscription *sub;
+	LIST_FOREACH(sub, &env->subscriptions, env_entry) {
+		if (subscription_same_path(sub, dir)) return sub;
+	}
+	return NULL;
+}
+
+static int subscribe(struct cnx_env *env, char const *dir, long long version)
+{
+	// TODO: check permissions
+	struct subscription *sub;
+	int err = subscription_new(&sub, dir, version);
+	if (! err) LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
+	return err;
+}
+
+int exec_sub(struct cnx_env *env, long long seq, char const *dir, long long version)
+{
+	debug("doing SUBSCR for '%s', last version %lld", dir, version);
+	int err = 0;
+	int substat = 0;
+	// Check if we are already registered
+	struct subscription *sub = find_subscription(env, dir);
+	if (sub) {
+		err = subscription_reset_version(sub, version);
+		substat = 1;	// signal that it's a reset
+	} else {
+		err = subscribe(env, dir, version);
+	}
+	return answer(env, seq, "SUBSCR", (err < 0 ? 500:200)+substat, err < 0 ? strerror(-err):"OK");
+}
+
+int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
+{
+	debug("doing UNSUBSCR for '%s'", dir);
+	struct subscription *sub = find_subscription(env, dir);
+	if (! sub) return answer(env, seq, "UNSUBSCR", 501, "Not subscribed");
+	LIST_REMOVE(sub, env_entry);
+	subscription_del(sub);
+	return answer(env, seq, "UNSUBSCR", 200, "OK");
 }
 
 /*
@@ -103,9 +167,7 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 		}
 	}
 	varbuf_dtor(&vb);
-	int status = 200;
-	if (err < 0) status = 500;
-	return answer(env, seq, cmdtag, status, err < 0 ? strerror(-err):"OK");
+	return answer(env, seq, cmdtag, err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
 }
 
 int exec_put(struct cnx_env *env, long long seq, char const *dir)
