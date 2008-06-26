@@ -7,6 +7,7 @@
 #define JNL_H_080623
 
 #include <stdbool.h>
+#include <unistd.h>	// ssize_t
 #include "queue.h"
 #include "mdird.h"
 
@@ -24,26 +25,33 @@ int jnl_copy(struct jnl *, ssize_t, int fd, long long *next_version);
 struct header;
 int jnl_add_action(char const *path, char action, struct header *header);
 
-/* 
- * Subscriptions
- * Beware that this structure, being in two very different lists, may be changed
- * by two different threads (the one that handle the client, and another one
- * writing in this director
+/* Beware that this structure, being in two very different lists, may be changed
+ * by THREE different threads :
+ * - the one that handle the client requests,
+ * - the one that handle a client subscription,
+ * - and any other one writing in this directory.
+ * Use directory mutex for safety !
  */
 
+struct cnx_env;
 struct subscription {
-	LIST_ENTRY(subscription) env_entry;	// in the client list of subscriptions. THE ONLY FIELD OTHER MODULES CAN USE
+	// Managed by client thread
+	LIST_ENTRY(subscription) env_entry;	// in the client list of subscriptions.
+	struct cnx_env *env;
+	pth_t thread_id;
+	// Managed by JNL module from here
 	LIST_ENTRY(subscription) dir_entry;	// in the directory list of subscriptions
 	struct dir *dir;
-	long long version;	// last known version
+	long long version;	// last known version (updated when we send a patch)
 	// location of the next one (or NULL if no more since last we checked)
 	struct jnl *jnl;
 	ssize_t offset;
 };
 
-bool subscription_same_path(struct subscription *sub, char const *path);
-int subscription_reset_version(struct subscription *sub, long long version);
 int subscription_new(struct subscription **sub, char const *path, long long version);
 void subscription_del(struct subscription *sub);
+bool subscription_same_path(struct subscription *sub, char const *path);
+int subscription_reset_version(struct subscription *sub, long long version);
+static void *subscription_thread(void *sub_);
 
 #endif

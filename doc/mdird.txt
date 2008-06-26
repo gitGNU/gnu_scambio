@@ -122,11 +122,12 @@ paquet suffit).
 - Le numéro de version de répertoire d'un client est connu par le serveur, 
   donc celui-ci le met dans la commande qui patch cette version dans la 
 version suivante (les numéros de versions ne sont pas obligés de ce suivre 
-(*)) de telel sorte que le client puisse détecter une perte de paquet et la 
+(*)) de telle sorte que le client puisse détecter une perte de paquet et la 
 signaler au serveur en se réinscrivant comme listener de ce répertoire avec le 
 numéro de version connu.
 
-(*) du fait de l'optimisation des journaux.
+(*) du fait de l'optimisation des journaux, et parceque ca évite à un serveur 
+qui démarre de rechercher les derniers numéros.
 
 - lorsqu'un nouveau message arrive dans un répertoire écouté par un client, 
   son thread (bloqué en lecture sur la socket ou sur un évènement consacré) se 
@@ -215,7 +216,7 @@ REM
 Format semblable à PUT, mais signifiant au contraire que tout fichier 
 possédant ces headers doit être retiré.
 
-%+/%-
+PATCH
 ~~~~~
 
 Jusqu'ici toutes les commandes étaient des requètes : à l'initiative du client 
@@ -223,8 +224,10 @@ et attendant une réponse du serveur.  Cette commande en revanche provient du
 serveur, ne tient pas sur une ligne car elle est suivit d'un header, et reste 
 sans réponse.
 
-Arguments : *répertoire* puis *ancienne version* et *nouvelle version*, suivit 
-d'une *action* (+ ou -), et d'un header terminé par '%%'.
+Arguments : *répertoire* puis *ancienne version*, suivit du contenu du journal 
+c'et à dire '%+/-' et *nouvelle version*, suivit d'un header terminé par '%%'.  
+On a donc bien l'ancienne version (celle attendue par le client ou la dernière 
+qu'on lui a envoyé) et la nouvelle.
 
 Si l'action est '%+', un fichier représenté par ce header doit être ajouté 
 s'il n'existe pas déjà et si c'est '%-' tout fichier possédant ce header devra 
@@ -239,5 +242,33 @@ On utilise '%+', '%-' et '%%' pour minimiser le risque d'avoir un nom de
 champs commencant par le délimiteur (ce qui est interdit) et faciliter le 
 dialogue manuel avec un mdird. Par ailleurs, et pour cette dernière raison, on 
 ignorera toujours les espaces en fin de ligne.
+
+Journal encore plus simple
+--------------------------
+
+Deux types de fichiers par répertoire :
+des fichiers %020lld.log et %020lld.idx.
+Les fichiers de log contiennent les patches ("%+ version\na: b\n..."),
+et les fichiers d'index contiennent un tableau d'offsets dans le fichier de 
+log, de telle sorte que l'offset du patch conduisant à la version V se trouve 
+dans idx[V].
+
+Il faut toutefois locker le répertoire en écriture pour pouvoir facilement 
+mettre à jour en append les deux fichiers, log et idx.
+
+L'API s'en trouve grandement simplifiée, car on n'a pas besoin alors de lire 
+les patchs ligne à ligne, etc : on connait fassilement leur position et la 
+position du suivant, et donc aussi leur taille.
+
+On pourrait même compresser (les log et les transferts réseau) mais pas 
+pendant le débugage.
+
+Pb : lorsqu'un nouveau client fait sa synchro initiale, il ne doit pas 
+récupérer l'historique complet. Pour cela, il faut nettoyer les log lorsqu'il 
+sont vieux, en les rejouant virtuellement et en écrivant à la fin des patchs 
+pour créer ceux qui restent. L'ennuis c'est qu'on introduit des gaps dans les 
+numéros de version, ce qui est génant (par ex pour déterminer les tailles).  
+C'est moins génant si on n'autorise ces gaps qu'entre deux fichiers.
+
 
 // vim: syntax=asciidoc

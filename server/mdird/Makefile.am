@@ -14,7 +14,8 @@ mdird_SOURCES = \
 	strib_cache.c \
 	mdird.c \
 	queries.c \
-	jnl.c
+	jnl.c \
+	sub.c
 
 mdird_LDADD = @LEXLIB@ ../../commons/libcommons.la
 

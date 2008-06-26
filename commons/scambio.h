@@ -8,6 +8,7 @@
 #include "config.h"
 #include "miscmac.h"
 #include "log.h"
+#include "queue.h"
 
 #define MAX_URL_LENGTH 8000
 #define MAX_HEADLINE_LENGTH 10000

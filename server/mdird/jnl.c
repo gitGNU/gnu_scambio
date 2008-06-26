@@ -272,7 +272,7 @@ static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
 				break;
 			}
 			if (this_version > version) {
-				error("Cannot find version %lld in jounral %"PRIjnl, version, PRIJNL(jnl));
+				error("Cannot find version %lld in journal %"PRIjnl, version, PRIJNL(jnl));
 				err = -ENOMSG;
 				break;
 			}
@@ -284,9 +284,8 @@ static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
 			debug("Skip version %lld (offset %llu)", this_version, (unsigned long long) offset);
 		}
 		if (new_offset == offset) {	// EOF
-			// We should not reach EOF without having found what we are looking for : complains loudly
-			error("Cannot find version %lld in journal %"PRIjnl" (up to offset %llu)",
-				version, PRIJNL(jnl), (unsigned long long)offset);
+			// Damned, we were given an inexistant version number. We are looking for the
+			// first patch of the next file !
 			err = -ENOENT;
 			break;
 		}
@@ -296,7 +295,8 @@ static ssize_t jnl_offset_of(struct jnl *jnl, long long version)
 	return err;
 }
 
-// Gives a ref to a journal containing the given version, and returns its offset
+// Gives a ref to a journal containing the given version (or the first version after this one),
+// and returns its offset.
 // returns -ENOMSG if there is no such version yet
 static ssize_t jnl_find(struct jnl **jnlp, struct dir *dir, long long version)
 {
@@ -309,7 +309,11 @@ static ssize_t jnl_find(struct jnl **jnlp, struct dir *dir, long long version)
 		STAILQ_FOREACH(jnl, &dir->jnls, entry) {
 			if (next_version(jnl) > version && jnl->version <= version) {
 				err = jnl_offset_of(jnl, version);
-				if (err >= 0 && jnlp) *jnlp = jnl;
+				if (err == -ENOENT && STAILQ_NEXT(jnl)) { // not found, but no later version found : see at the beginning of next journal !
+					*jnlp = STAILQ_NEXT(jnl);
+					return (size_t)0;
+				}
+				if (err >= 0) *jnlp = jnl;
 				return err;
 			}
 		}
@@ -381,7 +385,7 @@ static unsigned jnl_size(struct jnl *jnl)
 int jnl_add_action(char const *path, char action, struct header *header)
 {
 	int err = 0;
-	struct dir *dir;
+	struct dir *dir = NULL;
 	if (0 != (err = dir_get(&dir, path))) return err;
 	(void)pth_mutex_acquire(&dir->mutex, FALSE, NULL);
 	struct jnl *jnl = STAILQ_LAST(&dir->jnls, jnl, entry);
@@ -455,10 +459,11 @@ int subscription_reset_version(struct subscription *sub, long long version)
 	if (version > sub->version) return 0;	// forget about it
 	// in all other case we merely reset jnl and offset
 	sub->version = version;
-	sub->offset = jnl_find(&sub->jnl, sub->dir, version);
+	sub->offset = jnl_find(&sub->jnl, sub->dir, version+1);	// look for the next one
 	if (sub->offset < 0) {
 		sub->jnl = NULL;
 		return sub->offset == -ENOMSG ? 0 : sub->offset;
 	}
 	return 0;
 }
+

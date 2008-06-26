@@ -11,6 +11,7 @@
 #include "varbuf.h"
 #include "jnl.h"
 #include "header.h"
+#include "sub.h"
 
 /*
  * Misc
@@ -115,7 +116,11 @@ static int subscribe(struct cnx_env *env, char const *dir, long long version)
 	// TODO: check permissions
 	struct subscription *sub;
 	int err = subscription_new(&sub, dir, version);
-	if (! err) LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
+	if (! err) {
+		LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
+		sub->env = env;
+		sub->thread_id = pth_spawn(PTH_ATTR_DEFAULT, subscription_thread, sub);
+	}
 	return err;
 }
 
@@ -123,16 +128,16 @@ int exec_sub(struct cnx_env *env, long long seq, char const *dir, long long vers
 {
 	debug("doing SUBSCR for '%s', last version %lld", dir, version);
 	int err = 0;
-	int substat = 0;
+	int substatus = 0;
 	// Check if we are already registered
 	struct subscription *sub = find_subscription(env, dir);
 	if (sub) {
 		err = subscription_reset_version(sub, version);
-		substat = 1;	// signal that it's a reset
+		substatus = 1;	// signal that it's a reset
 	} else {
 		err = subscribe(env, dir, version);
 	}
-	return answer(env, seq, "SUBSCR", (err < 0 ? 500:200)+substat, err < 0 ? strerror(-err):"OK");
+	return answer(env, seq, "SUBSCR", (err < 0 ? 500:200)+substatus, err < 0 ? strerror(-err):"OK");
 }
 
 int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
@@ -140,6 +145,7 @@ int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
 	debug("doing UNSUBSCR for '%s'", dir);
 	struct subscription *sub = find_subscription(env, dir);
 	if (! sub) return answer(env, seq, "UNSUBSCR", 501, "Not subscribed");
+	(void)pth_cancel(sub->thread_id);	// better set the cancellation type to PTH_CANCEL_ASYNCHRONOUS
 	LIST_REMOVE(sub, env_entry);
 	subscription_del(sub);
 	return answer(env, seq, "UNSUBSCR", 200, "OK");
