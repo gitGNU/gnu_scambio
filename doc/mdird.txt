@@ -257,18 +257,36 @@ Il faut toutefois locker le répertoire en écriture pour pouvoir facilement
 mettre à jour en append les deux fichiers, log et idx.
 
 L'API s'en trouve grandement simplifiée, car on n'a pas besoin alors de lire 
-les patchs ligne à ligne, etc : on connait fassilement leur position et la 
+les patchs ligne à ligne, etc : on connait facilement leur position et la 
 position du suivant, et donc aussi leur taille.
 
 On pourrait même compresser (les log et les transferts réseau) mais pas 
 pendant le débugage.
 
-Pb : lorsqu'un nouveau client fait sa synchro initiale, il ne doit pas 
+Par contre lorsqu'un nouveau client fait sa synchro initiale, il ne doit pas 
 récupérer l'historique complet. Pour cela, il faut nettoyer les log lorsqu'il 
 sont vieux, en les rejouant virtuellement et en écrivant à la fin des patchs 
-pour créer ceux qui restent. L'ennuis c'est qu'on introduit des gaps dans les 
-numéros de version, ce qui est génant (par ex pour déterminer les tailles).  
-C'est moins génant si on n'autorise ces gaps qu'entre deux fichiers.
+pour créer ceux qui restent. L'ennuis c'est qu'on introduit ainsi des gaps 
+dans les numéros de version, ce qui est génant (par ex pour déterminer les 
+tailles).  C'est moins génant si on n'autorise ces gaps qu'entre deux 
+fichiers. Ainsi chaque paire de fichier log+index contient toujours une 
+séquence continue de patchs.
 
+Ainsi l'API du journal devient juste : add_patch(varbuf), 
+next_version(version), send_patch(version, to_fd).
+
+jnl_add_patch lit la taille du fichier de log (dans le struct jnl), prend le 
+lock en écriture sur le répertoire, ajoute l'entrée dans l'index avec le 
+dernier numero de version +1 et cet offset, et ajoute le contenu du varbuf 
+dans le log, puis rend le lock, incrémente le dernier numéro de version et met 
+à jour la taille du log dans la struct jnl.
+
+struct jnl contient donc first_version et last_version, vu les gaps c'est plus 
+simple.
+
+jnl_send_patch cherche le jnl contenant ce numéro de version ou la version 
+suivante en cas de gap, ce qui est trivial vu que jnl contient désormais 
+last_version.  Il renvoit à la fin le numéro de version effectivement expédié 
+pour que l'appelant puisse envoyer le suivant au coup d'après.
 
 // vim: syntax=asciidoc

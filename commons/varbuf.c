@@ -35,14 +35,21 @@ int varbuf_make_room(struct varbuf *vb, size_t new_size)
 
 int varbuf_append(struct varbuf *vb, size_t size, void *buf)
 {
-	int err;
+	size_t pos = vb->used;
+	int err = varbuf_put(vb, size);
+	if (! err) memcpy(vb->buf + pos, buf, size);
+	return err;
+}
+
+int varbuf_put(struct varbuf *vb, size_t size)
+{
+	int err = 0;
 	if (vb->used + size > vb->actual) {
 		size_t inc = vb->used + size - vb->actual;
 		if (0 != (err = varbuf_make_room(vb, vb->actual + inc + (inc + 1)/2))) return err;
 	}
-	memcpy(vb->buf+vb->used, buf, size);
 	vb->used += size;
-	return 0;
+	return err;
 }
 
 void varbuf_clean(struct varbuf *vb)

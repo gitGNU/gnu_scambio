@@ -14,7 +14,50 @@
 #include "sub.h"
 
 /*
- * Misc
+ * Answers
+ */
+
+static int answer(struct cnx_env *env, long long seq, char const *cmd_name, int status, char const *cmpl)
+{
+	char reply[100];
+	size_t len = snprintf(reply, sizeof(reply), "%lld %s %d (%s)\n", seq, cmd_name, status, cmpl);
+	assert(len < sizeof(reply));
+	return Write(env->fd, reply, len);
+}
+
+/*
+ * Subscriptions
+ */
+
+int exec_sub(struct cnx_env *env, long long seq, char const *dir, long long version)
+{
+	debug("doing SUB for '%s', last version %lld", dir, version);
+	int err = 0;
+	int substatus = 0;
+	// Check if we are already registered
+	struct subscription *sub = subscription_find(env, dir);
+	if (sub) {
+		subscription_reset_version(sub, version);
+		substatus = 1;	// signal that it's a reset
+	} else {
+		err = subscription_new(&sub, env, dir, version);
+	}
+	return answer(env, seq, "SUB", (err < 0 ? 500:200)+substatus, err < 0 ? strerror(-err):"OK");
+}
+
+int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
+{
+	debug("doing UNSUB for '%s'", dir);
+	struct subscription *sub = subscription_find(env, dir);
+	if (! sub) return answer(env, seq, "UNSUB", 501, "Not subscribed");
+	(void)pth_cancel(sub->thread_id);	// better set the cancellation type to PTH_CANCEL_ASYNCHRONOUS
+	LIST_REMOVE(sub, env_entry);
+	subscription_del(sub);
+	return answer(env, seq, "UNSUB", 200, "OK");
+}
+
+/*
+ * PUT/REM
  */
 
 // a line is said to match a delim if it starts with the delim, and is followed only by optional spaces
@@ -60,101 +103,6 @@ static int read_header(struct varbuf *vb, int fd)
 	return err;
 }
 
-/*
- * Answers
- */
-
-static int answer(struct cnx_env *env, long long seq, char const *cmd_name, int status, char const *cmpl)
-{
-	char reply[100];
-	size_t len = snprintf(reply, sizeof(reply), "%lld %s %d (%s)\n", seq, cmd_name, status, cmpl);
-	assert(len < sizeof(reply));
-	return Write(env->fd, reply, len);
-}
-
-/*
- * DIFF
- */
-
-#if 0
-int exec_diff(struct cnx_env *env, long long seq, char const *dir, long long version)
-{
-	debug("doing DIFF for '%s' from version %lld", dir, version);
-	version ++;	// look for next version.
-	// find where this version lies
-	int err = 0;
-	struct jnl *jnl;
-	do {
-		ssize_t offset = jnl_find(&jnl, dir, version);
-		if (offset  < 0) {
-			err = offset;
-			break;
-		}
-		err = jnl_copy(jnl, offset, env->fd, &version);
-		jnl_release(jnl);
-	} while (! err);
-	if (err == -ENOMSG) err = 0;
-	return answer(env, seq, "DIFF", err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
-}
-#endif
-
-/*
- * Subscriptions
- */
-
-static struct subscription *find_subscription(struct cnx_env *env, char const *dir)
-{
-	struct subscription *sub;
-	LIST_FOREACH(sub, &env->subscriptions, env_entry) {
-		if (subscription_same_path(sub, dir)) return sub;
-	}
-	return NULL;
-}
-
-static int subscribe(struct cnx_env *env, char const *dir, long long version)
-{
-	// TODO: check permissions
-	struct subscription *sub;
-	int err = subscription_new(&sub, dir, version);
-	if (! err) {
-		LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
-		sub->env = env;
-		sub->thread_id = pth_spawn(PTH_ATTR_DEFAULT, subscription_thread, sub);
-	}
-	return err;
-}
-
-int exec_sub(struct cnx_env *env, long long seq, char const *dir, long long version)
-{
-	debug("doing SUBSCR for '%s', last version %lld", dir, version);
-	int err = 0;
-	int substatus = 0;
-	// Check if we are already registered
-	struct subscription *sub = find_subscription(env, dir);
-	if (sub) {
-		err = subscription_reset_version(sub, version);
-		substatus = 1;	// signal that it's a reset
-	} else {
-		err = subscribe(env, dir, version);
-	}
-	return answer(env, seq, "SUBSCR", (err < 0 ? 500:200)+substatus, err < 0 ? strerror(-err):"OK");
-}
-
-int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
-{
-	debug("doing UNSUBSCR for '%s'", dir);
-	struct subscription *sub = find_subscription(env, dir);
-	if (! sub) return answer(env, seq, "UNSUBSCR", 501, "Not subscribed");
-	(void)pth_cancel(sub->thread_id);	// better set the cancellation type to PTH_CANCEL_ASYNCHRONOUS
-	LIST_REMOVE(sub, env_entry);
-	subscription_del(sub);
-	return answer(env, seq, "UNSUBSCR", 200, "OK");
-}
-
-/*
- * PUT/REM
- */
-
 static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing %s in '%s'", cmdtag, dir);
@@ -167,7 +115,8 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 			if (! h) {
 				err = -1;	// FIXME
 			} else {
-				err = jnl_add_action(dir, action, h);
+				// TODO: add an envelope field (when action is '+' only) ?
+				err = jnl_add_patch(dir, action, h);
 				header_del(h);
 			}
 		}

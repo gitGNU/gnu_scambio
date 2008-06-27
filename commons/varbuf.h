@@ -32,6 +32,7 @@ static inline void varbuf_dtor(struct varbuf *vb)
 
 int varbuf_make_room(struct varbuf *, size_t new_size);
 int varbuf_append(struct varbuf *, size_t size, void *buf);
+int varbuf_put(struct varbuf *, size_t size);
 // reads one more line of text into varbuf
 // returns 0 on EOF
 ssize_t varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
