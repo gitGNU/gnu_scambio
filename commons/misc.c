@@ -1,5 +1,8 @@
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <pth.h>
 #include "scambio.h"
 #include "misc.h"
@@ -34,3 +37,22 @@ int Read(void *buf, int fd, off_t offset, size_t len)
 	return 0;
 }
 
+int Mkdir(char const *path_)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s", path_);
+	char *c = path;
+	if (! *c) return -EINVAL;
+	for (c = path + 1; *c != '\0'; c++) {
+		if (*c == '/') {
+			*c = '\0';
+			if (-1 == mkdir(path, 0744) && errno != EEXIST) {
+				int err = -errno;
+				error("mkdir '%s' : %s", path, strerror(-err));
+				return err;
+			}
+			*c = '/';
+		}
+	}
+	return 0;
+}

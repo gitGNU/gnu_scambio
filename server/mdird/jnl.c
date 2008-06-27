@@ -17,6 +17,7 @@
 #include "header.h"
 #include "misc.h"
 #include "sub.h"
+#include "stribution.h"
 
 /*
  * Data Definitions
@@ -25,9 +26,10 @@
  * scheduler point.
  */
 
-static char *rootdir;
+static char const *rootdir;
 static size_t rootdir_len;
 static unsigned max_jnl_size;
+static char const *strib_fname;
 
 struct index_entry {
 	off_t offset;
@@ -51,6 +53,7 @@ struct dir {
 	pth_rwlock_t rwlock;
 	size_t path_len;
 	char path[PATH_MAX];
+	struct stribution *strib;	// classify configuration
 };
 
 static LIST_HEAD(dirs, dir) dirs;
@@ -180,14 +183,19 @@ static void jnl_del(struct jnl *jnl)
 static int dir_ctor(struct dir *dir, size_t path_len, char const *path)
 {
 	int err = 0;
+	struct stat statbuf;
+	if (0 != (err = Mkdir(path))) return err;
+	if (0 != (err = stat(dir->path, &statbuf))) return err;
 	dir->path_len = path_len;
 	memcpy(dir->path, path, path_len+1);
-	struct stat statbuf;
-	if (0 != (err = stat(dir->path, &statbuf))) return err;
 	dir->st_dev = statbuf.st_dev;
 	dir->st_ino = statbuf.st_ino;
-	(void)pth_rwlock_init(&dir->rwlock);	// FIXME: if this can schedule some other thread, we need to protect dirs list !
+	(void)pth_rwlock_init(&dir->rwlock);	// FIXME: if this can schedule some other thread, we need to prevent addition of the same dir twice
 	STAILQ_INIT(&dir->jnls);
+	// load classification configuration
+	if (0 != (err = append_to_dir_path(dir, strib_fname))) return err;
+	dir->strib = strib_new(dir->path);
+	restore_dir_path(dir);
 	// Find journals
 	DIR *d = opendir(dir->path);
 	if (! d) return -errno;
@@ -211,11 +219,15 @@ static void dir_dtor(struct dir *dir)
 {
 	assert(LIST_EMPTY(&dir->subscriptions));
 	(void)pth_rwlock_acquire(&dir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);
+	LIST_REMOVE(dir, entry);
 	struct jnl *jnl;
 	while (NULL != (jnl = STAILQ_FIRST(&dir->jnls))) {
 		jnl_del(jnl);
 	}
-	LIST_REMOVE(dir, entry);
+	if (dir->strib) {
+		strib_del(dir->strib);
+		dir->strib = NULL;
+	}
 	pth_rwlock_release(&dir->rwlock);
 }
 
@@ -253,13 +265,20 @@ bool dir_same_path(struct dir *dir, char const *path)
  * (De)Initialization
  */
 
-int jnl_begin(char const *rootdir_, unsigned max_jnl_size_)
+int jnl_begin(void)
 {
+	int err;
+	// Default configuration values
+	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp"))) return err;
+	if (0 != (err = conf_set_default_int("SCAMBIO_MAX_JNL_SIZE", 2000))) return err;
+	if (0 != (err = conf_set_default_str("SCAMBIO_STRIB_FNAME", ".stribution.conf"))) return err;
+	// Inits
 	LIST_INIT(&dirs);
-	rootdir = strdup(rootdir_);
+	rootdir = conf_get_str("SCAMBIO_ROOT_DIR");
 	rootdir_len = strlen(rootdir);
-	max_jnl_size = max_jnl_size_;
-	return 0;
+	max_jnl_size = conf_get_int("SCAMBIO_MAX_JNL_SIZE");
+	strib_fname = conf_get_str("SCAMBIO_STRIB_FNAME");
+	return err;
 }
 
 void jnl_end(void)
@@ -268,7 +287,6 @@ void jnl_end(void)
 	while (NULL != (dir = LIST_FIRST(&dirs))) {
 		dir_del(dir);
 	}
-	free(rootdir);
 }
 
 /*
@@ -300,12 +318,20 @@ int dir_get(struct dir **dir, char const *path)
 	return 0;
 }
 
+int strib_get(struct stribution **stribp, char const *path)
+{
+	struct dir *dir;
+	int err = dir_get(&dir, path);
+	if (! err) *stribp = dir->strib;
+	return err;
+}
+
 /*
  * Append an action into the journal.
  * Require writer's lock
  */
 
-static int add_patch(struct jnl *jnl, char action, struct header *header)
+static int write_patch(struct jnl *jnl, char action, struct header *header)
 {
 	int err = 0;
 	long long version = jnl->version + jnl->nb_patches;
@@ -316,7 +342,7 @@ static int add_patch(struct jnl *jnl, char action, struct header *header)
 	// Then the patch
 	if (0 != (err = header_write(header, jnl->patch_fd))) return err;
 	char action_str[32];
-	size_t const len = snprintf(action_str, sizeof(action_str), "%%%c %lld\n", action, version);
+	size_t const len = snprintf(action_str, sizeof(action_str), "%%%c %lld\n", action, version);	// TODO: add ctime ?
 	assert(len < sizeof(action_str));
 	if (0 != (err = Write(jnl->patch_fd, action_str, len))) return err;
 	jnl->nb_patches ++;
@@ -349,7 +375,7 @@ int jnl_add_patch(char const *path, char action, struct header *header)
 	} else if (jnl_too_big(jnl)) {
 		err = add_empty_jnl(&jnl, dir, jnl->version + jnl->nb_patches);
 	}
-	if (! err) err = add_patch(jnl, action, header);
+	if (! err) err = write_patch(jnl, action, header);
 	(void)pth_rwlock_release(&dir->rwlock);
 	return err;
 }

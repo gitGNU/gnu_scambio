@@ -4,7 +4,6 @@
 #include <pth.h>
 #include <string.h>
 #include "scambio.h"
-#include "conf.h"
 #include "daemon.h"
 #include "cnx.h"
 #include "varbuf.h"
@@ -25,6 +24,7 @@ char const *const kw_unsub = "unsub";
 char const *const kw_put   = "put";
 char const *const kw_class = "class";
 char const *const kw_rem   = "rem";
+char const *const kw_quit  = "quit";
 
 /*
  * Init functions
@@ -37,8 +37,6 @@ static int init_conf(void)
 	if (0 != (err = conf_set_default_str("SCAMBIO_LOG_DIR", "/var/log"))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_LOG_LEVEL", 3))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_PORT", 21654))) return err;
-	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp"))) return err;
-	if (0 != (err = conf_set_default_int("SCAMBIO_MAX_JNL_SIZE", 2000))) return err;
 	return 0;
 }
 
@@ -59,6 +57,7 @@ static int init_cmd(void)
 	cmd_begin();
 	if (0 != atexit(cmd_end)) return -1;
 	// Put most used commands at end, so that they end up at the beginning of the commands list
+	cmd_register_keyword(kw_quit,  0, 0, CMD_EOA);
 	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_class, 1, 1, CMD_STRING, CMD_EOA);
@@ -81,7 +80,7 @@ static int init_server(void)
 	if (0 != (err = cnx_begin())) return err;
 	if (0 != (err = cnx_server_ctor(&server, conf_get_int("SCAMBIO_PORT")))) return err;
 	if (0 != atexit(deinit_server)) return -1;
-	if (0 != (err = jnl_begin(conf_get_str("SCAMBIO_ROOT_DIR"), conf_get_int("SCAMBIO_MAX_JNL_SIZE")))) return err;
+	if (0 != (err = jnl_begin())) return err;
 	return 0;
 }
 
@@ -128,6 +127,7 @@ static struct cnx_env *cnx_env_new(int fd)
 		return NULL;
 	}
 	env->fd = fd;
+	pth_mutex_init(&env->wfd);
 	LIST_INIT(&env->subscriptions);
 	return env;
 }
@@ -145,6 +145,7 @@ static void *serve_cnx(void *arg)
 		struct cmd cmd;
 		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
 		if (! cmd.keyword) break;
+		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		if (cmd.keyword == kw_sub) {
 			err = exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
 		} else if (cmd.keyword == kw_unsub) {
@@ -155,7 +156,10 @@ static void *serve_cnx(void *arg)
 			err = exec_class(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_rem) {
 			err = exec_rem(env, cmd.seq, cmd.args[0].val.string);
+		} else if (cmd.keyword == kw_quit) {
+			err = exec_quit(env, cmd.seq);
 		}
+		pth_mutex_release(&env->wfd);
 		cmd_dtor(&cmd);
 	} while (1);
 	return NULL;

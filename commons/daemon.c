@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include "scambio.h"
 #include "daemon.h"
-#include "conf.h"
 
 int daemonize(void)
 {

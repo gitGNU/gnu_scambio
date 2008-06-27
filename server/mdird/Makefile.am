@@ -1,5 +1,5 @@
-AM_CFLAGS = -std=c99 -Wall -W -D_GNU_SOURCE
-AM_CPPFLAGS = -I$(top_srcdir)/commons
+AM_CFLAGS = -std=c99 -Wall -W
+AM_CPPFLAGS = -I$(top_srcdir)/commons -D_GNU_SOURCE
 AM_YFLAGS = -d
 
 SUBDIRS = . checks
@@ -18,4 +18,3 @@ mdird_SOURCES = \
 	sub.c
 
 mdird_LDADD = @LEXLIB@ ../../commons/libcommons.la
-

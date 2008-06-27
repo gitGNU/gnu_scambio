@@ -92,9 +92,9 @@ static void *subscription_thread(void *sub_)
 	debug("new thread for subscription @%p", sub);
 	int err = 0;
 	while (client_needs_patch(sub) && !err) {
-		// TODO: take writer lock on env->fd (which we need)
+		pth_mutex_acquire(&sub->env->wfd, FALSE, NULL);
 		err = send_next_patch(sub);
-		// TODO: release env->fd lock
+		pth_mutex_release(&sub->env->wfd);
 	}
 	debug("terminate thread for subscription @%p", sub);
 	subscription_del(sub);

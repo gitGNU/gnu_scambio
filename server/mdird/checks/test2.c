@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <log.h>
-#include "conf.h"
+#include "stribution.h"
 #include "header.h"
 
 static void my_print(char const *fmt, ...)
@@ -17,10 +17,9 @@ static void my_print(char const *fmt, ...)
 
 int main(void)
 {
-	(void)log_init();
-	struct conf *conf = conf_new("conf1.sample");
-	assert(conf);
-	conf_dump(conf, my_print);
+	struct stribution *strib = strib_new("conf1.sample");
+	assert(strib);
+	strib_dump(strib, my_print);
 	// Now add a header
 	char *head_mutable = strdup(
 		"From: grosminet@acme.org\n"
@@ -31,11 +30,11 @@ int main(void)
 	);
 	struct header *head = header_new(head_mutable);
 	assert(head);
-	struct conf_action const *actions[conf->nb_tests];
-	unsigned nb_actions = conf_eval(conf, head, actions);
+	struct strib_action const *actions[strib->nb_tests];
+	unsigned nb_actions = strib_eval(strib, head, actions);
 	assert(nb_actions == 3);
 	header_del(head);
 	free(head_mutable);
-	conf_del(conf);
+	strib_del(strib);
 	return EXIT_SUCCESS;
 }

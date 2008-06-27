@@ -1,12 +1,14 @@
-AM_CPPFLAGS = -I$(top_srcdir)/server/stribucion -D_GNU_SOURCE
 AM_CFLAGS = -std=c99 -Wall -W
+AM_CPPFLAGS = -I$(top_srcdir)/commons -I$(top_srcdir)/server/mdird -D_GNU_SOURCE
 
 check_PROGRAMS = test1 test2
 
-test1_SOURCES = test1.c
-test1_LDADD = ../libstribucion.la
-test2_SOURCES = test2.c
-test2_LDADD = ../libstribucion.la
+test1_SOURCES = test1.c ../header.c
+test1_LDADD = ../../../commons/libcommons.la
+test2_SOURCES = test2.c \
+	../header.c ../stribution.c ../strib_cache.c \
+	../strib_lexer.c ../strib_parser.c
+test2_LDADD = ../../../commons/libcommons.la
 
 TESTS = test1 test2
 

@@ -80,7 +80,6 @@ int main(void)
 		}
 	};
 
-	(void)log_init();
 	for (unsigned t=0; t<sizeof_array(tests); t++) {
 		do_test(tests+t);
 	}

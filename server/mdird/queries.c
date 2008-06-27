@@ -12,6 +12,7 @@
 #include "jnl.h"
 #include "header.h"
 #include "sub.h"
+#include "stribution.h"
 
 /*
  * Answers
@@ -75,53 +76,47 @@ static bool line_match(char *restrict line, char *restrict delim)
 	return true;
 }
 
-// Reads fd until a "%%" line
-static int read_header(struct varbuf *vb, int fd)
+// Reads fd until a "%%" line, then build a header object
+static int read_header(struct header **hp, int fd)
 {
 	int err = 0;
+	struct varbuf vb;
+	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
 	int nb_lines = 0;
 	char *line;
 	bool eoh_reached = false;
-	while (0 < (err = varbuf_read_line(vb, fd, MAX_HEADLINE_LENGTH, &line))) {
+	while (0 < (err = varbuf_read_line(&vb, fd, MAX_HEADLINE_LENGTH, &line))) {
 		if (++ nb_lines > MAX_HEADER_LINES) {
 			err = -E2BIG;
 			break;
 		}
 		if (line_match(line, "%%")) {
 			// forget this line
-			vb->used = line - vb->buf + 1;
-			vb->buf[vb->used-1] = '\0';
+			vb.used = line - vb.buf + 1;
+			vb.buf[vb.used-1] = '\0';
 			eoh_reached = true;
 			break;
 		}
 	}
 	if (nb_lines == 0) err = -EINVAL;
 	if (! eoh_reached) err = -EINVAL;
-	if (err < 0) {
-		varbuf_clean(vb);
+	if (! err) {
+		*hp = header_new(vb.buf);
+		if (! *hp) err = -1;	// FIXME
 	}
+	varbuf_dtor(&vb);
 	return err;
 }
 
 static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing %s in '%s'", cmdtag, dir);
-	struct varbuf vb;
-	int err = varbuf_ctor(&vb, 10000, true);
+	struct header *h;
+	int err = read_header(&h, env->fd);
 	if (! err) {
-		err = read_header(&vb, env->fd);
-		if (err >= 0) {
-			struct header *h = header_new(vb.buf);
-			if (! h) {
-				err = -1;	// FIXME
-			} else {
-				// TODO: add an envelope field (when action is '+' only) ?
-				err = jnl_add_patch(dir, action, h);
-				header_del(h);
-			}
-		}
+		err = jnl_add_patch(dir, action, h);
+		header_del(h);
 	}
-	varbuf_dtor(&vb);
 	return answer(env, seq, cmdtag, err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
 }
 
@@ -139,9 +134,71 @@ int exec_rem(struct cnx_env *env, long long seq, char const *dir)
  * CLASS
  */
 
+static bool void_dir(char const *dir)
+{
+	while (*dir != '\0') {
+		if (*dir != '/' && *dir != '.') return true;
+		dir++;
+	}
+	return false;
+}
+
+static int class_rec(struct cnx_env *env, long long seq, char const *dir, struct header *h);
+static int goto_dir(struct cnx_env *env, long long seq, char const *dir, struct strib_action const *action, struct header *h)
+{
+	if (action->dest_type != DEST_STRING) {
+		error("field target actions not implemented yet");
+		return -EINVAL;
+	}
+	if (void_dir(action->dest.string)) return -EINVAL;	// avoid staying here
+	char *new_dir = malloc(PATH_MAX);	// this is ercursive : don't allow malicious users to exhaust our stack
+	if (! new_dir) return -ENOMEM;
+	snprintf(new_dir, PATH_MAX, "%s/%s", dir, action->dest.string);
+	int err = class_rec(env, seq, dir, h);
+	free(new_dir);
+	return err;
+}
+
+static int class_rec(struct cnx_env *env, long long seq, char const *dir, struct header *h)
+{
+	struct stribution *strib;
+	int err = strib_get(&strib, dir);
+	if (err) return err;
+	if (! strib) {	// just stores it there
+		return exec_putrem("CLASS", '+', env, seq, dir);
+	}
+	struct strib_action const **actions = malloc(NB_MAX_TESTS * sizeof(*actions));
+	if (! actions) return -ENOMEM;
+	unsigned nb_actions = strib_eval(strib, h, actions);
+	struct strib_action const **tmp = realloc(actions, nb_actions * sizeof(*actions));
+	if (tmp) actions = tmp;
+	for (unsigned a=0; !err && a<nb_actions; a++) {
+		switch (actions[a]->type) {
+			case ACTION_DISCARD: err = 0; break;
+			case ACTION_COPY:    err = goto_dir(env, seq, dir, actions[a], h); break;
+			case ACTION_MOVE:    err = goto_dir(env, seq, dir, actions[a], h); goto bigbreak;
+		}
+	}
+bigbreak:
+	free(actions);
+	return err;
+}
+
 int exec_class(struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing CLASS in '%s'", dir);
+	struct header *h;
+	int err = read_header(&h, env->fd);
+	if (! err) err = class_rec(env, seq, dir, h);
 	return answer(env, seq, "CLASS", 500, "OK");
 }
 
+/*
+ * Quit
+ */
+
+int exec_quit (struct cnx_env *env, long long seq)
+{
+	debug("doing QUIT");
+	return answer(env, seq, "QUIT", 200, "OK");
+}
