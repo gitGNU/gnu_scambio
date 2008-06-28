@@ -13,6 +13,27 @@
 #include "header.h"
 #include "sub.h"
 #include "stribution.h"
+#include "persist.h"
+#include "conf.h"
+
+/*
+ * (De)Init
+ */
+
+static unsigned type_key, dirid_key;
+struct persist dirid_seq;
+
+int exec_begin(void)
+{
+	type_key = header_key("type");
+	dirid_key = header_key("dirId");
+	conf_set_default_str("SCAMBIO_DIRSEQ", "/tmp/dirid.seq");
+	return persist_ctor(&dirid_seq, sizeof(long long), conf_get_str("SCAMBIO_DIRSEQ"));
+}
+
+void exec_end(void) {
+	persist_dtor(&dirid_seq);
+}
 
 /*
  * Answers
@@ -76,6 +97,11 @@ static bool line_match(char *restrict line, char *restrict delim)
 	return true;
 }
 
+static bool is_directory(struct header *h) {
+	char const *type = header_search(h, "type", type_key);
+	return type && 0 == strncmp("dir", type, 3);
+}
+
 // Reads fd until a "%%" line, then build a header object
 static int read_header(struct header **hp, int fd)
 {
@@ -112,9 +138,29 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 {
 	debug("doing %s in '%s'", cmdtag, dir);
 	struct header *h;
+	char dirid_add[20+1];	// storage for additional header field on the stack, OK since the header is itself on this frame
 	int err = read_header(&h, env->fd);
 	if (! err) {
-		err = jnl_add_patch(dir, action, h);
+		if (is_directory(h)) {
+			char const *dirid_str = header_search(h, "dirId", dirid_key);
+			long long dirid;
+			if (dirid_str) {
+				dirid = strtoll(dirid_str, NULL, 0);
+			} else {
+				dirid = (*(long long *)dirid_seq.data)++;
+				snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
+				err = header_add_field(h, "dirId", dirid_key, dirid_add);
+			}
+			if (! err) {
+				if (action == '+') {
+					err = jnl_createdir(dir, dirid);
+				} else {
+					dirid = strtoll(dirid_str, NULL, 10);
+					err = jnl_unlinkdir(dir, dirid);
+				}
+			}
+		}
+		if (! err) err = jnl_add_patch(dir, action, h);
 		header_del(h);
 	}
 	return answer(env, seq, cmdtag, err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
@@ -189,6 +235,7 @@ int exec_class(struct cnx_env *env, long long seq, char const *dir)
 	debug("doing CLASS in '%s'", dir);
 	struct header *h;
 	int err = read_header(&h, env->fd);
+	if (is_directory(h)) return -EISDIR;
 	if (! err) err = class_rec(env, seq, dir, h);
 	return answer(env, seq, "CLASS", 500, "OK");
 }

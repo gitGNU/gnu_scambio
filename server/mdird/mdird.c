@@ -81,6 +81,9 @@ static int init_server(void)
 	if (0 != (err = cnx_server_ctor(&server, conf_get_int("SCAMBIO_PORT")))) return err;
 	if (0 != atexit(deinit_server)) return -1;
 	if (0 != (err = jnl_begin())) return err;
+	if (0 != atexit(jnl_end)) return -1;
+	if (0 != (err = exec_begin())) return err;
+	if (0 != atexit(exec_end)) return -1;
 	return 0;
 }
 

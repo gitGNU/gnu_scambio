@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <unistd.h>
 #include "scambio.h"
 #include "config.h"
@@ -87,6 +88,10 @@ static int header_ctor(struct header *h, char *msg)
 	memset(h->hash, -1, sizeof(h->hash));
 	ssize_t parsed;
 	while (*msg) {
+		if (h->nb_fields >= NB_MAX_FIELDS) {
+			error("Too many fields in this header (max is "TOSTR(NB_MAX_FIELDS)")");
+			return -E2BIG;
+		}
 		struct head_field *field = h->fields + h->nb_fields;
 		parsed = parse_field(msg, &field->name, &field->value);
 		if (parsed == -1) return -1;
@@ -95,11 +100,7 @@ static int header_ctor(struct header *h, char *msg)
 		// Hash these values
 		unsigned hkey = header_key(field->name);
 		field->hash_next = h->hash[hkey];
-		h->hash[hkey] = h->nb_fields;
-		if (++ h->nb_fields >= NB_MAX_FIELDS) {
-			error("Too many fields in this header (max is "TOSTR(NB_MAX_FIELDS)")");
-			return -1;
-		}
+		h->hash[hkey] = h->nb_fields ++;
 	};
 	return 0;
 }
@@ -165,4 +166,16 @@ int header_write(struct header const *h, int fd)
 	}
 	return 0;
 }
+
+int header_add_field(struct header *h, char const *name, unsigned key, char const *value)
+{
+	if (h->nb_fields >= NB_MAX_FIELDS) return -E2BIG;
+	struct head_field *field = h->fields + h->nb_fields;
+	field->name = (char *)name;	// won't be written to from now on
+	field->value = (char *)value;
+	field->hash_next = h->hash[key];
+	h->hash[key] = h->nb_fields ++;
+	return 0;
+}
+
 

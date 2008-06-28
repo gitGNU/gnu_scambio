@@ -33,4 +33,7 @@ bool dir_same_path(struct dir *dir, char const *path);
 long long dir_last_version(struct dir *dir);
 void dir_register_subscription(struct dir *dir, struct subscription *sub);
 
+int jnl_createdir(char const *dir, long long dirid);
+int jnl_unlinkdir(char const *dir, long long dirid);
+
 #endif

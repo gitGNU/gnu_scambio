@@ -27,6 +27,7 @@
  */
 
 static char const *rootdir;
+static char const *dirrootdir;
 static size_t rootdir_len;
 static unsigned max_jnl_size;
 static char const *strib_fname;
@@ -184,7 +185,6 @@ static int dir_ctor(struct dir *dir, size_t path_len, char const *path)
 {
 	int err = 0;
 	struct stat statbuf;
-	if (0 != (err = Mkdir(path))) return err;
 	if (0 != (err = stat(dir->path, &statbuf))) return err;
 	dir->path_len = path_len;
 	memcpy(dir->path, path, path_len+1);
@@ -269,13 +269,15 @@ int jnl_begin(void)
 {
 	int err;
 	// Default configuration values
-	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp"))) return err;
+	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp/mdir"))) return err;
+	if (0 != (err = conf_set_default_str("SCAMBIO_DIR_ROOT_DIR", "/tmp/mdirdir"))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_MAX_JNL_SIZE", 2000))) return err;
 	if (0 != (err = conf_set_default_str("SCAMBIO_STRIB_FNAME", ".stribution.conf"))) return err;
 	// Inits
 	LIST_INIT(&dirs);
 	rootdir = conf_get_str("SCAMBIO_ROOT_DIR");
 	rootdir_len = strlen(rootdir);
+	dirrootdir = conf_get_str("SCAMBIO_DIR_ROOT_DIR");
 	max_jnl_size = conf_get_int("SCAMBIO_MAX_JNL_SIZE");
 	strib_fname = conf_get_str("SCAMBIO_STRIB_FNAME");
 	return err;
@@ -452,5 +454,32 @@ int jnl_send_patch(long long *actual_version, struct dir *dir, long long version
 	}
 	(void)pth_rwlock_release(&dir->rwlock);
 	return err;
+}
+
+/*
+ * Directory creation / deletion
+ *
+ * They are symlinks to id-named directories.
+ * User friendly name may be friendly to user, but not to us.
+ */
+
+int jnl_createdir(char const *dir, long long dirid)
+{
+	int err = 0;
+	char diridpath[PATH_MAX];
+	char dirlinkpath[PATH_MAX];
+	snprintf(diridpath, sizeof(diridpath), "%s/%lld", dirrootdir, dirid);
+	if (0 != (err = Mkdir(diridpath))) return err;	// May already exists
+	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%lld", rootdir, dir, dirid);
+	if (0 != symlink(diridpath, dirlinkpath)) return -errno;
+	return err;
+}
+
+int jnl_unlinkdir(char const *dir, long long dirid)
+{
+	char dirlinkpath[PATH_MAX];
+	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%lld", rootdir, dir, dirid);
+	if (0 != unlink(dirlinkpath)) return -errno;
+	return 0;
 }
 

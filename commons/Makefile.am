@@ -10,4 +10,5 @@ libcommons_la_SOURCES = \
 	log.c \
 	cnx.c \
 	cmd.c \
-	daemon.c
+	daemon.c \
+	persist.c

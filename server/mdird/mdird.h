@@ -11,6 +11,8 @@ struct cnx_env {
 	pth_mutex_t wfd;	// protects fd on write
 };
 
+int exec_begin(void);
+void exec_end(void);
 int exec_sub  (struct cnx_env *, long long seq, char const *dir, long long version);
 int exec_unsub(struct cnx_env *, long long seq, char const *dir);
 int exec_put  (struct cnx_env *, long long seq, char const *dir);
