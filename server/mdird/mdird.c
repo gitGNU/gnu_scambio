@@ -144,6 +144,7 @@ static void *serve_cnx(void *arg)
 		return NULL;
 	}
 	int err = 0;
+	bool quit = false;
 	do {	// read a command and exec it
 		struct cmd cmd;
 		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
@@ -161,10 +162,11 @@ static void *serve_cnx(void *arg)
 			err = exec_rem(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_quit) {
 			err = exec_quit(env, cmd.seq);
+			quit = true;
 		}
 		pth_mutex_release(&env->wfd);
 		cmd_dtor(&cmd);
-	} while (1);
+	} while (! err && ! quit);
 	return NULL;
 }
 

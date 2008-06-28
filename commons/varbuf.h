@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "scambio.h"
 
 struct varbuf {
 	size_t used, actual;	// used <= actual !
@@ -21,12 +22,14 @@ static inline int varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocata
 	vb->actual = init_size;
 	vb->relocatable = relocatable;
 	vb->buf = malloc(init_size);
+	debug("varbuf_ctor(vb=%p, size=%zu)->@%p", vb, init_size, vb->buf);
 	if (! vb->buf) return -ENOMEM;
 	return 0;
 }
 
 static inline void varbuf_dtor(struct varbuf *vb)
 {
+	debug("varbuf_dtor(vb=%p)", vb);
 	free(vb->buf);
 }
 

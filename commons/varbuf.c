@@ -69,6 +69,7 @@ static int stringifies(struct varbuf *vb)
 
 ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
+	debug("varbuf_read_line(vb=%p, fd=%d)", vb, fd);
 	int err = 0;
 	if (0 != (err = stringifies(vb))) return err;
 	vb->used--;	// chop nul char

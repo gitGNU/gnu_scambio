@@ -111,15 +111,13 @@ static int header_ctor(struct header *h, char *msg)
 
 struct header *header_new(char *msg)
 {
+	debug("header_new(msg='%s')", msg);
 	struct header *h = calloc(1, sizeof(*h) + NB_MAX_FIELDS*sizeof(h->fields[0]));
 	if (! h) return NULL;
 	if (0 != header_ctor(h, msg)) {
 		free(h);
 		return NULL;
 	}
-	struct header *smaller_h = realloc(h, sizeof(*h) + h->nb_fields*sizeof(h->fields[0]));
-	if (smaller_h) return smaller_h;
-	warning("Cannot resize a struct header down to %d fields", h->nb_fields);
 	return h;
 }
 

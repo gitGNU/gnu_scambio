@@ -20,7 +20,11 @@ void log_end(void);
 #define error(...)      do if (log_level > 0) log_print("ERR: " __VA_ARGS__); while(0)
 #define warning(...)    do if (log_level > 1) log_print("WRN: " __VA_ARGS__); while(0)
 #define info(...)       do if (log_level > 2) log_print("NFO: " __VA_ARGS__); while(0)
+#ifndef NDEBUG
 #define debug(fmt, ...) do if (log_level > 3) log_print("DBG: %s: " fmt, __func__, ##__VA_ARGS__); while(0)
+#else
+#define debug(...)
+#endif
 #define fatal(...)      do { log_print("FATAL: " __VA_ARGS__); abort(); } while(0)
 
 #endif

@@ -185,7 +185,7 @@ static int dir_ctor(struct dir *dir, size_t path_len, char const *path)
 {
 	int err = 0;
 	struct stat statbuf;
-	if (0 != (err = stat(dir->path, &statbuf))) return err;
+	if (0 != (err = stat(path, &statbuf))) return err;
 	dir->path_len = path_len;
 	memcpy(dir->path, path, path_len+1);
 	dir->st_dev = statbuf.st_dev;

@@ -103,43 +103,45 @@ static bool is_directory(struct header *h) {
 }
 
 // Reads fd until a "%%" line, then build a header object
-static int read_header(struct header **hp, int fd)
+static int read_header(struct header **hp, struct varbuf *vb, int fd)
 {
+	debug("read_header(%p, %p, %d)", hp, vb, fd);
 	int err = 0;
-	struct varbuf vb;
-	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
 	int nb_lines = 0;
 	char *line;
 	bool eoh_reached = false;
-	while (0 < (err = varbuf_read_line(&vb, fd, MAX_HEADLINE_LENGTH, &line))) {
+	while (0 < (err = varbuf_read_line(vb, fd, MAX_HEADLINE_LENGTH, &line))) {
 		if (++ nb_lines > MAX_HEADER_LINES) {
 			err = -E2BIG;
 			break;
 		}
 		if (line_match(line, "%%")) {
 			// forget this line
-			vb.used = line - vb.buf + 1;
-			vb.buf[vb.used-1] = '\0';
+			vb->used = line - vb->buf + 1;
+			vb->buf[vb->used-1] = '\0';
 			eoh_reached = true;
 			break;
 		}
 	}
 	if (nb_lines == 0) err = -EINVAL;
 	if (! eoh_reached) err = -EINVAL;
+	if (err > 0) err = 0;	// no more use for bytes count
 	if (! err) {
-		*hp = header_new(vb.buf);
+		*hp = header_new(vb->buf);
 		if (! *hp) err = -1;	// FIXME
 	}
-	varbuf_dtor(&vb);
 	return err;
 }
 
 static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing %s in '%s'", cmdtag, dir);
+	int err = 0;
 	struct header *h;
 	char dirid_add[20+1];	// storage for additional header field on the stack, OK since the header is itself on this frame
-	int err = read_header(&h, env->fd);
+	struct varbuf vb;
+	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
+	err = read_header(&h, &vb, env->fd);
 	if (! err) {
 		if (is_directory(h)) {
 			char const *dirid_str = header_search(h, "dirId", dirid_key);
@@ -151,18 +153,13 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 				snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
 				err = header_add_field(h, "dirId", dirid_key, dirid_add);
 			}
-			if (! err) {
-				if (action == '+') {
-					err = jnl_createdir(dir, dirid);
-				} else {
-					dirid = strtoll(dirid_str, NULL, 10);
-					err = jnl_unlinkdir(dir, dirid);
-				}
-			}
+			debug("put is for directory %lld", dirid);
+			if (! err) err = (action == '+' ? jnl_createdir : jnl_unlinkdir)(dir, dirid);
 		}
 		if (! err) err = jnl_add_patch(dir, action, h);
 		header_del(h);
 	}
+	varbuf_dtor(&vb);
 	return answer(env, seq, cmdtag, err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
 }
 
@@ -233,10 +230,14 @@ bigbreak:
 int exec_class(struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing CLASS in '%s'", dir);
+	int err;
 	struct header *h;
-	int err = read_header(&h, env->fd);
+	struct varbuf vb;
+	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
+	err = read_header(&h, &vb, env->fd);
 	if (is_directory(h)) return -EISDIR;
 	if (! err) err = class_rec(env, seq, dir, h);
+	varbuf_dtor(&vb);
 	return answer(env, seq, "CLASS", 500, "OK");
 }
 
