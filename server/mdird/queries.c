@@ -20,13 +20,14 @@
  * (De)Init
  */
 
-static unsigned type_key, dirid_key;
+static unsigned type_key, dirid_key, name_key;
 struct persist dirid_seq;
 
 int exec_begin(void)
 {
-	type_key = header_key("type");
+	type_key  = header_key("type");
 	dirid_key = header_key("dirId");
+	name_key  = header_key("name");
 	conf_set_default_str("SCAMBIO_DIRSEQ", "/tmp/dirid.seq");
 	return persist_ctor(&dirid_seq, sizeof(long long), conf_get_str("SCAMBIO_DIRSEQ"));
 }
@@ -145,16 +146,25 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 	if (! err) {
 		if (is_directory(h)) {
 			char const *dirid_str = header_search(h, "dirId", dirid_key);
+			char const *dirname   = header_search(h, "name", name_key);
 			long long dirid;
-			if (dirid_str) {
-				dirid = strtoll(dirid_str, NULL, 0);
+			debug("put is for directory id=%s, name=%s", dirid_str, dirname);
+			if (action == '+') {
+				if (! dirname) dirname = "Unnamed";
+				if (dirid_str) err = -EINVAL;
+				if (! err) {
+					dirid = (*(long long *)dirid_seq.data)++;
+					snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
+					err = header_add_field(h, "dirId", dirid_key, dirid_add);
+					if (! err) err = jnl_createdir(dir, dirid, dirname);
+				}
 			} else {
-				dirid = (*(long long *)dirid_seq.data)++;
-				snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
-				err = header_add_field(h, "dirId", dirid_key, dirid_add);
+				if (! dirname) err = -EINVAL;
+				if (! err) {
+					dirid = strtoll(dirid_str, NULL, 0);
+					err = jnl_unlinkdir(dir, dirname);
+				}
 			}
-			debug("put is for directory %lld", dirid);
-			if (! err) err = (action == '+' ? jnl_createdir : jnl_unlinkdir)(dir, dirid);
 		}
 		if (! err) err = jnl_add_patch(dir, action, h);
 		header_del(h);

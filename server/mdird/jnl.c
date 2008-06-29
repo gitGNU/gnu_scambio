@@ -269,8 +269,8 @@ int jnl_begin(void)
 {
 	int err;
 	// Default configuration values
-	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp/mdir"))) return err;
-	if (0 != (err = conf_set_default_str("SCAMBIO_DIR_ROOT_DIR", "/tmp/mdirdir"))) return err;
+	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp/mdir/msgs"))) return err;
+	if (0 != (err = conf_set_default_str("SCAMBIO_DIR_ROOT_DIR", "/tmp/mdir/dirs"))) return err;
 	if (0 != (err = conf_set_default_int("SCAMBIO_MAX_JNL_SIZE", 2000))) return err;
 	if (0 != (err = conf_set_default_str("SCAMBIO_STRIB_FNAME", ".stribution.conf"))) return err;
 	// Inits
@@ -463,22 +463,22 @@ int jnl_send_patch(long long *actual_version, struct dir *dir, long long version
  * User friendly name may be friendly to user, but not to us.
  */
 
-int jnl_createdir(char const *dir, long long dirid)
+int jnl_createdir(char const *dir, long long dirid, char const *dirname)
 {
 	int err = 0;
 	char diridpath[PATH_MAX];
 	char dirlinkpath[PATH_MAX];
 	snprintf(diridpath, sizeof(diridpath), "%s/%lld", dirrootdir, dirid);
 	if (0 != (err = Mkdir(diridpath))) return err;	// May already exists
-	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%lld", rootdir, dir, dirid);
+	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%s", rootdir, dir, dirname);
 	if (0 != symlink(diridpath, dirlinkpath)) return -errno;
 	return err;
 }
 
-int jnl_unlinkdir(char const *dir, long long dirid)
+int jnl_unlinkdir(char const *dir, char const *dirname)
 {
 	char dirlinkpath[PATH_MAX];
-	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%lld", rootdir, dir, dirid);
+	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%s", rootdir, dir, dirname);
 	if (0 != unlink(dirlinkpath)) return -errno;
 	return 0;
 }
