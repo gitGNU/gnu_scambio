@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons server doc
+SUBDIRS = commons server doc www
 
 .PHONY: cscope
 
