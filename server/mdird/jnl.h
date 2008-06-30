@@ -27,6 +27,7 @@ int jnl_add_patch(char const *path, char action, struct header *header);
 int jnl_send_patch(long long *actual_version, struct dir *dir, long long version, int fd);
 
 int dir_get(struct dir **dir, char const *path);
+int dir_exist(char const *path);
 int strib_get(struct stribution **, char const *path);
 
 bool dir_same_path(struct dir *dir, char const *path);

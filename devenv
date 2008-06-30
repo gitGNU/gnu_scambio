@@ -4,3 +4,5 @@ export SCAMBIO_DIR_ROOT_DIR=$PWD/server/mdird/checks/mdird/dirs
 export SCAMBIO_LOG_DIR=$PWD/server/mdird/checks/mdird/
 export SCAMBIO_LOG_LEVEL=5
 export SCAMBIO_MAX_JNL_SIZE=10
+
+mkdir -p $SCAMBIO_ROOT_DIR $SCAMBIO_DIR_ROOT_DIR $SCAMBIO_LOG_DIR

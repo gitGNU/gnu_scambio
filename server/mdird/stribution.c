@@ -282,6 +282,7 @@ unsigned strib_eval(struct stribution *stribution, struct header const *head, st
 	for (unsigned t=0; t<stribution->nb_tests; t++) {
 		if (condition_eval(&stribution->tests[t].condition, head)) {
 			actions[nb_actions++] = &stribution->tests[t].action;
+			// TODO: break once a final state is reached (discard or move)
 		}
 	}
 	return nb_actions;

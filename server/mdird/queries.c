@@ -134,43 +134,50 @@ static int read_header(struct header **hp, struct varbuf *vb, int fd)
 	return err;
 }
 
+static int add_header(char const *dir, struct header *h, char action)
+{
+	int err = 0;
+	char dirid_add[20+1];	// storage for additional header field on the stack, OK since the header is itself on this frame
+	if (is_directory(h)) {
+		char const *dirid_str = header_search(h, "dirId", dirid_key);
+		char const *dirname   = header_search(h, "name", name_key);
+		long long dirid;
+		debug("header is for directory id=%s, name=%s", dirid_str, dirname);
+		if (action == '+') {
+			if (! dirname) dirname = "Unnamed";
+			if (dirid_str) err = -EINVAL;
+			if (! err) {
+				dirid = (*(long long *)dirid_seq.data)++;
+				snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
+				err = header_add_field(h, "dirId", dirid_key, dirid_add);
+				if (! err) err = jnl_createdir(dir, dirid, dirname);
+			}
+		} else {
+			if (! dirname) err = -EINVAL;
+			if (! err) {
+				dirid = strtoll(dirid_str, NULL, 0);
+				err = jnl_unlinkdir(dir, dirname);
+			}
+		}
+	}
+	if (! err) err = jnl_add_patch(dir, action, h);
+	return err;
+}
+
 static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing %s in '%s'", cmdtag, dir);
 	int err = 0;
 	struct header *h;
-	char dirid_add[20+1];	// storage for additional header field on the stack, OK since the header is itself on this frame
 	struct varbuf vb;
 	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
 	err = read_header(&h, &vb, env->fd);
 	if (! err) {
-		if (is_directory(h)) {
-			char const *dirid_str = header_search(h, "dirId", dirid_key);
-			char const *dirname   = header_search(h, "name", name_key);
-			long long dirid;
-			debug("put is for directory id=%s, name=%s", dirid_str, dirname);
-			if (action == '+') {
-				if (! dirname) dirname = "Unnamed";
-				if (dirid_str) err = -EINVAL;
-				if (! err) {
-					dirid = (*(long long *)dirid_seq.data)++;
-					snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
-					err = header_add_field(h, "dirId", dirid_key, dirid_add);
-					if (! err) err = jnl_createdir(dir, dirid, dirname);
-				}
-			} else {
-				if (! dirname) err = -EINVAL;
-				if (! err) {
-					dirid = strtoll(dirid_str, NULL, 0);
-					err = jnl_unlinkdir(dir, dirname);
-				}
-			}
-		}
-		if (! err) err = jnl_add_patch(dir, action, h);
+		err = add_header(dir, h, action);
 		header_del(h);
 	}
 	varbuf_dtor(&vb);
-	return answer(env, seq, cmdtag, err < 0 ? 500:200, err < 0 ? strerror(-err):"OK");
+	return answer(env, seq, cmdtag, err ? 500:200, err ? strerror(-err):"OK");
 }
 
 int exec_put(struct cnx_env *env, long long seq, char const *dir)
@@ -190,24 +197,52 @@ int exec_rem(struct cnx_env *env, long long seq, char const *dir)
 static bool void_dir(char const *dir)
 {
 	while (*dir != '\0') {
-		if (*dir != '/' && *dir != '.') return true;
+		if (*dir != '/' && *dir != '.') return false;
 		dir++;
 	}
-	return false;
+	return true;
+}
+
+static int create_if_missing(char const *dir, char const *subdir)
+{
+	union {
+		char path[PATH_MAX];
+		char msg[20+PATH_MAX];
+	} u;
+	snprintf(u.path, sizeof(u.path), "%s/%s", dir, subdir);
+	int err = dir_exist(u.path);
+	if (err > 0) return 0;
+	if (err < 0) return err;
+	snprintf(u.msg, sizeof(u.msg), "type: dir\nname: %s\n", subdir);
+	struct header *h = header_new(u.msg);
+	if (! h) return -1;	// FIXME
+	return add_header(dir, h, '+');
 }
 
 static int class_rec(struct cnx_env *env, long long seq, char const *dir, struct header *h);
 static int goto_dir(struct cnx_env *env, long long seq, char const *dir, struct strib_action const *action, struct header *h)
 {
-	if (action->dest_type != DEST_STRING) {
-		error("field target actions not implemented yet");
-		return -EINVAL;
+	int err = 0;
+	char const *dest;
+	switch (action->dest_type) {
+		case DEST_DEREF:
+			dest = header_search(h, action->dest.deref.name, action->dest.deref.key);
+			if (! dest) {
+				error("dereferencing unset field '%s'", action->dest.deref.name);
+				return -ENOENT;
+			}
+			break;
+		case DEST_STRING:
+			dest = action->dest.string;
+			break;
 	}
-	if (void_dir(action->dest.string)) return -EINVAL;	// avoid staying here
+	debug("Delivering to %s", dest);
+	if (void_dir(dest)) return -EINVAL;	// avoid staying here
+	if (0 != (err = create_if_missing(dir, dest))) return err;
 	char *new_dir = malloc(PATH_MAX);	// this is ercursive : don't allow malicious users to exhaust our stack
 	if (! new_dir) return -ENOMEM;
-	snprintf(new_dir, PATH_MAX, "%s/%s", dir, action->dest.string);
-	int err = class_rec(env, seq, dir, h);
+	snprintf(new_dir, PATH_MAX, "%s/%s", dir, dest);
+	err = class_rec(env, seq, new_dir, h);
 	free(new_dir);
 	return err;
 }
@@ -218,16 +253,17 @@ static int class_rec(struct cnx_env *env, long long seq, char const *dir, struct
 	int err = strib_get(&strib, dir);
 	if (err) return err;
 	if (! strib) {	// just stores it there
-		return exec_putrem("CLASS", '+', env, seq, dir);
+		return add_header(dir, h, '+');
 	}
 	struct strib_action const **actions = malloc(NB_MAX_TESTS * sizeof(*actions));
 	if (! actions) return -ENOMEM;
 	unsigned nb_actions = strib_eval(strib, h, actions);
 	struct strib_action const **tmp = realloc(actions, nb_actions * sizeof(*actions));
 	if (tmp) actions = tmp;
+	debug("Evaluate to %u actions", nb_actions);
 	for (unsigned a=0; !err && a<nb_actions; a++) {
 		switch (actions[a]->type) {
-			case ACTION_DISCARD: err = 0; break;
+			case ACTION_DISCARD: err = 0; goto bigbreak;
 			case ACTION_COPY:    err = goto_dir(env, seq, dir, actions[a], h); break;
 			case ACTION_MOVE:    err = goto_dir(env, seq, dir, actions[a], h); goto bigbreak;
 		}
@@ -240,15 +276,21 @@ bigbreak:
 int exec_class(struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing CLASS in '%s'", dir);
-	int err;
+	int err = 0;
 	struct header *h;
 	struct varbuf vb;
-	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
-	err = read_header(&h, &vb, env->fd);
-	if (is_directory(h)) return -EISDIR;
-	if (! err) err = class_rec(env, seq, dir, h);
+	if (0 != (err = varbuf_ctor(&vb, 10000, true))) goto answ;
+	do {
+		if (0 != (err = read_header(&h, &vb, env->fd))) break;
+		if (is_directory(h)) {
+			err = -EISDIR;
+			break;
+		}
+		if (0 != (err = class_rec(env, seq, dir, h))) break;
+	} while (0);
 	varbuf_dtor(&vb);
-	return answer(env, seq, "CLASS", 500, "OK");
+answ:
+	return answer(env, seq, "CLASS", err ? 500:200, err ? strerror(-err):"OK");
 }
 
 /*

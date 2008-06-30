@@ -320,6 +320,19 @@ int dir_get(struct dir **dir, char const *path)
 	return 0;
 }
 
+int dir_exist(char const *path)
+{
+	char abspath[PATH_MAX];
+	snprintf(abspath, sizeof(abspath), "%s/%s", rootdir, path);
+	struct stat statbuf;
+	if (0 != stat(abspath, &statbuf)) {
+		if (errno == ENOENT) return 0;
+		return -errno;
+	}
+	if (! S_ISDIR(statbuf.st_mode)) return -ENOTDIR;
+	return 1;
+}
+
 int strib_get(struct stribution **stribp, char const *path)
 {
 	struct dir *dir;
