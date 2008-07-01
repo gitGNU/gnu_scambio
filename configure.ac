@@ -35,6 +35,5 @@ AC_CONFIG_FILES([
 	server/mdird/Makefile
 	server/mdird/checks/Makefile
 	doc/Makefile
-	www/Makefile
 ])
 AC_OUTPUT
