@@ -1,0 +1,18 @@
+#!/usr/bin/env perl
+# Pipe a mailbox file to this script and it will pipe each of the emails through deliver.
+
+my $msg = '';
+while (<>) {
+	if (/^From /o) {
+		my $len = length($msg);
+		if ($len > 0 and $len < 100000) {
+			print "Write a mail of size $len\n";
+			open(TMP, "|./deliver") or die "cannot pipe : $?";
+			print TMP $msg;
+			close(TMP);
+		}
+		$msg = '';
+	} else {
+		$msg .= $_;
+	}
+}
