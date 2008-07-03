@@ -18,22 +18,9 @@ use vars qw( $dir $lock $level $message %levelpart
   # When no content-type specified, consider it this.
   contenttype        => "text/plain",
   # Prefixes of output files with internally generated names
-  headerprefix       => "headers",
-  mimepreambleprefix => "mimepreamble",
-  mimeepilogueprefix => "mimeepilogue",
   partprefix         => "part",
-  # Print all parts? Headers, mime preamble and epilogue, part headers...
-  printall         => 1,
-  # Recurse into message/* parts?
-  messagerecurse   => 0,
   # If recursing the MIME structure, add extra indentation per recurse level
   indentperlevel   => '  ',
-  # Maximum length for a filename (including extension)
-  filenamelength   => 80,
-  # Print warnings?
-  showwarnings     => 1,
-  # Suppress printing filenames?
-  quiet            => 0,
 );
 
 # Match and capture in $1 a filename extension (with the '.').
@@ -66,7 +53,6 @@ sub process($$);
 sub fileinfo($$);
 sub pickname($$;$);
 sub pickext($);
-sub checklen($);
 sub cleanse($$$);
 sub dumpheaders($$$);
 sub dumpbody($$$$);
@@ -84,7 +70,7 @@ mkextmap();
 dosighandlers();
 undef($/);
 $message = <>;
-process('.', \$message);
+process('mstore', \$message);
 exit(0);
 # } main functionality
 
@@ -171,11 +157,12 @@ sub process($$) {
 	} else {
 		$filename = cleanse($level, $filename, $type);
 	}
+	push(@headers, "url: $cwd/$filename");
 
 	if (!defined($boundary)) {
 		$outfile = dumpbody($encoding, $cwd, $filename, $messref);
 		fileinfo($level, $outfile);
-		if($default{messagerecurse} and $type =~ /^message/o) {
+		if($type =~ /^message/o) {
 			$level ++;
 			process($cwd, $messref);
 			$level --;
@@ -189,11 +176,6 @@ sub process($$) {
 			$mline = $1;
 			if($mline =~ /^-*\Q$boundary\E-*\s*$/) {
 				if (length($part)) {
-#					if ($default{printall}) { 
-#						$name = pickname($level, 'preamble', $default{mimepreambleprefix});
-#						$outfile = dumpbody('none', $cwd, $name, \$part);
-#						fileinfo($level, $outfile);
-#					}
 					$part = '';
 				}
 				last;
@@ -215,20 +197,10 @@ sub process($$) {
 			}
 		} # while messref (additional boundaries)
 
-		if (length($part)) {
-#			if ($default{printall}) { 
-#				$name = pickname($level, 'epilogue', $default{mimeepilogueprefix});
-#				$outfile = dumpbody('none', $cwd, $name, \$part);
-#				fileinfo($level, $outfile);
-#			}
-		}
-
 	} # if $boundary
 
-	if ($default{printall}) { 
-		$outfile = dumpheaders($cwd, ".header.$filename", \@headers);
-		fileinfo($level, $outfile);
-	}
+	$outfile = dumpheaders($cwd, ".$filename", \@headers);
+	fileinfo($level, $outfile);
 } # end &process
 
 # Expand a directory template, build directory path for it, and
@@ -287,9 +259,7 @@ sub THEEND ($) {
 # Signal handler for warnings.
 sub WARN ($) {
 	my $warning = (shift or '(unknown)');
-	if ($default{showwarnings}) {
-		print STDERR $warning;
-	}
+	print STDERR $warning;
 } # end &WARN 
 
 # Installs the signal handlers.
@@ -332,13 +302,13 @@ sub cleanse($$$) {
 
 	# only simple names ok as-is
 	if ($input =~ /$REfilename/i) {
-		return(checklen($1)); # untaint
+		return($1); # untaint
 	}
 	$input =~ s:.*/\.*([^/]*):$1:;
 	$input =~ s:[^a-z\d\._ -]+::ig;
 	$input =~ s:\s+:-:g;
 	if ($input =~ /$REfilename/i) {
-		return(checklen($1)); # untaint
+		return($1); # untaint
 	}
 	return pickname($level, $type);
 } # end &cleanse
@@ -348,9 +318,6 @@ sub fileinfo ($$) {
 	my $level = shift;
 	my $name = shift;
 
-	if ($default{quiet} or !defined($name)) {
-		return;
-	}
 	$name =~ s://+:/:g;
 	if (defined($default{indentperlevel})) {
 		$level = $default{indentperlevel} x $level;
@@ -369,23 +336,6 @@ sub pickname ($$;$) {
 	$levelpart{$level} = $seq + 1;
 	return "$pre-$$-${level}_$seq" . pickext($type);
 } # end &pickname 
-
-# Returns a version of the provided filename that is no longer
-# than the maximum length. The filename is shortened from the
-# end, with an attempt to preserve the extension.
-sub checklen($) {
-	my $name = shift;
-
-	if(length($name) > $default{filenamelength}) {
-		my $ext = '';
-		if ($name =~ s/$REextension//i) {
-			$ext = $1;
-		}
-		$name = substr($name, 0, $default{filenamelength} - length($ext)) . $ext;
-	}
-	return $name;
-} # end &checklen
-
 
 # Prints a body or attachment part, decoding if needed, to a specified
 # file. Returns 'undef' for error, and the filename on success.

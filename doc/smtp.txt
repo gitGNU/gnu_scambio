@@ -2,16 +2,45 @@ Connecteur SMTP
 ===============
 
 La plupart des serveurs SMTP savent livrer un mail sur stdin à un programme 
-externe. On exploite ceci pour la réception d'emails. Pour l'envoit, on 
-utilise un programme qui scanne une outbox et manipule sendmail (ou commande 
+externe. On exploite ceci pour la réception d'emails. Pour l'envoie on utilise 
+un programme qui scanne une outbox et manipule sendmail (ou commande 
 compatible livrée par le serveur SMTP).
 
 Le connecteur doit, en réception, décomposer l'email en fichiers, et pour 
-chacun l'ajouter à son mstore et construire un header. Le MID et le header 
-sont ensuite donnés au gestionnaire du mdir pour classement (et 
-notifications).
+chacun l'ajouter à son mstore (avec son message-id) et construire un header 
+(comportant en plus une url et en option un suggested-name). Le header est 
+ensuite envoyé à mdird pour classement (et notifications).
 
+Faire un fichier par parties, chacun référencant dans ses méta-données le 
+fichier principal (première partie), qui sert donc "d'ancre" à l'email. Si 
+l'URL est toujours basée sur le message-id+part_num, il n'est pas interdit de 
+suggérer un nom de fichier plus adapté au client pour les pièces jointes qui 
+pourraient avoir un nom. Le problème alors c'est l'unicité du nom sur le 
+client ; mais ceux-ci sont libres de nommer le vrai fichier physique autrement 
+qu'avec le nom suggéré (par exemple, possibilité d'ajouter un suffixe). Les 
+méta données sont stoquées dans un sous-répertoire ".meta" sous le même nom 
+que le fichier physique. De plus, le client possède aussi son numéro de 
+version par répertoire, dans ".version" par exemple (en ascii pour pouvoir le 
+corriger à la main). Si ce fichier n'existe pas c'est que la version courrante 
+est 0. Ce micmac (URL, suggested-name, fichier physique, .meta, .version) doit 
+être pris en charge par la lib client.
 
+Autre solution : implémenter un vrai petit serveur SMTP, connecté en 
+permanence à mdird, qui stoque les fichiers et, pour chaque fichiers, envoie 
+les headers au mdird. Pour l'expédition, il se contente de transférer à un 
+autre SMTP, toujours le même (et éventuellement signer d'office).
 
+Dans ce cas on peut prévoir quelques fonctionnalitées antispam. Par exemple, 
+en cas d'erreur de destinataire blacklister l'IP de la machine qui livre (sauf 
+si elle a aussi livré des messages valides). Oubien elle peut faire du grey 
+listing systématiquement.
+
+Problème de vérification des abonnés : il faut une seule configuration pour 
+les utilisateurs : leur(s) addresse(s) emails, ainsi que les autres comptes 
+(SIP...) les certificats etc... Cette conf doit-être dans le mdir (à un 
+endroit convenu précisé par l'environement). Par exemple, il doit y avoir les 
+folder 'Users/JojoLapin/emailAccounts/jojolapin@machin.com' et 
+'Users/JojoLapin/emailAccounts/joe@lapin.org' pour Jojo Lapin qui utilise deux 
+comptes mails. Sinon, c'est une erreur (blacklistage).
 
 // vim: syntax=asciidoc
