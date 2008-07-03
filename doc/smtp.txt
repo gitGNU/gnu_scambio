@@ -38,9 +38,23 @@ listing systématiquement.
 Problème de vérification des abonnés : il faut une seule configuration pour 
 les utilisateurs : leur(s) addresse(s) emails, ainsi que les autres comptes 
 (SIP...) les certificats etc... Cette conf doit-être dans le mdir (à un 
-endroit convenu précisé par l'environement). Par exemple, il doit y avoir les 
-folder 'Users/JojoLapin/emailAccounts/jojolapin@machin.com' et 
-'Users/JojoLapin/emailAccounts/joe@lapin.org' pour Jojo Lapin qui utilise deux 
-comptes mails. Sinon, c'est une erreur (blacklistage).
+endroit convenu précisé par l'environement). Par exemple, il doit y avoir un 
+folder 'SMTP/Accounts/jojolapin@machin.com' dans lequel les messages destinés 
+à cette addresse seront poussés (ce folder est probablement monté ailleurs, 
+par exemple dans 'Users/JojoLapin/Emails'). C'est ensuite à JojoLapin de 
+configurer son stribution.
+
+On peut aussi de la sorte renseigner directement le serveur SMTP : en 
+déplacant un mail dans la boite à spam celui-ci peut être récupéré par le 
+smtpd pour analyze (par exemple, pour chaque IP ou propriétaire d'IP connaître 
+combien de spam ont étés reçu par rapport au nombre total de messages reçus).  
+Cette boite à spam est récupérée et vidée par smtpd qui maintient sa base de 
+donnée interne et la publie tous les jours/mois dans 'SMTP/Statistics/' avec 
+les autres stats (sur l'usage, les users, les spammers, les sites sources, les 
+sites destinations...) ; c'est ensuite à l'admin de configurer un stribution 
+pour classer ces messages de stats par jour/semaine/sujet comme il veut.
+
+Il faut essayer de se tenir au principe suivant : un connecteur ne doit pas 
+faire du suppositions quant à la configuration du classement des messages.
 
 // vim: syntax=asciidoc
