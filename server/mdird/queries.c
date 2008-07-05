@@ -14,7 +14,6 @@
 #include "sub.h"
 #include "stribution.h"
 #include "persist.h"
-#include "conf.h"
 
 /*
  * (De)Init
@@ -28,8 +27,8 @@ int exec_begin(void)
 	type_key  = header_key("type");
 	dirid_key = header_key("dirId");
 	name_key  = header_key("name");
-	conf_set_default_str("SCAMBIO_DIRSEQ", "/tmp/dirid.seq");
-	return persist_ctor(&dirid_seq, sizeof(long long), conf_get_str("SCAMBIO_DIRSEQ"));
+	conf_set_default_str("MDIRD_DIRSEQ", "/tmp/dirid.seq");
+	return persist_ctor(&dirid_seq, sizeof(long long), conf_get_str("MDIRD_DIRSEQ"));
 }
 
 void exec_end(void) {
@@ -43,7 +42,7 @@ void exec_end(void) {
 static int answer(struct cnx_env *env, long long seq, char const *cmd_name, int status, char const *cmpl)
 {
 	char reply[100];
-	size_t len = snprintf(reply, sizeof(reply), "%lld %s %d (%s)\n", seq, cmd_name, status, cmpl);
+	size_t len = snprintf(reply, sizeof(reply), "%lld %s %d %s\n", seq, cmd_name, status, cmpl);
 	assert(len < sizeof(reply));
 	return Write(env->fd, reply, len);
 }

@@ -269,17 +269,17 @@ int jnl_begin(void)
 {
 	int err;
 	// Default configuration values
-	if (0 != (err = conf_set_default_str("SCAMBIO_ROOT_DIR", "/tmp/mdir/msgs"))) return err;
-	if (0 != (err = conf_set_default_str("SCAMBIO_DIR_ROOT_DIR", "/tmp/mdir/dirs"))) return err;
-	if (0 != (err = conf_set_default_int("SCAMBIO_MAX_JNL_SIZE", 2000))) return err;
-	if (0 != (err = conf_set_default_str("SCAMBIO_STRIB_FNAME", ".stribution.conf"))) return err;
+	if (0 != (err = conf_set_default_str("MDIRD_ROOT_DIR", "/tmp/mdir/msgs"))) return err;
+	if (0 != (err = conf_set_default_str("MDIRD_DIR_ROOT_DIR", "/tmp/mdir/dirs"))) return err;
+	if (0 != (err = conf_set_default_int("MDIRD_MAX_JNL_SIZE", 2000))) return err;
+	if (0 != (err = conf_set_default_str("MDIRD_STRIB_FNAME", ".stribution.conf"))) return err;
 	// Inits
 	LIST_INIT(&dirs);
-	rootdir = conf_get_str("SCAMBIO_ROOT_DIR");
+	rootdir = conf_get_str("MDIRD_ROOT_DIR");
 	rootdir_len = strlen(rootdir);
-	dirrootdir = conf_get_str("SCAMBIO_DIR_ROOT_DIR");
-	max_jnl_size = conf_get_int("SCAMBIO_MAX_JNL_SIZE");
-	strib_fname = conf_get_str("SCAMBIO_STRIB_FNAME");
+	dirrootdir = conf_get_str("MDIRD_DIR_ROOT_DIR");
+	max_jnl_size = conf_get_int("MDIRD_MAX_JNL_SIZE");
+	strib_fname = conf_get_str("MDIRD_STRIB_FNAME");
 	return err;
 }
 

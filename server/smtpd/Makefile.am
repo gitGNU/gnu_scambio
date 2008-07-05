@@ -1,0 +1,10 @@
+AM_CFLAGS = -std=c99 -Wall -W
+AM_CPPFLAGS = -I$(top_srcdir)/commons -D_GNU_SOURCE
+
+bin_PROGRAMS = smtpd
+
+smtpd_SOURCES = \
+	smtpd.c \
+	queries.c
+
+smtpd_LDADD = ../../commons/libcommons.la

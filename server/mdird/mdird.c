@@ -33,20 +33,19 @@ char const *const kw_quit  = "quit";
 static int init_conf(void)
 {
 	int err;
-	debug("init conf");
-	if (0 != (err = conf_set_default_str("SCAMBIO_LOG_DIR", "/var/log"))) return err;
-	if (0 != (err = conf_set_default_int("SCAMBIO_LOG_LEVEL", 3))) return err;
-	if (0 != (err = conf_set_default_int("SCAMBIO_PORT", 21654))) return err;
+	if (0 != (err = conf_set_default_str("MDIRD_LOG_DIR", "/var/log"))) return err;
+	if (0 != (err = conf_set_default_int("MDIRD_LOG_LEVEL", 3))) return err;
+	if (0 != (err = conf_set_default_int("MDIRD_PORT", 21654))) return err;
 	return 0;
 }
 
 static int init_log(void)
 {
 	int err;
+	if (0 != (err = log_begin(conf_get_str("MDIRD_LOG_DIR"), "mdird.log"))) return err;
 	debug("init log");
-	if (0 != (err = log_begin(conf_get_str("SCAMBIO_LOG_DIR"), "mdird.log"))) return err;
 	if (0 != atexit(log_end)) return -1;
-	log_level = conf_get_int("SCAMBIO_LOG_LEVEL");
+	log_level = conf_get_int("MDIRD_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
 	return 0;
 }
@@ -78,7 +77,7 @@ static int init_server(void)
 	int err;
 	debug("init server");
 	if (0 != (err = cnx_begin())) return err;
-	if (0 != (err = cnx_server_ctor(&server, conf_get_int("SCAMBIO_PORT")))) return err;
+	if (0 != (err = cnx_server_ctor(&server, conf_get_int("MDIRD_PORT")))) return err;
 	if (0 != atexit(deinit_server)) return -1;
 	if (0 != (err = jnl_begin())) return err;
 	if (0 != atexit(jnl_end)) return -1;
@@ -148,7 +147,6 @@ static void *serve_cnx(void *arg)
 	do {	// read a command and exec it
 		struct cmd cmd;
 		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
-		if (! cmd.keyword) break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		if (cmd.keyword == kw_sub) {
 			err = exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);

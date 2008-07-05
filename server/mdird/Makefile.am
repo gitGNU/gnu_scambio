@@ -7,7 +7,6 @@ SUBDIRS = . checks
 bin_PROGRAMS = mdird
 
 mdird_SOURCES = \
-	header.c \
 	strib_parser.y \
 	strib_lexer.l \
 	stribution.c \

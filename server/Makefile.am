@@ -1,2 +1,2 @@
-SUBDIRS = mdird
+SUBDIRS = mdird smtpd
 
