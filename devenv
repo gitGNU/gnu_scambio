@@ -1,8 +1,11 @@
 export MALLOC_CHECK_=2
-export SCAMBIO_ROOT_DIR=$PWD/server/mdird/checks/mdird/msgs
-export SCAMBIO_DIR_ROOT_DIR=$PWD/server/mdird/checks/mdird/dirs
-export SCAMBIO_LOG_DIR=$PWD/server/mdird/checks/mdird/
-export SCAMBIO_LOG_LEVEL=5
-export SCAMBIO_MAX_JNL_SIZE=10
+export MDIRD_ROOT_DIR=$PWD/server/mdird/checks/mdird/msgs
+export MDIRD_DIR_ROOT_DIR=$PWD/server/mdird/checks/mdird/dirs
+export MDIRD_LOG_DIR=/tmp
+export MDIRD_LOG_LEVEL=5
+export MDIRD_MAX_JNL_SIZE=10
+export SMTPD_LOG_DIR=/tmp
+export SMTPD_LOG_LEVEL=5
+export SMTPD_PORT=1025
 
-mkdir -p $SCAMBIO_ROOT_DIR $SCAMBIO_DIR_ROOT_DIR $SCAMBIO_LOG_DIR
+mkdir -p $MDIRD_ROOT_DIR $MDIRD_DIR_ROOT_DIR

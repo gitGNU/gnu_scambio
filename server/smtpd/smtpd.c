@@ -9,7 +9,6 @@
 #include "cnx.h"
 #include "varbuf.h"
 #include "cmd.h"
-#include "header.h"
 #include "smtpd.h"
 
 /*
@@ -18,6 +17,7 @@
 
 static struct cnx_server server;
 static sig_atomic_t terminate = 0;
+char my_hostname[256];
 
 char const *const kw_ehlo = "ehlo";
 char const *const kw_helo = "helo";
@@ -85,6 +85,7 @@ static int init_server(void)
 {
 	int err;
 	debug("init server");
+	if (0 != gethostname(my_hostname, sizeof(my_hostname))) return -errno;
 	if (0 != (err = cnx_begin())) return err;
 	if (0 != (err = cnx_server_ctor(&server, conf_get_int("SMTPD_PORT")))) return err;
 	if (0 != atexit(deinit_server)) return -1;
@@ -113,18 +114,15 @@ static void cnx_env_del(void *env_)
 {
 	struct cnx_env *env = env_;
 	close(env->fd);
-	if (env->h) header_del(env->h);
+	if (env->domain) free(env->domain);
+	if (env->reverse_path) free(env->reverse_path);
+	if (env->forward_path) free(env->forward_path);
 	free(env);
 }
 
 static char *client_host(void)
 {
 	return "0.0.0.0";	// TODO
-}
-
-static char *my_host(void)
-{
-	return "MeMyselfAndI";	// TODO
 }
 
 static struct cnx_env *cnx_env_new(int fd)
@@ -135,15 +133,14 @@ static struct cnx_env *cnx_env_new(int fd)
 		return NULL;
 	}
 	env->fd = fd;
-	time_t now = time(NULL);
-	snprintf(env->start_head, sizeof(env->start_head),
-		"Type: email\n"
-		"Received: from %s\n"
-		"  by %s SMTPD "TOSTR(VERSION)"; %s",
-		client_host(),
-		my_host(),
-		ctime(&now));
-	env->h = header_new(env->start_head);
+	time_t const now = time(NULL);
+	struct tm *tm = localtime(&now);
+	snprintf(env->client_address, sizeof(env->client_address), "%s", client_host());
+	snprintf(env->reception_date, sizeof(env->reception_date), "%04d-%02d-%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
+	snprintf(env->reception_time, sizeof(env->reception_time), "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+	env->domain = NULL;
+	env->reverse_path = NULL;
+	env->forward_path = NULL;
 	return env;
 }
 
@@ -155,11 +152,12 @@ static void *serve_cnx(void *arg)
 		cnx_env_del(env);
 		return NULL;
 	}
-	int err = 0;
 	bool quit = false;
-	do {	// read a command and exec it
+	int err = answer(env, 220, my_hostname);
+	while (! quit && ! err) {	// read a command and exec it
 		struct cmd cmd;
-		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
+		if (0 != (err = cmd_read(&cmd, false, env->fd))) break;
+		debug("Read keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_ehlo) {
 			err = exec_ehlo(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_helo) {
@@ -177,7 +175,7 @@ static void *serve_cnx(void *arg)
 		} else if (cmd.keyword == kw_expn) {
 			err = exec_expn(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_help) {
-			err = exec_helo(env, cmd.args[0].val.string);
+			err = exec_helo(env, cmd.nb_args > 0 ? cmd.args[0].val.string:NULL);
 		} else if (cmd.keyword == kw_noop) {
 			err = exec_noop(env);
 		} else if (cmd.keyword == kw_quit) {
@@ -185,7 +183,8 @@ static void *serve_cnx(void *arg)
 			quit = true;
 		}
 		cmd_dtor(&cmd);
-	} while (! err && ! quit);
+	}
+	if (err) error("Error: %s", strerror(-err));
 	return NULL;
 }
 

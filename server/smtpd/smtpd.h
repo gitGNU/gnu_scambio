@@ -4,18 +4,25 @@
 #include <pth.h>
 #include "queue.h"
 
-struct header;
+#define CRLF "\r\n"
+
+extern char my_hostname[256];
 
 struct cnx_env {
 	int fd;
-	struct header *h;
-	char start_head[200];
+	char *domain;	// stores the last received helo information
+	char *reverse_path;
+	char *forward_path;
+	char client_address[100];
+	char reception_date[10+1];
+	char reception_time[8+1];
 };
 
 int exec_begin(void);
 void exec_end(void);
-int exec_ehlo(struct cnx_env *, char const *client_id);
-int exec_helo(struct cnx_env *, char const *client_id);
+int answer(struct cnx_env *env, int status, char *cmpl);
+int exec_ehlo(struct cnx_env *, char const *domain);
+int exec_helo(struct cnx_env *, char const *domain);
 int exec_mail(struct cnx_env *, char const *from);
 int exec_rcpt(struct cnx_env *, char const *to);
 int exec_data(struct cnx_env *);
