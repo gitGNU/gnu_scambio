@@ -140,7 +140,7 @@ int exec_mail(struct cnx_env *env, char const *from)
 	if (! env->domain) return answer(env, BAD_SEQUENCE, "What about presenting yourself first ?");
 #	define FROM_LEN 5
 	if (0 != strncasecmp("FROM:", from, FROM_LEN)) {
-		return answer(env, SYNTAX_ERR, "I think it should be 'MAIL FROM:...'");
+		return answer(env, SYNTAX_ERR, "I remember RFC speaking of 'MAIL FROM:...'");
 	}
 	set_reverse_path(env, from + FROM_LEN);
 	return answer(env, OK, "Ok");
@@ -165,11 +165,13 @@ int exec_rcpt(struct cnx_env *env, char const *to)
 
 int exec_data(struct cnx_env *env)
 {
-	// 1/ read headers in a varbuf
-	// 2/ read a part with that headers (recursive)
-	//     1/ if this is multipart, recurse
-	//     2/ or just save the part and headers (decoded)
-	return answer(env, LOCAL_ERROR, "Not implemented yet");
+	int err;
+	if (! env->forward_path) return answer(env, BAD_SEQUENCE, "What recipient, again ?");
+	if (0 != (err = answer(env, START_MAIL, "Go ahaid, end with a single dot"))) return err;
+	if (0 != (err = process_mail(env))) {
+		return answer(env, LOCAL_ERROR, "Something bad happened at some point");
+	}
+	return answer(env, OK, "Ok");
 }
 
 /*
