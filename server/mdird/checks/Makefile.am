@@ -3,10 +3,10 @@ AM_CPPFLAGS = -I$(top_srcdir)/commons -I$(top_srcdir)/server/mdird -D_GNU_SOURCE
 
 check_PROGRAMS = test1 test2
 
-test1_SOURCES = test1.c ../header.c
+test1_SOURCES = test1.c $(top_srcdir)/commons/header.c
 test1_LDADD = ../../../commons/libcommons.la
 test2_SOURCES = test2.c \
-	../header.c ../stribution.c ../strib_cache.c \
+	$(top_srcdir)/commons/header.c ../stribution.c ../strib_cache.c \
 	../strib_lexer.c ../strib_parser.c
 test2_LDADD = ../../../commons/libcommons.la
 
