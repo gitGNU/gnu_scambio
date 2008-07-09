@@ -30,7 +30,7 @@ int cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 {
 	int err = 0;
 	int const one = 1;
-	static struct sockaddr_in any_addr;
+	struct sockaddr_in any_addr;
 	memset(&any_addr, sizeof(any_addr), 0);
 	any_addr.sin_family = AF_INET;
 	any_addr.sin_port = htons(port);
@@ -40,7 +40,7 @@ int cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 		err = -errno;
 	} else if (
 		0 != setsockopt(serv->sock_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) ||
-		0 != bind(serv->sock_fd, &any_addr, sizeof(any_addr)) ||
+		0 != bind(serv->sock_fd, (struct sockaddr *)&any_addr, sizeof(any_addr)) ||
 		0 != listen(serv->sock_fd, 10)
 	) {
 		err = -errno;

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <pth.h>

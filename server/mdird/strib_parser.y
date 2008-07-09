@@ -166,6 +166,7 @@ dest:
 		TEST.action.dest.deref.name = strdup($1);
 		TEST.action.dest.deref.key  = header_key($1);
 	}
+	;
 
 deref:
 	DEREF FIELDNAME { $$ = $2; }

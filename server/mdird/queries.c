@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <pth.h>
 #include "scambio.h"
 #include "mdird.h"

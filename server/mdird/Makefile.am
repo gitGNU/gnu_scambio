@@ -17,3 +17,7 @@ mdird_SOURCES = \
 	sub.c
 
 mdird_LDADD = @LEXLIB@ ../../commons/libcommons.la
+
+clean-local:
+	rm -f strib_lexer.c strib_parser.c strib_parser.h
+
