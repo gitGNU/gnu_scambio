@@ -18,7 +18,7 @@ struct cnx_env {
 	char reception_date[10+1];
 	char reception_time[8+1];
 	// From the top-level header (points toward a varbuf that will be deleted by the time this env is deleted)
-	char *subject;
+	char const *subject, *message_id;
 };
 
 // From queries.c
@@ -43,14 +43,16 @@ int exec_quit(struct cnx_env *);
 struct header;
 struct msg_tree {
 	struct header *header;
-	enum msg_tree_type { CT_FILE, CT_SUBTREE } content;
+	enum msg_tree_type { CT_FILE, CT_SUBTREE } type;
 	union {
 		struct varbuf file;
-		struct msg_tree *subtree;
+		SLIST_HEAD(subtrees, msg_tree) subtree;
 	} content;
+	SLIST_ENTRY(msg_tree) entry;
 };
 
 struct msg_tree;
 int msg_tree_read(struct msg_tree **root, int fd);
+void msg_tree_del(struct msg_tree *);
 
 #endif

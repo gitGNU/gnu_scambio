@@ -37,7 +37,7 @@
 #define MBOX_UNALLOWED  553 // Requested action not taken: mailbox name not allowed (e.g., mailbox syntax incorrect)
 #define TRANSAC_FAILED  554 // Transaction failed  (Or, in the case of a connection-opening response, "No SMTP service here")
 
-unsigned subject_key;
+unsigned subject_key, message_id_key;
 
 /*
  * (De)Init
@@ -46,6 +46,7 @@ unsigned subject_key;
 int exec_begin(void)
 {
 	subject_key = header_key("subject");
+	message_id_key = header_key("message-id");
 	return 0;
 }
 
@@ -166,6 +167,26 @@ int exec_rcpt(struct cnx_env *env, char const *to)
  * DATA
  */
 
+static int store_file(struct cnx_env *env, struct header *header, struct varbuf *vb)
+{
+	// content is already decoded (by parse_mail)
+	return -ENOSYS;
+}
+
+static int store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
+{
+	if (tree->type == CT_FILE) {
+		return store_file(env, tree->header, &tree->content.file);
+	}
+	assert(tree->type == CT_SUBTREE);
+	struct msg_tree *subtree;
+	SLIST_FOREACH(subtree, &tree->content.subtree, entry) {
+		int err = store_file_rec(env, subtree);
+		if (err) return err;
+	}
+	return 0;
+}
+
 static int process_mail(struct cnx_env *env)
 {
 	// First parse the data into a mail tree
@@ -173,11 +194,10 @@ static int process_mail(struct cnx_env *env)
 	int err = msg_tree_read(&msg_tree, env->fd);
 	if (err) return err;
 	// Extract the values that will be used for all meta-data blocs from top-level header
-	env->subject = header_search(msg_tree.header, "subject", subject_key);
-	// Then store each file in the mdir.
-	// All parts are stored in a separate file which meta data are formed from some top-level values (extracted from context
-	// and local headers).
-	err = -ENOSYS;	// TODO
+	env->subject = header_search(msg_tree->header, "subject", subject_key);
+	env->message_id = header_search(msg_tree->header, "message-id", message_id_key);
+	// Then store each file in the mdir
+	err = store_file_rec(env, msg_tree);
 	msg_tree_del(msg_tree);
 	return err;
 }
