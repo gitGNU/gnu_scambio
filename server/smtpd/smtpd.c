@@ -127,7 +127,7 @@ static char *client_host(void)
 
 static struct cnx_env *cnx_env_new(int fd)
 {
-	struct cnx_env *env = malloc(sizeof(*env));
+	struct cnx_env *env = calloc(1, sizeof(*env));
 	if (! env) {
 		error("Cannot alloc a cnx_env");
 		return NULL;
@@ -138,9 +138,6 @@ static struct cnx_env *cnx_env_new(int fd)
 	snprintf(env->client_address, sizeof(env->client_address), "%s", client_host());
 	snprintf(env->reception_date, sizeof(env->reception_date), "%04d-%02d-%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
 	snprintf(env->reception_time, sizeof(env->reception_time), "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
-	env->domain = NULL;
-	env->reverse_path = NULL;
-	env->forward_path = NULL;
 	return env;
 }
 

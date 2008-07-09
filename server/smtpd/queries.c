@@ -37,12 +37,15 @@
 #define MBOX_UNALLOWED  553 // Requested action not taken: mailbox name not allowed (e.g., mailbox syntax incorrect)
 #define TRANSAC_FAILED  554 // Transaction failed  (Or, in the case of a connection-opening response, "No SMTP service here")
 
+unsigned subject_key;
+
 /*
  * (De)Init
  */
 
 int exec_begin(void)
 {
+	subject_key = header_key("subject");
 	return 0;
 }
 
@@ -140,7 +143,7 @@ int exec_mail(struct cnx_env *env, char const *from)
 	if (! env->domain) return answer(env, BAD_SEQUENCE, "What about presenting yourself first ?");
 #	define FROM_LEN 5
 	if (0 != strncasecmp("FROM:", from, FROM_LEN)) {
-		return answer(env, SYNTAX_ERR, "I remember RFC speaking of 'MAIL FROM:...'");
+		return answer(env, SYNTAX_ERR, "I remember RFC mentioning 'MAIL FROM:...'");
 	}
 	set_reverse_path(env, from + FROM_LEN);
 	return answer(env, OK, "Ok");
@@ -162,6 +165,22 @@ int exec_rcpt(struct cnx_env *env, char const *to)
 /*
  * DATA
  */
+
+static int process_mail(struct cnx_env *env)
+{
+	// First parse the data into a mail tree
+	struct msg_tree *msg_tree;
+	int err = msg_tree_read(&msg_tree, env->fd);
+	if (err) return err;
+	// Extract the values that will be used for all meta-data blocs from top-level header
+	env->subject = header_search(msg_tree.header, "subject", subject_key);
+	// Then store each file in the mdir.
+	// All parts are stored in a separate file which meta data are formed from some top-level values (extracted from context
+	// and local headers).
+	err = -ENOSYS;	// TODO
+	msg_tree_del(msg_tree);
+	return err;
+}
 
 int exec_data(struct cnx_env *env)
 {

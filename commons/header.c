@@ -82,6 +82,14 @@ static ssize_t parse_field(char *msg, char **name, char **value)
 	return parsedN + parsedV;
 }
 
+static void str_tolower(char *str)
+{
+	while (*str != '\0') {
+		*str = tolower(*str);
+		str++;
+	}
+}
+
 static int header_ctor(struct header *h, char *msg)
 {
 	// h is already set to all 0
@@ -97,6 +105,8 @@ static int header_ctor(struct header *h, char *msg)
 		if (parsed == -1) return -1;
 		if (parsed == 0) break;	// end of message
 		msg += parsed;
+		// Lowercase inplace stored field names
+		str_tolower(field->name);
 		// Hash these values
 		unsigned hkey = header_key(field->name);
 		field->hash_next = h->hash[hkey];

@@ -3,6 +3,7 @@
 
 #include <pth.h>
 #include "queue.h"
+#include "varbuf.h"
 
 #define CRLF "\r\n"
 
@@ -16,7 +17,11 @@ struct cnx_env {
 	char client_address[100];
 	char reception_date[10+1];
 	char reception_time[8+1];
+	// From the top-level header (points toward a varbuf that will be deleted by the time this env is deleted)
+	char *subject;
 };
+
+// From queries.c
 
 int exec_begin(void);
 void exec_end(void);
@@ -32,5 +37,20 @@ int exec_expn(struct cnx_env *, char const *list);
 int exec_help(struct cnx_env *, char const *command);
 int exec_noop(struct cnx_env *);
 int exec_quit(struct cnx_env *);
+
+// From parse.c
+
+struct header;
+struct msg_tree {
+	struct header *header;
+	enum msg_tree_type { CT_FILE, CT_SUBTREE } content;
+	union {
+		struct varbuf file;
+		struct msg_tree *subtree;
+	} content;
+};
+
+struct msg_tree;
+int msg_tree_read(struct msg_tree **root, int fd);
 
 #endif
