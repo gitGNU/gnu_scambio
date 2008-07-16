@@ -201,7 +201,7 @@ PUT
 ~~~
 
 Arguments : *répertoire* puis les headers terminés par une ligne ne contenant 
-que '%%'.
+que '::'.
 
 Cela place de fichier dans le répertoire.
 
@@ -224,13 +224,13 @@ et attendant une réponse du serveur.  Cette commande en revanche provient du
 serveur, ne tient pas sur une ligne car elle est suivit d'un header, et reste 
 sans réponse.
 
-Arguments : *répertoire* puis *ancienne version*, suivit du contenu du journal 
-c'et à dire '%+/-' et *nouvelle version*, suivit d'un header terminé par '%%'.  
-On a donc bien l'ancienne version (celle attendue par le client ou la dernière 
-qu'on lui a envoyé) et la nouvelle.
+Arguments : *répertoire* puis *ancienne version*, suivi du contenu du journal 
+c'est à dire le header puis la ligne de fin, composée de ':+/-' et de 
+*nouvelle version*.  On a donc bien l'ancienne version (celle attendue par le 
+client ou la dernière qu'on lui a envoyé) et la nouvelle.
 
-Si l'action est '%+', un fichier représenté par ce header doit être ajouté 
-s'il n'existe pas déjà et si c'est '%-' tout fichier possédant ce header devra 
+Si l'action est ':+', un fichier représenté par ce header doit être ajouté 
+s'il n'existe pas déjà et si c'est ':-' tout fichier possédant ce header devra 
 être effacé (les headers sont donc uniques par répertoire, par construction).  
 La dernière commande reçue et comprise par le client lui permet d'accéder à la 
 version indiquée. C'est plus verbeux qu'une seule version figurant à la fin de 
@@ -238,10 +238,11 @@ la liste (ou en début) mais cela peut permettre au client de se rattraper
 partiellement en cas de transfert incomplet et c'est plus simple pour le 
 serveur qui ne fait que recopier son journal.
 
-On utilise '%+', '%-' et '%%' pour minimiser le risque d'avoir un nom de 
-champs commencant par le délimiteur (ce qui est interdit) et faciliter le 
-dialogue manuel avec un mdird. Par ailleurs, et pour cette dernière raison, on 
-ignorera toujours les espaces en fin de ligne.
+On utilise ':+', ':-' et '::' pour minimiser le risque d'avoir un nom de 
+champs commencant par le délimiteur (ce qui est interdit), parceque ':' est un 
+caractère déjà interdit pour un nom de header, et enfin pour faciliter le 
+dialogue manuel avec un mdird.  Par ailleurs, et pour cette dernière raison, 
+on ignorera toujours les espaces en fin de ligne.
 
 Journal encore plus simple
 --------------------------

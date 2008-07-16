@@ -357,7 +357,7 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 	// Then the patch
 	if (0 != (err = header_write(header, jnl->patch_fd))) return err;
 	char action_str[32];
-	size_t const len = snprintf(action_str, sizeof(action_str), "%%%c %lld\n", action, version);	// TODO: add ctime ?
+	size_t const len = snprintf(action_str, sizeof(action_str), ":%c %lld\n", action, version);	// TODO: add ctime ?
 	assert(len < sizeof(action_str));
 	if (0 != (err = Write(jnl->patch_fd, action_str, len))) return err;
 	jnl->nb_patches ++;

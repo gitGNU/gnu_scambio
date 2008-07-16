@@ -103,7 +103,7 @@ static bool is_directory(struct header *h) {
 	return type && 0 == strncmp("dir", type, 3);
 }
 
-// Reads fd until a "%%" line, then build a header object
+// Reads fd until a "::" line, then build a header object
 static int read_header(struct header **hp, struct varbuf *vb, int fd)
 {
 	debug("read_header(%p, %p, %d)", hp, vb, fd);
@@ -116,7 +116,7 @@ static int read_header(struct header **hp, struct varbuf *vb, int fd)
 			err = -E2BIG;
 			break;
 		}
-		if (line_match(line, "%%")) {
+		if (line_match(line, "::")) {
 			// forget this line
 			vb->used = line - vb->buf + 1;
 			vb->buf[vb->used-1] = '\0';
