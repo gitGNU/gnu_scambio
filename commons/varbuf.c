@@ -33,7 +33,7 @@ int varbuf_make_room(struct varbuf *vb, size_t new_size)
 	return 0;
 }
 
-int varbuf_append(struct varbuf *vb, size_t size, void *buf)
+int varbuf_append(struct varbuf *vb, size_t size, void const *buf)
 {
 	size_t pos = vb->used;
 	int err = varbuf_put(vb, size);
@@ -67,7 +67,7 @@ static int stringifies(struct varbuf *vb)
 	return 0;
 }
 
-ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
+int varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
 	debug("varbuf_read_line(vb=%p, fd=%d)", vb, fd);
 	int err = 0;
@@ -75,26 +75,32 @@ ssize_t varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 	vb->used--;	// chop nul char
 	size_t prev_used = vb->used;
 	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
-	while (vb->used - prev_used < maxlen) {
+	bool was_CR = false;
+	while (!err && vb->used - prev_used < maxlen) {
 		int8_t byte;
 		ssize_t ret = pth_read(fd, &byte, 1);	// "If in doubt, use brute force"
 		if (ret < 0) {
-			if (errno == EINTR) continue;
-			err = -errno;
-			break;
+			if (errno != EINTR) err = -errno;
 		} else if (ret == 0) {
-			err = 0;
-			break;
+			err = 1;	// EOF
+		} else {
+			assert(ret == 1);
+			if (byte == '\n') break;
+			if (byte == '\r') {
+				was_CR = true;
+			} else {
+				static char const cr = '\r';
+				if (was_CR) err = varbuf_append(vb, 1, &cr);	// \r followed by anthing but \n are passed
+				was_CR = false;
+				if (! err) err = varbuf_append(vb, 1, &byte);
+			}
 		}
-		err ++;	// count read bytes
-		assert(ret == 1);
-		if (byte != '\r') varbuf_append(vb, 1, &byte);	// we just ignore them
-		if (byte == '\n') break;
 	}
 	stringifies(vb);
 	return err;
 }
 
+#if 0
 off_t varbuf_read_line_off(struct varbuf *vb, int fd, size_t maxlen, off_t offset, char **new)
 {
 	int err = 0;
@@ -102,20 +108,28 @@ off_t varbuf_read_line_off(struct varbuf *vb, int fd, size_t maxlen, off_t offse
 	vb->used--;	// chop nul char
 	size_t prev_used = vb->used;
 	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
-	while (vb->used - prev_used < maxlen) {
+	bool was_CR = false;
+	while (!err && vb->used - prev_used < maxlen) {
 		int8_t byte;
 		ssize_t ret = pth_pread(fd, &byte, 1, offset);
 		if (ret < 0) {
-			if (errno == EINTR) continue;
-			offset = -errno;
-			break;
-		} else if (ret == 0) break;
-		assert(ret == 1);
-		offset += 1;
-		if (byte != '\r') varbuf_append(vb, 1, &byte);
-		if (byte == '\n') break;
+			if (errno != EINTR) err = -errno;
+		} else if (ret == 0) {
+			err = 1;
+		} else {
+			assert(ret == 1);
+			offset ++;
+			if (byte == '\r') {
+				was_CR = true;
+			} else {
+				if (was_CR) err = varbuf_append(vb, 1, '\r');	// \r followed by anthing but \n are passed
+				was_CR = false;
+				if (! err) err = varbuf_append(vb, 1, &byte);
+			}
+		}
 	}
 	stringifies(vb);
-	return offset;
+	return err ? err : offset;
 }
+#endif
 

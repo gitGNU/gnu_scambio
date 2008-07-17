@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <pth.h>
+#include <ctype.h>
 #include "scambio.h"
 #include "misc.h"
 
@@ -66,4 +67,19 @@ int Mkdir(char const *path_)
 	}
 	return Mkdir_single(path);
 }
+
+bool line_match(char *restrict line, char *restrict delim)
+{
+	unsigned c = 0;
+	while (delim[c] != '\0') {
+		if (delim[c] != line[c]) return false;
+		c++;
+	}
+	while (line[c] != '\0') {
+		if (! isspace(line[c])) return false;
+		c++;
+	}
+	return true;
+}
+
 

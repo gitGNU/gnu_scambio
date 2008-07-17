@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <pth.h>
@@ -83,21 +82,6 @@ int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
  * PUT/REM
  */
 
-// a line is said to match a delim if it starts with the delim, and is followed only by optional spaces
-static bool line_match(char *restrict line, char *restrict delim)
-{
-	unsigned c = 0;
-	while (delim[c] != '\0') {
-		if (delim[c] != line[c]) return false;
-		c++;
-	}
-	while (line[c] != '\0') {
-		if (! isspace(line[c])) return false;
-		c++;
-	}
-	return true;
-}
-
 static bool is_directory(struct header *h) {
 	char const *type = header_search(h, "type", type_key);
 	return type && 0 == strncmp("dir", type, 3);
@@ -111,7 +95,7 @@ static int read_header(struct header **hp, struct varbuf *vb, int fd)
 	int nb_lines = 0;
 	char *line;
 	bool eoh_reached = false;
-	while (0 < (err = varbuf_read_line(vb, fd, MAX_HEADLINE_LENGTH, &line))) {
+	while (0 == (err = varbuf_read_line(vb, fd, MAX_HEADLINE_LENGTH, &line))) {
 		if (++ nb_lines > MAX_HEADER_LINES) {
 			err = -E2BIG;
 			break;
@@ -126,7 +110,7 @@ static int read_header(struct header **hp, struct varbuf *vb, int fd)
 	}
 	if (nb_lines == 0) err = -EINVAL;
 	if (! eoh_reached) err = -EINVAL;
-	if (err > 0) err = 0;	// no more use for bytes count
+	if (err == 1) err = 0;	// no more use for EOF
 	if (! err) {
 		*hp = header_new(vb->buf);
 		if (! *hp) err = -1;	// FIXME
