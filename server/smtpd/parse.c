@@ -5,11 +5,35 @@
  * Parse a mail from a file descriptor into a struct msg_tree
  */
 
-static int parse_mail_rec(struct msg_tree **root, struct varbuf *vb)
+static int parse_mail_rec(struct msg_tree **node, char *msg, char const *delimiter);
+static int parse_mail_node(struct msg_tree *node, char *msg, char const *delimiter)
 {
 	// First read the header
-	// Then the body, which may be a mere unstructured body or another message up to a boundary
-	// TODO
+	node->header = header_new(msg);
+	if (! node->header) return -EINVAL;
+	// Find out weither the body is total with a decoding method, or
+	// is another message up to a given boundary.
+	char const *content_type = header_search(node->header,
+		well_known_headers[WKH_CONTENT_TYPE].name, well_known_headers[WKH_CONTENT_TYPE].key);
+	if (content_type && 0 == strncasecmp(content_type, "multipart/", 10)) {
+		node->type = CT_MULTIPART;
+		SLIST_INIT(&node->content.parts);
+
+	} else {
+		node->type = CT_FILE;
+	}
+}
+
+static int parse_mail_rec(struct msg_tree **node, char *msg, char const *delimiter)
+{
+	*node = malloc(sizeof(**node));
+	if (! *node) return -ENOMEM;
+	int err;
+	if (0 != (err = parse_mail_node(*node, msg, delimiter))) {
+		free(*node);
+		*node = NULL;
+	}
+	return err;
 }
 
 static int read_whole_mail(struct varbuf *vb, int fd)
@@ -36,7 +60,7 @@ int msg_tree_read(struct msg_tree **root, int fd)
 	struct varbuf vb;
 	if (0 != (err = varbuf_ctor(&vb, 10240, true))) return err;
 	err = read_whole_mail(&vb, fd);
-	if (! err) err = parse_mail_rec(root, &vb);
+	if (! err) err = parse_mail_rec(root, vb->buf, NULL);
 	varbuf_dtor(&vb);
 	return err;
 }

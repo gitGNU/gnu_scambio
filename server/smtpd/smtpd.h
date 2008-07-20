@@ -23,6 +23,16 @@ struct cnx_env {
 
 // From queries.c
 
+#define WKH_SUBJECT 0
+#define WKH_MESSAGE_ID 1
+#define WKH_CONTENT_TYPE 2
+#define WKH_CONTENT_TRANSFERT_ENCODING 3
+
+extern struct {
+	unsigned key;
+	char *name;
+} well_known_headers[];
+
 int exec_begin(void);
 void exec_end(void);
 int answer(struct cnx_env *env, int status, char *cmpl);
@@ -43,10 +53,10 @@ int exec_quit(struct cnx_env *);
 struct header;
 struct msg_tree {
 	struct header *header;
-	enum msg_tree_type { CT_FILE, CT_SUBTREE } type;
+	enum msg_tree_type { CT_FILE, CT_MULTIPART } type;
 	union {
 		struct varbuf file;
-		SLIST_HEAD(subtrees, msg_tree) subtree;
+		SLIST_HEAD(subtrees, msg_tree) parts;
 	} content;
 	SLIST_ENTRY(msg_tree) entry;
 };

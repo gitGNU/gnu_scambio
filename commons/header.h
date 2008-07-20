@@ -14,6 +14,7 @@ struct header {
 	int nb_fields;
 #	define FIELD_HASH_SIZE 32
 	int hash[FIELD_HASH_SIZE];	// first field with this hash value;
+	char *end;	// end of header in initial message
 	// Variable size
 	struct head_field {
 		char *name, *value;
@@ -24,7 +25,7 @@ struct header {
 /* Build a header from this message.
  * Do not free the message while the header is valid, for it keeps some pointer to it.
  * Returns NULL on error.
- * In any case, the message is modified in undefined way.
+ * In any case, the message is modified in undefined way until header->end
  */
 struct header *header_new(char *msg);
 

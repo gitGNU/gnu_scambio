@@ -112,6 +112,7 @@ static int header_ctor(struct header *h, char *msg)
 		field->hash_next = h->hash[hkey];
 		h->hash[hkey] = h->nb_fields ++;
 	};
+	h->end = msg;
 	return 0;
 }
 
