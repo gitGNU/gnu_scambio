@@ -35,6 +35,9 @@ AC_CONFIG_FILES([
 	server/mdird/Makefile
 	server/mdird/checks/Makefile
 	server/smtpd/Makefile
+	client/Makefile
+	client/include/Makefile
+	client/lib/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

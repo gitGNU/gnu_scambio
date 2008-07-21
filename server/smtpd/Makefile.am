@@ -1,5 +1,5 @@
 AM_CFLAGS = -std=c99 -Wall -W
-AM_CPPFLAGS = -I$(top_srcdir)/commons -D_GNU_SOURCE
+AM_CPPFLAGS = -I$(top_srcdir)/client/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 
 bin_PROGRAMS = smtpd
 
@@ -8,4 +8,4 @@ smtpd_SOURCES = \
 	queries.c \
 	parse.c
 
-smtpd_LDADD = ../../commons/libcommons.la
+smtpd_LDADD = ../../commons/libcommons.la ../../client/lib/libmdir.la

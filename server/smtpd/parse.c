@@ -66,9 +66,11 @@ static int parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 		well_known_headers[WKH_CONTENT_TYPE].name, well_known_headers[WKH_CONTENT_TYPE].key);
 	if (content_type && 0 == strncasecmp(content_type, "multipart/", 10)) {
 		debug("message is multipart");
-		char boundary[2+MAX_BOUNDARY_LENGTH] = "--";
+#		define PREFIX "\n--"
+#		define PREFIX_LENGTH 3
+		char boundary[PREFIX_LENGTH+MAX_BOUNDARY_LENGTH] = PREFIX;
 		int err;
-		if (0 > (err = header_copy_parameter("boundary", content_type, sizeof(boundary)-2, boundary+2))) {
+		if (0 > (err = header_copy_parameter("boundary", content_type, sizeof(boundary)-PREFIX_LENGTH, boundary+PREFIX_LENGTH))) {
 			warning("multipart message without boundary ? : %s", strerror(-err));	// proceed as a single file
 		} else {
 			return parse_multipart(node, msg, size, boundary);

@@ -12,5 +12,4 @@ libcommons_la_SOURCES = \
 	cnx.c \
 	cmd.c \
 	daemon.c \
-	persist.c \
-	mdir.c
+	persist.c
