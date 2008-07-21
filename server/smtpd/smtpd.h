@@ -7,7 +7,11 @@
 
 #define CRLF "\r\n"
 #define MAX_MAILLINE_LENGTH 1000
-#define MAX_BOUNDARY_LENGTH MAX_MAILLINE_LENGTH
+/* Boundary delimiters must not appear within the encapsulated material,
+ * and must be no longer than 70 characters, not counting the two leading
+ * hyphens. -- RFC 2046
+ */
+#define MAX_BOUNDARY_LENGTH 70
 
 extern char my_hostname[256];
 

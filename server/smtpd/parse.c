@@ -26,12 +26,15 @@ static char *strnstr(const char *big_, const char *little, size_t big_len)
 
 static int parse_mail_rec(struct msg_tree **node, char *msg, size_t size);
 
+// We treat the preamble (what preceeds the first boundary) as a normal part.
+// The epilogue is ignored, though.
 static int parse_multipart(struct msg_tree *node, char *msg, size_t size, char *boundary)
 {
 	char *msg_end = msg+size;
 	node->type = CT_MULTIPART;
 	SLIST_INIT(&node->content.parts);
 	size_t const boundary_len = strlen(boundary);
+	bool last_boundary = true;
 	do {
 		char *delim_pos = strnstr(msg, boundary, msg_end-msg);
 		if (! delim_pos) {
@@ -44,14 +47,18 @@ static int parse_multipart(struct msg_tree *node, char *msg, size_t size, char *
 			SLIST_INSERT_HEAD(&node->content.parts, part, entry);
 		}
 		msg = delim_pos + boundary_len;
-		// boundary may be followed by spaces, then CRLF
+		// boundary may be followed by "--" if its the last one, then some optional spaces then CRLF.
+		if (msg[0] == '-' && msg[1] == '-') {
+			msg += 2;
+			last_boundary = true;
+		}
 		while (isblank(*msg)) msg++;
 		if (*msg != '\n') {	// CRLF are converted to '\n' by varbuf_read_line()
 			warning("Badly formated multipart message : boundary not followed by new line (%s)", boundary);
 			return -EINVAL;
 		}
 		msg ++;	// skip NL
-	} while (msg < msg_end);
+	} while (msg < msg_end && !last_boundary);
 	return 0;
 }
 
