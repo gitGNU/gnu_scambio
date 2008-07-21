@@ -26,7 +26,7 @@ AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([memset strtol])
+AC_CHECK_FUNCS([memset strtol strnstr])
 
 AC_CONFIG_FILES([
 	Makefile

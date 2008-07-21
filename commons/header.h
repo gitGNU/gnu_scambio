@@ -45,4 +45,10 @@ int header_write(struct header const *h, int fd);
 // Beware : name and value must lasts (as long as header do)
 int header_add_field(struct header *h, char const *name, unsigned key, char const *value);
 
+// Return a pointer to the beginning of the value.
+// Return -ENOENT if not found, or the length of the value if *value!=NULL.
+int header_find_parameter(char const *name, char const *field_value, char const **value);
+// Same result. Error may be -EMSGSIZE or -ENOENT
+int header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
+
 #endif

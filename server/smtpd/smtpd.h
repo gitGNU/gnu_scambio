@@ -6,6 +6,8 @@
 #include "varbuf.h"
 
 #define CRLF "\r\n"
+#define MAX_MAILLINE_LENGTH 1000
+#define MAX_BOUNDARY_LENGTH MAX_MAILLINE_LENGTH
 
 extern char my_hostname[256];
 
@@ -28,10 +30,12 @@ struct cnx_env {
 #define WKH_CONTENT_TYPE 2
 #define WKH_CONTENT_TRANSFERT_ENCODING 3
 
-extern struct {
+struct well_known_header {
 	unsigned key;
 	char *name;
-} well_known_headers[];
+};
+
+extern struct well_known_header well_known_headers[];
 
 int exec_begin(void);
 void exec_end(void);
@@ -53,7 +57,7 @@ int exec_quit(struct cnx_env *);
 struct header;
 struct msg_tree {
 	struct header *header;
-	enum msg_tree_type { CT_FILE, CT_MULTIPART } type;
+	enum msg_tree_type { CT_NONE=0, CT_FILE, CT_MULTIPART } type;
 	union {
 		struct varbuf file;
 		SLIST_HEAD(subtrees, msg_tree) parts;

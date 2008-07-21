@@ -5,6 +5,7 @@ bin_PROGRAMS = smtpd
 
 smtpd_SOURCES = \
 	smtpd.c \
-	queries.c
+	queries.c \
+	parse.c
 
 smtpd_LDADD = ../../commons/libcommons.la

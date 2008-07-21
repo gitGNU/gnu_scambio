@@ -37,10 +37,7 @@
 #define MBOX_UNALLOWED  553 // Requested action not taken: mailbox name not allowed (e.g., mailbox syntax incorrect)
 #define TRANSAC_FAILED  554 // Transaction failed  (Or, in the case of a connection-opening response, "No SMTP service here")
 
-struct {
-	unsigned key;
-	char *name;
-} well_known_headers[] = {
+struct well_known_header well_known_headers[] = {
 	{ 0, "subject" },
 	{ 0, "message-id" },
 	{ 0, "content-type" },
@@ -142,9 +139,9 @@ static bool is_valid_mailbox(char const *name)
 #	define MB_LEN 10
 	snprintf(mbox_dir+MB_LEN, sizeof(mbox_dir)-MB_LEN, "%s", name);
 	struct mdir *mdir;
-	int err = mdir_get(&mdir, mbox_dir);
+	if (0 != mdir_get(&mdir, mbox_dir)) return false;
 	mdir_unref(mdir);
-	return 0 == err;
+	return true;
 }
 
 int exec_mail(struct cnx_env *env, char const *from)
@@ -178,6 +175,9 @@ int exec_rcpt(struct cnx_env *env, char const *to)
 
 static int store_file(struct cnx_env *env, struct header *header, struct varbuf *vb)
 {
+	(void)env;
+	(void)header;
+	(void)vb;
 	// content is already decoded (by parse_mail)
 	return -ENOSYS;
 }
@@ -187,9 +187,9 @@ static int store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
 	if (tree->type == CT_FILE) {
 		return store_file(env, tree->header, &tree->content.file);
 	}
-	assert(tree->type == CT_SUBTREE);
+	assert(tree->type == CT_MULTIPART);
 	struct msg_tree *subtree;
-	SLIST_FOREACH(subtree, &tree->content.subtree, entry) {
+	SLIST_FOREACH(subtree, &tree->content.parts, entry) {
 		int err = store_file_rec(env, subtree);
 		if (err) return err;
 	}

@@ -8,10 +8,10 @@ et facilement extensible pour la communication inter-individuelle/groupes.
 Utiliser ou même améliorer les solutions existantes (principalement Kolab) 
 n'est suffisant, car ces solutions ne sont pas facilement extensibles. Mail, 
 calendrier et contacts unifié, voilà ce qui semble leur principal objectif.  
-Pour l'atteindre, elles se contente donc d'implémenter la tuyauterie manquante 
-aux clients et serveurs déjà existants.
+Pour l'atteindre, elles se contentent donc d'implémenter la tuyauterie 
+manquante aux clients et serveurs déjà existants.
 
-Si l'on ne voulait pas rfaire de compromis avec les programmes existants, il 
+Si l'on ne voulait pas faire de compromis avec les programmes existants, il 
 semble pourtant qu'il y aurait une solution bien plus simple. C'est cette 
 nouvelle approche que l'on se propose d'essayer.
 

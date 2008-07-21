@@ -187,4 +187,46 @@ int header_add_field(struct header *h, char const *name, unsigned key, char cons
 	return 0;
 }
 
+int header_find_parameter(char const *name, char const *field_value, char const **value)
+{
+	char const *v = field_value;
+	size_t len = strlen(name);
+	int ret = 0;
+	*value = NULL;
+	do {
+		// First find next separator
+		for ( ; *v != ';'; v++) {
+			if (*v == '\0') return -ENOENT;
+		}
+		// Then skip the only white space that may lie here
+		while (*v == ' ') v++;	// there should be only one
+		if (0 == strncasecmp(name, v, len)) {	// found
+			v += len;
+			while (*v == ' ') v++;
+			if (*v != '=') continue;
+			v++;
+			while (*v == ' ') v++;
+			char delim = ';';
+			if (*v == '"') {
+				v++;
+				delim = '"';
+			}
+			*value = v;
+			while (*v && *v != delim) ret++;
+			return ret;
+		}
+	} while (*v != '\0');
+	return -ENOENT;
+}
+
+int header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value)
+{
+	char const *str;
+	int str_len = header_find_parameter(name, field_value, &str);
+	if (! str || ! str_len) return -ENOENT;
+	if (str_len >= (int)max_len) return -EMSGSIZE;
+	memcpy(value, str, str_len);
+	value[str_len] = '\0';
+	return str_len;
+}
 

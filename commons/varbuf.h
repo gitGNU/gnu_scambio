@@ -36,7 +36,7 @@ static inline void varbuf_dtor(struct varbuf *vb)
 int varbuf_make_room(struct varbuf *, size_t new_size);
 int varbuf_append(struct varbuf *, size_t size, void const *buf);
 int varbuf_put(struct varbuf *, size_t size);
-// reads one more line of text into varbuf
+// reads one more line of text into varbuf (converting CRLF into LF)
 // returns 1 on EOF, <0 on error
 int varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
 //off_t varbuf_read_line_off(struct varbuf *, int fd, size_t maxlen, off_t, char **new);
