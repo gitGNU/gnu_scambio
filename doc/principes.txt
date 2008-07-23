@@ -461,8 +461,8 @@ visualiser ou créer de nouveaux messages pour un type mime donné ?
 
 Deux difficultés :
 
-- les fichiers "temps-réel" qui impose à ce browser d'écrire alors le message 
-  dans un fifo.
+- les fichiers "temps-réel" qui imposent à ce browser d'écrire alors le 
+message dans un fifo.
 
 - certains messages n'ont de sens qu'avec les autres de la même catégorie : 
   par exemple le calendrier qui représente tous les vCal, par type, et les 

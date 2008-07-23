@@ -94,7 +94,7 @@ Les contraintes à respecter sont :
 Pour les notifications, deux approches sont possibles :
 
 - soit on utilie un second canal de communication pour les notifications, et 
-  dans ce cas les notifications ne contiennent que les nom de répertoires à 
+dans ce cas les notifications ne contiennent que les noms de répertoires à 
 ressynchroniser ;
 - soit on utilise le même canal que celui de la synchronisation, et dans ce 
   cas la synchronisation est simplement permanente ;
