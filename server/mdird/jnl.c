@@ -363,10 +363,12 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 		if (0 != (err = varbuf_ctor(&vb, 5000, true))) return err;
 		err = header_dump(header, &vb);
 		if (! err) {
-			static char digest_field[8+MAX_DIGEST_LEN+1] = "digest: ";
-			digest(digest_field+8, vb.used, vb.buf);
-			struct header *alternate_header = header_new(vb.buf);
-			if (! header) {
+			char digest_field[8+MAX_DIGEST_LEN+1+1] = "digest: ";	// + NL + NUL
+			size_t dig_len = digest(digest_field+8, vb.used, vb.buf);
+			digest_field[8 + dig_len] = '\n';
+			digest_field[8 + dig_len + 1] = '\0';
+			struct header *alternate_header = header_new(digest_field);
+			if (! alternate_header) {
 				err = -1;
 			} else {
 				err = header_write(alternate_header, jnl->patch_fd);
