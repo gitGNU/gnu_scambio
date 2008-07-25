@@ -160,11 +160,22 @@ char const *header_search(struct header const *h, char const *name, unsigned key
 
 static int field_write(struct head_field const *f, int fd)
 {
-	if (0 != Write(fd, f->name, strlen(f->name))) return -1;
-	if (0 != Write(fd, ": ", 2)) return -1;
-	if (0 != Write(fd, f->value, strlen(f->value))) return -1;
-	if (0 != Write(fd, "\n", 1)) return -1;
-	return 0;
+	int err = 0;
+	if (0 != (err = Write(fd, f->name, strlen(f->name)))) return err;
+	if (0 != (err = Write(fd, ": ", 2))) return err;
+	if (0 != (err = Write(fd, f->value, strlen(f->value)))) return err;
+	if (0 != (err = Write(fd, "\n", 1))) return err;
+	return err;
+}
+
+static int field_dump(struct head_field const *f, struct varbuf *vb)
+{
+	int err = 0;
+	if (0 != (err = varbuf_append(vb, strlen(f->name), f->name))) return err;
+	if (0 != (err = varbuf_append(vb, 2, ": "))) return err;
+	if (0 != (err = varbuf_append(vb, strlen(f->value), f->value))) return err;
+	if (0 != (err = varbuf_append(vb, 1, "\n"))) return err;
+	return err;
 }
 
 int header_write(struct header const *h, int fd)
@@ -172,6 +183,16 @@ int header_write(struct header const *h, int fd)
 	for (int f=0; f<h->nb_fields; f++) {
 		int err;
 		if (0 != (err = field_write(h->fields+f, fd))) return err;
+	}
+	return 0;
+}
+
+int header_dump(struct header const *h, struct varbuf *vb)
+{
+	varbuf_clean(vb);
+	for (int f=0; f<h->nb_fields; f++) {
+		int err;
+		if (0 != (err = field_dump(h->fields+f, vb))) return err;
 	}
 	return 0;
 }

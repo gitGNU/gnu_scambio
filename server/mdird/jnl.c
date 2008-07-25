@@ -18,6 +18,7 @@
 #include "misc.h"
 #include "sub.h"
 #include "stribution.h"
+#include "digest.h"
 
 /*
  * Data Definitions
@@ -355,7 +356,28 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 	// Write the index
 	if (0 != (err = Write(jnl->idx_fd, &ie, sizeof(ie)))) return err;
 	// Then the patch
-	if (0 != (err = header_write(header, jnl->patch_fd))) return err;
+	if (action == '-' && header->nb_fields > 1) {
+		// if this is a suppression, we can replace the content by a single field header with the digest,
+		// at the condition that the incomming header itself is not a digest (or any single field header ?).
+		struct varbuf vb;
+		if (0 != (err = varbuf_ctor(&vb, 5000, true))) return err;
+		err = header_dump(header, &vb);
+		if (! err) {
+			static char digest_field[8+MAX_DIGEST_LEN+1] = "digest: ";
+			digest(digest_field+8, vb.used, vb.buf);
+			struct header *alternate_header = header_new(vb.buf);
+			if (! header) {
+				err = -1;
+			} else {
+				err = header_write(alternate_header, jnl->patch_fd);
+				header_del(alternate_header);
+			}
+		}
+		varbuf_dtor(&vb);
+	} else {	// plain header
+		err = header_write(header, jnl->patch_fd);
+	}
+	if (0 != err) return err;
 	char action_str[32];
 	size_t const len = snprintf(action_str, sizeof(action_str), ":%c %lld\n", action, version);	// TODO: add ctime ?
 	assert(len < sizeof(action_str));

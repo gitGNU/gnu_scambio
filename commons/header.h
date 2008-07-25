@@ -42,6 +42,10 @@ char const *header_search(struct header const *h, char const *name, unsigned key
 // Beware : file is written to on error
 int header_write(struct header const *h, int fd);
 
+#include "varbuf.h"
+// Write a header onto a variable buffer
+int header_dump(struct header const *h, struct varbuf *vb);
+
 // Beware : name and value must lasts (as long as header do)
 int header_add_field(struct header *h, char const *name, unsigned key, char const *value);
 

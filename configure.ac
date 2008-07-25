@@ -14,6 +14,7 @@ AM_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_PTH(2.0.0)
+AC_CHECK_LIB(ssl, SHA1)
 
 # Checks for header files.
 AC_HEADER_STDC
