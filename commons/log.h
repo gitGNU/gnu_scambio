@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <stdlib.h>	// abort
 
 extern FILE *log_file;
 extern int log_level;
