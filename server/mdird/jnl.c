@@ -28,7 +28,6 @@
  */
 
 static char const *rootdir;
-static char const *dirrootdir;
 static size_t rootdir_len;
 static unsigned max_jnl_size;
 static char const *strib_fname;
@@ -253,7 +252,7 @@ static void dir_del(struct dir *dir)
 bool dir_same_path(struct dir *dir, char const *path)
 {
 	char abspath[PATH_MAX];	// FIXME: change directory once and for all !
-	snprintf(abspath, sizeof(abspath), "%s/%s", rootdir, path);
+	snprintf(abspath, sizeof(abspath), "%s/root/%s", rootdir, path);
 	struct stat statbuf;
 	if (0 != stat(abspath, &statbuf)) {
 		warning("Cannot stat '%s' : %s", abspath, strerror(errno));
@@ -270,15 +269,13 @@ int jnl_begin(void)
 {
 	int err;
 	// Default configuration values
-	if (0 != (err = conf_set_default_str("MDIRD_ROOT_DIR", "/tmp/mdir/msgs"))) return err;
-	if (0 != (err = conf_set_default_str("MDIRD_DIR_ROOT_DIR", "/tmp/mdir/dirs"))) return err;
+	if (0 != (err = conf_set_default_str("MDIRD_ROOT_DIR", "/tmp/mdir"))) return err;
 	if (0 != (err = conf_set_default_int("MDIRD_MAX_JNL_SIZE", 2000))) return err;
 	if (0 != (err = conf_set_default_str("MDIRD_STRIB_FNAME", ".stribution.conf"))) return err;
 	// Inits
 	LIST_INIT(&dirs);
 	rootdir = conf_get_str("MDIRD_ROOT_DIR");
 	rootdir_len = strlen(rootdir);
-	dirrootdir = conf_get_str("MDIRD_DIR_ROOT_DIR");
 	max_jnl_size = conf_get_int("MDIRD_MAX_JNL_SIZE");
 	strib_fname = conf_get_str("MDIRD_STRIB_FNAME");
 	return err;
@@ -301,7 +298,7 @@ int dir_get(struct dir **dir, char const *path)
 	int err;
 	char abspath[PATH_MAX];
 	if (strstr(path, "/../")) return -EACCES;
-	size_t path_len = snprintf(abspath, sizeof(abspath), "%s/%s", rootdir, path);
+	size_t path_len = snprintf(abspath, sizeof(abspath), "%s/root/%s", rootdir, path);
 	if (path_len >= sizeof(abspath)) return -ENAMETOOLONG;
 	while (path_len > 1 && abspath[path_len-1] == '/') {	// removes unnecessary slashes
 		abspath[--path_len] = '\0';
@@ -324,7 +321,7 @@ int dir_get(struct dir **dir, char const *path)
 int dir_exist(char const *path)
 {
 	char abspath[PATH_MAX];
-	snprintf(abspath, sizeof(abspath), "%s/%s", rootdir, path);
+	snprintf(abspath, sizeof(abspath), "%s/root/%s", rootdir, path);
 	struct stat statbuf;
 	if (0 != stat(abspath, &statbuf)) {
 		if (errno == ENOENT) return 0;
@@ -505,9 +502,9 @@ int jnl_createdir(char const *dir, long long dirid, char const *dirname)
 	int err = 0;
 	char diridpath[PATH_MAX];
 	char dirlinkpath[PATH_MAX];
-	snprintf(diridpath, sizeof(diridpath), "%s/%lld", dirrootdir, dirid);
+	snprintf(diridpath, sizeof(diridpath), "%s/%lld", rootdir, dirid);
 	if (0 != (err = Mkdir(diridpath))) return err;	// May already exists
-	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%s", rootdir, dir, dirname);
+	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/root/%s/%s", rootdir, dir, dirname);
 	if (0 != symlink(diridpath, dirlinkpath)) return -errno;
 	return err;
 }
@@ -515,7 +512,7 @@ int jnl_createdir(char const *dir, long long dirid, char const *dirname)
 int jnl_unlinkdir(char const *dir, char const *dirname)
 {
 	char dirlinkpath[PATH_MAX];
-	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/%s/%s", rootdir, dir, dirname);
+	snprintf(dirlinkpath, sizeof(dirlinkpath), "%s/root/%s/%s", rootdir, dir, dirname);
 	if (0 != unlink(dirlinkpath)) return -errno;
 	return 0;
 }

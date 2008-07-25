@@ -27,7 +27,7 @@ int exec_begin(void)
 	type_key  = header_key("type");
 	dirid_key = header_key("dirId");
 	name_key  = header_key("name");
-	conf_set_default_str("MDIRD_DIRSEQ", "/tmp/dirid.seq");
+	conf_set_default_str("MDIRD_DIRSEQ", "/tmp/.dirid.seq");
 	return persist_ctor(&dirid_seq, sizeof(long long), conf_get_str("MDIRD_DIRSEQ"));
 }
 
