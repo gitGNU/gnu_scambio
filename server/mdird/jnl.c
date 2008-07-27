@@ -23,8 +23,7 @@
 /*
  * Data Definitions
  *
- * We have some cache here. Beware they keep coherency at pth
- * scheduler point.
+ * We have some cache here. Beware that they keep coherency at pth scheduling points.
  */
 
 static char const *rootdir;
@@ -313,7 +312,7 @@ int dir_get(struct dir **dir, char const *path)
 			return 0;
 		}
 	}
-	// TODO: delete some dir from time to time
+	// TODO: uncache some dir from time to time
 	if (0 != (err = dir_new(dir, path_len, abspath))) return err;
 	return 0;
 }

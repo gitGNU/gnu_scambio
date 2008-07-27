@@ -118,10 +118,11 @@ static int read_header(struct header **hp, struct varbuf *vb, int fd)
 	return err;
 }
 
+// dir is the directory user name instead of dirId, because we wan't the client
+// to be able to add things to this directory before knowing it's dirId.
 static int add_header(char const *dir, struct header *h, char action)
 {
 	int err = 0;
-	char dirid_add[20+1];	// storage for additional header field on the stack, OK since the header is itself on this frame
 	if (is_directory(h)) {
 		char const *dirid_str = header_search(h, "dirId", dirid_key);
 		char const *dirname   = header_search(h, "name", name_key);
@@ -131,10 +132,14 @@ static int add_header(char const *dir, struct header *h, char action)
 			if (! dirname) dirname = "Unnamed";
 			if (dirid_str) err = -EINVAL;
 			if (! err) {
+				char dirid_add[20+1];	// storage for additional temporary header field
 				dirid = (*(long long *)dirid_seq.data)++;
 				snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
 				err = header_add_field(h, "dirId", dirid_key, dirid_add);
-				if (! err) err = jnl_createdir(dir, dirid, dirname);
+				if (! err) {
+					err = jnl_createdir(dir, dirid, dirname);
+					(void)header_chop_field(h, dirid_key);
+				}
 			}
 		} else {
 			if (! dirname) err = -EINVAL;
@@ -189,18 +194,20 @@ static bool void_dir(char const *dir)
 
 static int create_if_missing(char const *dir, char const *subdir)
 {
-	union {
-		char path[PATH_MAX];
-		char msg[20+PATH_MAX];
-	} u;
-	snprintf(u.path, sizeof(u.path), "%s/%s", dir, subdir);
-	int err = dir_exist(u.path);
+#	define DIRFIELD "type: dir\nname: %s\n"
+#	define DIRFIELD_LEN (17 + PATH_MAX)
+	char str[DIRFIELD_LEN];
+	COMPILE_ASSERT(DIRFIELD_LEN > PATH_MAX);	// we are going to use str as a temporary path
+	snprintf(str, sizeof(str), "%s/%s", dir, subdir);
+	int err = dir_exist(str);
 	if (err > 0) return 0;
 	if (err < 0) return err;
-	snprintf(u.msg, sizeof(u.msg), "type: dir\nname: %s\n", subdir);
-	struct header *h = header_new(u.msg);
+	snprintf(str, sizeof(str), DIRFIELD, subdir);
+	struct header *h = header_new(str);
 	if (! h) return -1;	// FIXME
-	return add_header(dir, h, '+');
+	err = add_header(dir, h, '+');
+	header_del(h);
+	return err;
 }
 
 static int class_rec(struct cnx_env *env, long long seq, char const *dir, struct header *h);
@@ -264,14 +271,15 @@ int exec_class(struct cnx_env *env, long long seq, char const *dir)
 	struct header *h;
 	struct varbuf vb;
 	if (0 != (err = varbuf_ctor(&vb, 10000, true))) goto answ;
-	do {
-		if (0 != (err = read_header(&h, &vb, env->fd))) break;
-		if (is_directory(h)) {
-			err = -EISDIR;
-			break;
-		}
-		if (0 != (err = class_rec(env, seq, dir, h))) break;
-	} while (0);
+	if (0 != (err = read_header(&h, &vb, env->fd))) goto q1;
+	if (is_directory(h)) {
+		err = -EISDIR;
+		goto q2;
+	}
+	err = class_rec(env, seq, dir, h);
+q2:
+	header_del(h);
+q1:
 	varbuf_dtor(&vb);
 answ:
 	return answer(env, seq, "CLASS", err ? 500:200, err ? strerror(-err):"OK");

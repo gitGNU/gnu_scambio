@@ -13,7 +13,7 @@
 struct header {
 	int nb_fields;
 #	define FIELD_HASH_SIZE 32
-	int hash[FIELD_HASH_SIZE];	// first field with this hash value;
+	int hash[FIELD_HASH_SIZE];	// first field with this hash value (-1 if none);
 	char *end;	// end of header in initial message
 	// Variable size
 	struct head_field {
@@ -48,6 +48,7 @@ int header_dump(struct header const *h, struct varbuf *vb);
 
 // Beware : name and value must lasts (as long as header do)
 int header_add_field(struct header *h, char const *name, unsigned key, char const *value);
+int header_chop_field(struct header *h, unsigned key);
 
 // Return a pointer to the beginning of the value.
 // Return -ENOENT if not found, or the length of the value if *value!=NULL.

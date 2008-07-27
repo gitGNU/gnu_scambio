@@ -207,6 +207,13 @@ int header_add_field(struct header *h, char const *name, unsigned key, char cons
 	h->hash[key] = h->nb_fields ++;
 	return 0;
 }
+int header_chop_field(struct header *h, unsigned key)
+{
+	if (! h->nb_fields) return -ENOENT;
+	if (h->hash[key] != h->nb_fields-1) return -EINVAL;
+	h->hash[key] = h->fields[--h->nb_fields].hash_next;
+	return 0;
+}
 
 int header_find_parameter(char const *name, char const *field_value, char const **value)
 {
