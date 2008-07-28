@@ -82,4 +82,26 @@ bool line_match(char *restrict line, char *restrict delim)
 	return true;
 }
 
+void path_push(char path[], char const *next)
+{
+	char *c = path;
+	char const *s = next;
+	while (*c != '\0') c++;
+	if (c == path || *(c-1) != '/') *c++ = '/';
+	do {
+		assert(c-path < PATH_MAX);
+		*c++ = *s;
+	} while (*s++ != '\0');
+}
+
+void path_pop(char path[])
+{
+	char *c = path;
+	char *last_sl = path;
+	while (*c != '\0') {
+		if (*c == '/') last_sl = c;
+		c++;
+	}
+	*last_sl = '\0';
+}
 

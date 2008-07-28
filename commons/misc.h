@@ -9,4 +9,7 @@ int Mkdir(char const *path);
 // a line is said to match a delim if it starts with the delim, and is followed only by optional spaces
 bool line_match(char *restrict line, char *restrict delim);
 
+void path_push(char path[], char const *next);
+void path_pop(char path[]);
+
 #endif

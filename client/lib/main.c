@@ -3,6 +3,7 @@
  */
 
 #include <pth.h>
+#include <errno.h>
 #include "cnx.h"
 
 /* Those two threads share some structures related to the shared socket :
@@ -38,7 +39,7 @@ static pth_rwlock_t put_commands_lock, rem_commands_lock;
  * - wait until root queue not empty ;
  * - unqueue the oldest one, and process the directory recursively :
  *   - read its .hide file and parse it ;
- *   - For each forlder entry :
+ *   - For each folder entry :
  *     - if the entry is a directory :
  *       - if we are in a '.put' or a '.rem' directory, ignore it ;
  *       - if it's a .put directory, recurse with flag 'in_put' set ;
@@ -52,9 +53,9 @@ static pth_rwlock_t put_commands_lock, rem_commands_lock;
  *           send an unsub command _and_recurse_ ;
  *     - otherwise it's an ordinary file :
  *       - if we are neither in a '.put' not a '.rem' directory, ignore it ;
- *       - sends the appropriate command if it was not already sent or if
+ *       - send the appropriate command if it was not already sent or if
  *         the previous one timed out ;
- * After each entry other is inserted a schedule point so other threads can execute.
+ * After each entry is inserted a schedule point so other threads can execute.
  * Also, for security, a max depth is fixed to 30.
  *
  * When a plugin add/remove content or change the subscription state, it adds
@@ -64,12 +65,81 @@ static pth_rwlock_t put_commands_lock, rem_commands_lock;
  * into the root queue while removing one means linking its meta onto the .rem
  * directory (the actual meta will be deleted on reception of the suppression patch).
  */
+#include <sys/types.h>
+#include <dirent.h>
 
-/* The reader listen for commands.
+static bool always_skip(char const *name)
+{
+	return
+		0 == strcmp(name, ".") ||
+		0 == strcmp(name, "..");
+}
+
+#define PUTDIR_NAME ".put"
+#define REMDIR_NAME ".rem"
+enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
+static int writer_step_rec(char path[], enum dir_type dir_type, int depth)
+{
+#	define MAX_DEPTH 30;
+	if (depth >= MAX_DEPTH) return -ELOOP;
+	int err;
+	struct hide_cfg *hide_cfg;
+	if (0 != (err = hide_cfg_get(&hide_cfg, path))) goto q0;	// load the .hide file
+	DIR *dir = opendir(path);
+	if (! dir) {
+		err = -errno;
+		goto q1;
+	}
+	struct dirent *dirent;
+	errno = 0;
+	while (!err && NULL != (dirent = readdir(dir))) {
+		if (always_skip(dirent->d_name)) continue;
+		pth_yield(NULL);
+		struct stat statbuf;
+		if (0 != stat(dirent->d_name, &statbuf)) {
+			err = -errno;
+			break;
+		}
+		path_push(path, dirent->d_name);
+		if (S_ISDIR(statbuf.st_mode)) {
+			if (dir_type == PUT_DIR || dir_type == REM_DIR) continue;
+			if (0 == strcmp(dirent->d_name, PUTDIR_NAME)) {
+				err = writer_step_rec(path, PUT_DIR, depth+1);
+			} else if (0 == strcmp(dirent->d_name, REMDIR_NAME)) {
+				err = writer_step_rec(path, REM_DIR, depth+1);
+			} else if (show_this_dir(hide_cfg, dirent->d_name)) {
+				err = try_subscribe(path);
+				if (! err) err = writer_step_rec(path, FOLDER_DIR, depth+1);
+			} else {	// hide this dir
+				err = try_unsubscribe(path);
+				if (! err) err = writer_step_rec(path, FOLDER_DIR, depth+1);
+			}
+		} else {	// dir entry is not itself a directory
+			if (dir_type == FOLDER_DIR) continue;
+			err = try_command(dir_type, path);
+		}
+		path_pop(path);
+	}
+	if (!err && errno) {
+		err = -errno;
+	}
+	closedir(dir);
+q1:
+	hide_cfg_release(&hide_cfg);
+q0:
+	return err;
+}
+
+/* The reader listens for commands.
  * On a put response, it removes the temporary filename stored in the action
  * (the actual meta file will be synchronized independantly from the server).
  * On a rem response, it removes the temporary filename (same remark as above).
  * On a sub response, it moves the subscription from subscribing to subscribed.
  * On an unsub response, it deletes the unsubcribing subscription.
- * On a patch, 
+ * On a patch for addition, it creates the meta file (under the digest name)
+ * and updates the version number. The meta may already been there if the update of
+ * the version number previously failed.
+ * On a patch for deletion, it removes the meta file and updates the version number.
+ * Again, the meta may already have been removed if the update of the version number
+ * previously failed.
  */
