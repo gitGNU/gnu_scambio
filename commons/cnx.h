@@ -16,4 +16,7 @@ int cnx_server_ctor(struct cnx_server *, unsigned short port);
 void cnx_server_dtor(struct cnx_server *);
 int cnx_server_accept(struct cnx_server *);
 
+/* Add a client for assynchronous name resolution and connect.
+ */
+
 #endif

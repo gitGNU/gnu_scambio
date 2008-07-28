@@ -8,6 +8,8 @@
 #ifndef CONF_H_080617
 #define CONF_H_080617
 
+#define DEFAULT_MDIRD_PORT 21654
+
 int conf_set_default_str(char const *name, char const *value);
 int conf_set_default_int(char const *name, long long value);
 

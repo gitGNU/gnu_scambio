@@ -35,7 +35,7 @@ static int init_conf(void)
 	int err;
 	if (0 != (err = conf_set_default_str("MDIRD_LOG_DIR", "/var/log"))) return err;
 	if (0 != (err = conf_set_default_int("MDIRD_LOG_LEVEL", 3))) return err;
-	if (0 != (err = conf_set_default_int("MDIRD_PORT", 21654))) return err;
+	if (0 != (err = conf_set_default_int("MDIRD_PORT", DEFAULT_MDIRD_PORT))) return err;
 	return 0;
 }
 
