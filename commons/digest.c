@@ -51,4 +51,9 @@ size_t digest(char *out, size_t len, char const *in)
 	(void)SHA1((unsigned char const *)in, len, compact_digest);
 	return stringify(out, sizeof(compact_digest), compact_digest);
 }
+
+#else
+
+#	error no digest function available. Use gnutls or openssl.
+
 #endif

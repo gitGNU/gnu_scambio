@@ -7,5 +7,6 @@ export MDIRD_MAX_JNL_SIZE=10
 export SMTPD_LOG_DIR=/tmp
 export SMTPD_LOG_LEVEL=5
 export SMTPD_PORT=1025
+export MDIRD_SERVER=localhost
 
 mkdir -p $MDIRD_ROOT_DIR/root

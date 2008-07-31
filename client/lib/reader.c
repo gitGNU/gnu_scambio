@@ -1,4 +1,5 @@
 #include "main.h"
+#include "scambio.h"
 
 /* The reader listens for commands.
  * On a put response, it removes the temporary filename stored in the action
@@ -13,3 +14,19 @@
  * Again, the meta may already have been removed if the update of the version number
  * previously failed.
  */
+
+void *reader_thread(void *args)
+{
+	(void)args;
+	debug("starting reader thread");
+	return NULL;
+}
+
+int reader_begin(void)
+{
+	return 0;
+}
+
+void reader_end(void)
+{
+}

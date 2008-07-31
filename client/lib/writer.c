@@ -1,3 +1,4 @@
+#include "scambio.h"
 #include "main.h"
 
 /* A run goes like this :
@@ -25,6 +26,34 @@
  */
 #include <sys/types.h>
 #include <dirent.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <pth.h>
+#include "misc.h"
+#include "hide.h"
+
+enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
+static long long seqnum;
+
+static int try_subscribe(char const *path)
+{
+	(void)path;
+	return 0;
+}
+static int try_unsubscribe(char const *path)
+{
+	(void)path;
+	return 0;
+}
+static int try_command(enum dir_type dir_type, char const *path)
+{
+	(void)dir_type;
+	(void)path;
+	return 0;
+}
 
 static bool always_skip(char const *name)
 {
@@ -33,12 +62,22 @@ static bool always_skip(char const *name)
 		0 == strcmp(name, "..");
 }
 
+static char const *dirtype2str(enum dir_type dir_type)
+{
+	switch (dir_type) {
+		case PUT_DIR:    return "PUT";
+		case REM_DIR:    return "REM";
+		case FOLDER_DIR: return "NORMAL";
+	}
+	return "INVALID";
+}
+
 #define PUTDIR_NAME ".put"
 #define REMDIR_NAME ".rem"
-enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
 static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 {
-#	define MAX_DEPTH 30;
+#	define MAX_DEPTH 30
+	debug("run on path %s, dirtype %s", path, dirtype2str(dir_type));
 	if (depth >= MAX_DEPTH) return -ELOOP;
 	int err;
 	struct hide_cfg *hide_cfg;
@@ -62,15 +101,15 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 		if (S_ISDIR(statbuf.st_mode)) {
 			if (dir_type == PUT_DIR || dir_type == REM_DIR) continue;
 			if (0 == strcmp(dirent->d_name, PUTDIR_NAME)) {
-				err = writer_step_rec(path, PUT_DIR, depth+1);
+				err = writer_run_rec(path, PUT_DIR, depth+1);
 			} else if (0 == strcmp(dirent->d_name, REMDIR_NAME)) {
-				err = writer_step_rec(path, REM_DIR, depth+1);
+				err = writer_run_rec(path, REM_DIR, depth+1);
 			} else if (show_this_dir(hide_cfg, dirent->d_name)) {
 				err = try_subscribe(path);
-				if (! err) err = writer_step_rec(path, FOLDER_DIR, depth+1);
+				if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 			} else {	// hide this dir
 				err = try_unsubscribe(path);
-				if (! err) err = writer_step_rec(path, FOLDER_DIR, depth+1);
+				if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 			}
 		} else {	// dir entry is not itself a directory
 			if (dir_type == FOLDER_DIR) continue;
@@ -83,8 +122,25 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 	}
 	closedir(dir);
 q1:
-	hide_cfg_release(&hide_cfg);
+	hide_cfg_release(hide_cfg);
 q0:
 	return err;
 }
 
+void *writer_thread(void *args)
+{
+	(void)args;
+	debug("starting writer thread");
+	return NULL;
+}
+
+int writer_begin(void)
+{
+	seqnum = 0;
+	return hide_begin();
+}
+
+void writer_end(void)
+{
+	hide_end();
+}

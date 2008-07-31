@@ -1,16 +1,18 @@
 /* The client lib first connect to a mdird, then spawns two threads : one that writes and
- * one that reads the socket.
+ * one that reads the socket. Since connection can takes some time, this whole process is
+ * done on the connector thread, thus execution flow is returned at once to the user.
  */
 
 #include <pth.h>
 #include <errno.h>
+#include "scambio.h"
 #include "main.h"
 
 /* Those two threads share some structures related to the shared socket :
  * First the socket itself
  */
 
-int sockfd;
+struct cnx_client cnx;
 
 /* Then, lists of pending commands.
  *
@@ -75,20 +77,19 @@ int client_begin(void)
 {
 	int err;
 	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) return err;
-	if (0 != (err = conf_set_default_str("MDIRD_PORT", DEFAULT_MDIRD_PORT))) return err;
-	sockfd = -1;
+	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) return err;
 	(void)pth_rwlock_init(&subscribing_lock);
 	(void)pth_rwlock_init(&subscribed_lock);
 	(void)pth_rwlock_init(&unsubscribing_lock);
 	LIST_INIT(&subcribing);
-	LIST_INIT(&subcribed);
-	LIST_INIT(&unsubcribing);
+	LIST_INIT(&subscribed);
+	LIST_INIT(&unsubscribing);
 	(void)pth_rwlock_init(&put_commands_lock);
 	(void)pth_rwlock_init(&rem_commands_lock);
 	LIST_INIT(&put_commands);
 	LIST_INIT(&rem_commands);
 	(void)pth_rwlock_init(&run_queue_lock);
-	TAILQ_INIT(&run_queue_lock);
+	TAILQ_INIT(&run_queue);
 	atexit(client_end);
 	if (0 != (err = writer_begin())) goto q0;
 	if (0 != (err = reader_begin())) goto q1;
