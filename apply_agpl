@@ -23,8 +23,10 @@ EOL
 
 # Make this a sed command (with sed)
 
-sed -i -e 's/\//\\\//g' -e 's/\*/\\\*/g' -e 's/^/1i\ /' $LIC
+sed -i -e 's/\//\\\//g' -e 's/\*/\\\*/g' -e 's/ /\\ /g' -e 's/^/1i\ /' $LIC
 
-find . -name '*.c' -o -name '*.h' | xargs sed -ie "$(cat $LIC)"
+find . -name '*.c' -o -name '*.h' |
+	xargs grep --files-without-match '/* Copyright' |
+	xargs sed -i -e "$(cat $LIC)"
 
 rm -f $LIC
