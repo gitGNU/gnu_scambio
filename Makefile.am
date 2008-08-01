@@ -8,3 +8,5 @@ cscope:
 
 distclean-local:
 	rm -f cscope.out
+
+EXTRA_DIST: COPYING

@@ -20,6 +20,7 @@
  * done on the connector thread, thus execution flow is returned at once to the user.
  */
 
+#include <stdlib.h>
 #include <pth.h>
 #include <errno.h>
 #include "scambio.h"
@@ -71,12 +72,23 @@ static pth_rwlock_t put_commands_lock, rem_commands_lock;
  * programm that it should, recursively, reparse the whole tree.
  * This run queue is of course shared by several threads (writer and plugins).
  */
-struct run_path {
-	char root[PATH_MAX];
-	TAILQ_ENTRY(run_path) entry;
-};
 static TAILQ_HEAD(run_paths, run_path) run_queue;
 static pth_rwlock_t run_queue_lock;
+
+struct run_path *shift_run_queue(void)
+{
+	(void)pth_rwlock_acquire(&run_queue_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	struct run_path *rp = TAILQ_FIRST(&run_queue);
+	if (! rp) return NULL;
+	TAILQ_REMOVE(&run_queue, rp, entry);
+	(void)pth_rwlock_release(&run_queue_lock);
+	return rp;
+}
+
+void run_path_del(struct run_path *rp)
+{
+	free(rp);
+}
 
 /* Initialisation function init all these shared datas, then call other modules
  * init function, then spawn the connecter threads, which will spawn the reader

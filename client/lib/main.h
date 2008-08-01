@@ -18,7 +18,9 @@
 #ifndef MAIN_H_080731
 #define MAIN_H_080731
 
+#include <limits.h>
 #include "cnx.h"
+#include "queue.h"
 
 extern struct cnx_client cnx;
 typedef void *thread_entry(void *);
@@ -28,5 +30,12 @@ int reader_begin(void);
 void reader_end(void);
 int writer_begin(void);
 void writer_end(void);
+
+struct run_path {
+	char root[PATH_MAX];
+	TAILQ_ENTRY(run_path) entry;
+};
+struct run_path *shift_run_queue(void);
+void run_path_del(struct run_path *rp);
 
 #endif

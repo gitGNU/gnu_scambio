@@ -54,6 +54,7 @@
 
 enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
 static long long seqnum;
+bool terminate_writer;
 
 static int try_subscribe(char const *path)
 {
@@ -144,10 +145,31 @@ q0:
 	return err;
 }
 
+#include <signal.h>
+static void wait_signal(void)
+{
+	int err, sig;
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGHUP);
+	if (0 != (err = pth_sigwait(&set, &sig))) {	// this is a cancel point
+		error("Cannot sigwait : %d", err);
+	}
+}
+
 void *writer_thread(void *args)
 {
 	(void)args;
 	debug("starting writer thread");
+	struct run_path *rp;
+	terminate_writer = false;
+	do {
+		while (NULL != (rp = shift_run_queue())) {
+			(void)writer_run_rec(rp->root, FOLDER_DIR, 0);	// FIXME: ensure that we only push folders !
+			run_path_del(rp);
+		}
+		wait_signal();
+	} while (! terminate_writer);
 	return NULL;
 }
 
