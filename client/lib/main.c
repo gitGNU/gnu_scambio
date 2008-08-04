@@ -32,7 +32,7 @@
 
 struct cnx_client cnx;
 
-/* Then, lists of pending commands.
+/* Then, lists of pending commands, starting with subscriptions.
  *
  * The writer will add entries to these lists while the reader will remove them once completed,
  * and perform the proper final action for these commands.
@@ -41,20 +41,79 @@ struct cnx_client cnx;
 #include <limits.h>
 #include <time.h>
 #include "queue.h"
-struct subscription {
-	enum subscription_state { SUBSCRIBING, SUBSCRIBED, UNSUBSCRIBING } state;
-	LIST_ENTRY(sub_command) entry;	// the list depends on the state
-	char rel_path[PATH_MAX];	// folder's path relative to root dir
-	long long seq;	// irrelevant if SUBSCRIBED
-	time_t send;	// idem
+struct command {
+	LIST_ENTRY(command) entry;
+	char path[PATH_MAX];	// folder's path relative to root dir
+	long long seqnum;	// irrelevant if SUBSCRIBED
+	time_t creation;	// idem
 };
-static LIST_HEAD(subscriptions, subscription) subcribing, subscribed, unsubscribing;
-static pth_rwlock_t subscribing_lock, subscribed_lock, unsubscribing_lock;
+static LIST_HEAD(commands, command) subscribing, subscribed, unsubscribing;
+pth_rwlock_t subscriptions_lock;
+
+extern inline void subscription_lock(void);
+extern inline void subscription_unlock(void);
+
+#include <time.h>
+static int command_timeouted(struct command *cmd)
+{
+#	define CMD_TIMEOUT 15
+	return time(NULL) - cmd->creation > CMD_TIMEOUT;
+}
+
+static void command_ctor(struct command *cmd, struct commands *list, char const *path)
+{
+	static long long seqnum = 0;
+	snprintf(cmd->path, sizeof(cmd->path), "%s", path);
+	cmd->seqnum = seqnum++;
+	cmd->creation = time(NULL);
+	LIST_INSERT_HEAD(list, cmd, entry);
+}
+
+int subscription_new(struct command **cmd, char const *path)
+{
+	*cmd = malloc(sizeof(**cmd));
+	if (! *cmd) return -ENOMEM;
+	command_ctor(*cmd, &subscribing, path);
+	return 0;
+}
+
+void command_del(struct command *cmd)
+{
+	LIST_REMOVE(cmd, entry);
+	free(cmd);
+}
+
+#include <string.h>
+static struct command *command_get_from_list(struct commands *list, char const *path)
+{
+	struct command *cmd;
+	LIST_FOREACH(cmd, list, entry) {
+		if (0 == strcmp(path, cmd->path)) return cmd;
+	}
+	return NULL;
+}
+struct command *subscription_get(char const *path)
+{
+	return command_get_from_list(&subscribed, path);
+}
+struct command *subscription_get_pending(char const *path)
+{
+	struct command *cmd = command_get_from_list(&subscribing, path);
+	if (cmd && command_timeouted(cmd)) {
+		command_del(cmd);
+		cmd = NULL;
+	}
+	return cmd;
+}
+
+/* Then PUT/REM commands.
+ * Same notes as above.
+ */
 
 struct putrem_command {
 	LIST_ENTRY(putrem_command) entry;
-	char meta_path[PATH_MAX];	// absolute path to the meta file
-	long long seq;
+	char path[PATH_MAX];	// absolute path to the meta file
+	long long seqnum;
 	time_t send;
 };
 static LIST_HEAD(putrem_commands, putrem_command) put_commands, rem_commands;
@@ -107,10 +166,8 @@ int client_begin(void)
 	int err;
 	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) return err;
 	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) return err;
-	(void)pth_rwlock_init(&subscribing_lock);
-	(void)pth_rwlock_init(&subscribed_lock);
-	(void)pth_rwlock_init(&unsubscribing_lock);
-	LIST_INIT(&subcribing);
+	(void)pth_rwlock_init(&subscriptions_lock);
+	LIST_INIT(&subscribing);
 	LIST_INIT(&subscribed);
 	LIST_INIT(&unsubscribing);
 	(void)pth_rwlock_init(&put_commands_lock);

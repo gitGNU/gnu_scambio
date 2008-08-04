@@ -38,4 +38,20 @@ struct run_path {
 struct run_path *shift_run_queue(void);
 void run_path_del(struct run_path *rp);
 
+#include <pth.h>
+extern pth_rwlock_t subscriptions_lock;
+static inline void subscription_lock(void)
+{
+	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
+}
+static inline void subscription_unlock(void)
+{
+	(void)pth_rwlock_release(&subscriptions_lock);
+}
+struct command;
+int subscription_new(struct command **cmd, char const *path);
+void command_del(struct command *cmd);
+struct command *subscription_get(char const *path);
+struct command *subscription_get_pending(char const *path);
+
 #endif

@@ -46,6 +46,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pth.h>
@@ -53,13 +54,26 @@
 #include "hide.h"
 
 enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
-static long long seqnum;
 bool terminate_writer;
 
 static int try_subscribe(char const *path)
 {
-	(void)path;
-	return 0;
+	int err = 0;
+	assert(path);
+	subscription_lock();
+	do {
+		struct command *subscription = subscription_get(path);
+		if (subscription) break;
+		subscription = subscription_get_pending(path);
+		if (subscription) break;
+		if (0 != (err = subscription_new(&subscription, path))) break;
+		if (0 != (err = send_command("SUB", path, NULL))) {
+			command_del(subscription);
+			break;
+		}
+	} while (0);
+	subscription_unlock();
+	return err;
 }
 static int try_unsubscribe(char const *path)
 {
@@ -175,7 +189,6 @@ void *writer_thread(void *args)
 
 int writer_begin(void)
 {
-	seqnum = 0;
 	return hide_begin();
 }
 
