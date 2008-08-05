@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <pth.h>
@@ -40,6 +41,20 @@ int Write(int fd, void const *buf, size_t len)
 	}
 	assert(done == len);
 	return 0;
+}
+
+int Write_strs(int fd, ...)
+{
+	va_list ap;
+	va_start(ap, fd);
+	char const *str;
+	int err = 0;
+	while (NULL != (str = va_arg(ap, char const *)) && !err) {
+		size_t len = strlen(str);
+		err = Write(fd, str, len);
+	}
+	va_end(ap);
+	return err;
 }
 
 int Read(void *buf, int fd, off_t offset, size_t len)

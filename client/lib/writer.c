@@ -67,7 +67,7 @@ static int try_subscribe(char const *path)
 		subscription = subscription_get_pending(path);
 		if (subscription) break;
 		if (0 != (err = subscription_new(&subscription, path))) break;
-		if (0 != (err = send_command("SUB", path, NULL))) {
+		if (0 != (err = Write_strs(cnx.sock_fd, "SUB", path, NULL))) {
 			command_del(subscription);
 			break;
 		}
