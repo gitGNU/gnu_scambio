@@ -17,6 +17,7 @@
  */
 #include "scambio.h"
 #include "main.h"
+#include "cmd.h"
 
 /* A run goes like this :
  * - wait until root queue not empty ;
@@ -54,45 +55,6 @@
 #include "hide.h"
 
 enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
-bool terminate_writer;
-
-static int try_subscribe(char const *path)
-{
-	int err = 0;
-	assert(path);
-	subscription_lock();
-	do {
-		struct command *subscription = subscription_get(path);
-		if (subscription) break;
-		subscription = subscription_get_pending(path);
-		if (subscription) break;
-		if (0 != (err = subscription_new(&subscription, path))) break;
-		if (0 != (err = Write_strs(cnx.sock_fd, "SUB", path, NULL))) {
-			command_del(subscription);
-			break;
-		}
-	} while (0);
-	subscription_unlock();
-	return err;
-}
-static int try_unsubscribe(char const *path)
-{
-	(void)path;
-	return 0;
-}
-static int try_command(enum dir_type dir_type, char const *path)
-{
-	(void)dir_type;
-	(void)path;
-	return 0;
-}
-
-static bool always_skip(char const *name)
-{
-	return
-		0 == strcmp(name, ".") ||
-		0 == strcmp(name, "..");
-}
 
 static char const *dirtype2str(enum dir_type dir_type)
 {
@@ -104,12 +66,81 @@ static char const *dirtype2str(enum dir_type dir_type)
 	return "INVALID";
 }
 
+bool terminate_writer;
+
+static int try_subscribe(char const *path)
+{
+	int err = 0;
+	char buf[SEQ_BUF_LEN];
+	assert(path);
+	debug("try_subscribe(%s)", path);
+	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	do {
+		struct command *subscription = command_get(&subscribed, path);
+		if (subscription) break;
+		subscription = command_get_with_timeout(&subscribing, path);
+		if (subscription) break;
+		if (0 != (err = command_new(&subscription, path))) break;
+		if (0 != (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, subscription->seqnum), " SUB ", path, NULL))) {
+			command_del(subscription);
+			break;
+		}
+	} while (0);
+	(void)pth_rwlock_release(&subscriptions_lock);
+	return err;
+}
+static int try_unsubscribe(char const *path)
+{
+	int err = 0;
+	char buf[SEQ_BUF_LEN];
+	assert(path);
+	debug("try_unsubscribe(%s)", path);
+	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	do {
+		struct command *subscription = command_get(&subscribed, path);
+		if (! subscription) {
+			subscription = command_get(&unsubscribing, path);
+			if (subscription && !command_timeouted(subscription)) subscription = NULL;
+		}
+		// If we have a subscription here, we must renew it
+		if (! subscription) break;
+		command_touch_renew_seqnum(subscription);
+		if (0 != (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, subscription->seqnum), " UNSUB ", path, NULL))) break;
+		command_change_list(subscription, &unsubscribing);
+	} while (0);
+	(void)pth_rwlock_release(&subscriptions_lock);
+	return err;
+}
+// Path is a file that must be added or removed
+static int try_put(char const *path)
+{
+	int err = 0;
+	assert(path);
+	debug("try_put(%s)", path);
+	(void)pth_rwlock_acquire(&put_commands_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	do {
+		struct command *cmd = command_get(&put_commands, path);
+		if (cmd) break;
+		cmd = command_new(&put_commands, path);
+		...
+	} while (0);
+	(void)pth_rwlock_release(&put_commands_lock);
+	return 0;
+}
+
+static bool always_skip(char const *name)
+{
+	return
+		0 == strcmp(name, ".") ||
+		0 == strcmp(name, "..");
+}
+
 #define PUTDIR_NAME ".put"
 #define REMDIR_NAME ".rem"
 static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 {
 #	define MAX_DEPTH 30
-	debug("run on path %s, dirtype %s", path, dirtype2str(dir_type));
+	debug("writer_run_rec(path=%s, dir_type=%s)", path, dirtype2str(dir_type));
 	if (depth >= MAX_DEPTH) return -ELOOP;
 	int err;
 	struct hide_cfg *hide_cfg;
@@ -144,8 +175,11 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 				if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 			}
 		} else {	// dir entry is not itself a directory
-			if (dir_type == FOLDER_DIR) continue;
-			err = try_command(dir_type, path);
+			switch (dir_type) {
+				case FOLDER_DIR: break;
+				case PUT_DIR:    err = try_put(path); break;
+				case REM_DIR:    err = try_rem(path); break;
+			}
 		}
 		path_pop(path);
 	}
@@ -179,7 +213,7 @@ void *writer_thread(void *args)
 	terminate_writer = false;
 	do {
 		while (NULL != (rp = shift_run_queue())) {
-			(void)writer_run_rec(rp->root, FOLDER_DIR, 0);	// FIXME: ensure that we only push folders !
+			(void)writer_run_rec(rp->root, FOLDER_DIR, 0);	// root is the full path
 			run_path_del(rp);
 		}
 		wait_signal();

@@ -19,10 +19,13 @@
 #define MAIN_H_080731
 
 #include <limits.h>
+#include <pth.h>
 #include "cnx.h"
 #include "queue.h"
 
 extern struct cnx_client cnx;
+char const *root_dir;
+size_t root_dir_len;
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
 
@@ -38,20 +41,25 @@ struct run_path {
 struct run_path *shift_run_queue(void);
 void run_path_del(struct run_path *rp);
 
-#include <pth.h>
+extern LIST_HEAD(commands, command) subscribing, subscribed, unsubscribing;
 extern pth_rwlock_t subscriptions_lock;
-static inline void subscription_lock(void)
-{
-	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
-}
-static inline void subscription_unlock(void)
-{
-	(void)pth_rwlock_release(&subscriptions_lock);
-}
-struct command;
-int subscription_new(struct command **cmd, char const *path);
+struct commands put_commands, rem_commands;
+pth_rwlock_t put_commands_lock, rem_commands_lock;
+
+struct command {
+	LIST_ENTRY(command) entry;
+	char path[PATH_MAX];	// folder's path relative to root dir
+	long long seqnum;	// irrelevant if SUBSCRIBED
+	time_t creation;	// idem
+};
+
+int command_new(struct command **cmd, char const *path);
 void command_del(struct command *cmd);
-struct command *subscription_get(char const *path);
-struct command *subscription_get_pending(char const *path);
+struct command *command_get(struct commands *list, char const *path);
+struct command *command_get_with_timeout(struct commands *list, char const *path);
+#include <stdbool.h>
+bool command_timeouted(struct command *cmd);
+void command_touch_renew_seqnum(struct command *cmd);
+void command_change_list(struct command *cmd, struct commands *list);
 
 #endif

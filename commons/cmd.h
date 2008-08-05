@@ -57,5 +57,7 @@ void cmd_end(void);
 // construct a struct cmd that must be destroyed with cmd_dtor
 int cmd_read(struct cmd *cmd, bool with_seq, int fd);
 void cmd_dtor(struct cmd *cmd);
+#define SEQ_BUF_LEN 21
+char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
 
 #endif

@@ -8,5 +8,6 @@ export SMTPD_LOG_DIR=/tmp
 export SMTPD_LOG_LEVEL=5
 export SMTPD_PORT=1025
 export MDIRD_SERVER=localhost
+export MDIR_ROOT_DIR=$PWD/client/checks/msgs
 
-mkdir -p $MDIRD_ROOT_DIR/root
+mkdir -p $MDIRD_ROOT_DIR/root $MDIR_ROOT_DIR

@@ -223,3 +223,9 @@ int cmd_read(struct cmd *cmd, bool with_seq, int fd)
 	return err;
 }
 
+char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq)
+{
+	snprintf(buf, sizeof(buf), "%lld", seq);
+	return buf;
+}
+

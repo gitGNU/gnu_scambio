@@ -31,6 +31,9 @@
  */
 
 struct cnx_client cnx;
+char const *root_dir;
+size_t root_dir_len;
+
 
 /* Then, lists of pending commands, starting with subscriptions.
  *
@@ -41,35 +44,31 @@ struct cnx_client cnx;
 #include <limits.h>
 #include <time.h>
 #include "queue.h"
-struct command {
-	LIST_ENTRY(command) entry;
-	char path[PATH_MAX];	// folder's path relative to root dir
-	long long seqnum;	// irrelevant if SUBSCRIBED
-	time_t creation;	// idem
-};
-static LIST_HEAD(commands, command) subscribing, subscribed, unsubscribing;
+struct commands subscribing, subscribed, unsubscribing;
 pth_rwlock_t subscriptions_lock;
 
-extern inline void subscription_lock(void);
-extern inline void subscription_unlock(void);
-
 #include <time.h>
-static int command_timeouted(struct command *cmd)
+bool command_timeouted(struct command *cmd)
 {
 #	define CMD_TIMEOUT 15
 	return time(NULL) - cmd->creation > CMD_TIMEOUT;
 }
 
-static void command_ctor(struct command *cmd, struct commands *list, char const *path)
+void command_touch_renew_seqnum(struct command *cmd)
 {
 	static long long seqnum = 0;
-	snprintf(cmd->path, sizeof(cmd->path), "%s", path);
 	cmd->seqnum = seqnum++;
 	cmd->creation = time(NULL);
+}
+
+static void command_ctor(struct command *cmd, struct commands *list, char const *path)
+{
+	snprintf(cmd->path, sizeof(cmd->path), "%s", path);
+	command_touch_renew_seqnum(cmd);
 	LIST_INSERT_HEAD(list, cmd, entry);
 }
 
-int subscription_new(struct command **cmd, char const *path)
+int command_new(struct command **cmd, char const *path)
 {
 	*cmd = malloc(sizeof(**cmd));
 	if (! *cmd) return -ENOMEM;
@@ -83,8 +82,14 @@ void command_del(struct command *cmd)
 	free(cmd);
 }
 
+void command_change_list(struct command *cmd, struct commands *list)
+{
+	LIST_REMOVE(cmd, entry);
+	LIST_INSERT_HEAD(list, cmd, entry);
+}
+
 #include <string.h>
-static struct command *command_get_from_list(struct commands *list, char const *path)
+struct command *command_get(struct commands *list, char const *path)
 {
 	struct command *cmd;
 	LIST_FOREACH(cmd, list, entry) {
@@ -92,13 +97,9 @@ static struct command *command_get_from_list(struct commands *list, char const *
 	}
 	return NULL;
 }
-struct command *subscription_get(char const *path)
+struct command *command_get_with_timeout(struct commands *list, char const *path)
 {
-	return command_get_from_list(&subscribed, path);
-}
-struct command *subscription_get_pending(char const *path)
-{
-	struct command *cmd = command_get_from_list(&subscribing, path);
+	struct command *cmd = command_get(list, path);
 	if (cmd && command_timeouted(cmd)) {
 		command_del(cmd);
 		cmd = NULL;
@@ -110,14 +111,8 @@ struct command *subscription_get_pending(char const *path)
  * Same notes as above.
  */
 
-struct putrem_command {
-	LIST_ENTRY(putrem_command) entry;
-	char path[PATH_MAX];	// absolute path to the meta file
-	long long seqnum;
-	time_t send;
-};
-static LIST_HEAD(putrem_commands, putrem_command) put_commands, rem_commands;
-static pth_rwlock_t put_commands_lock, rem_commands_lock;
+struct commands put_commands, rem_commands;
+pth_rwlock_t put_commands_lock, rem_commands_lock;
 
 /* The writer thread works by traversing a directory tree from a given root.
  * It dies this for every run path on its run queue.
@@ -166,6 +161,14 @@ int client_begin(void)
 	int err;
 	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) return err;
 	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) return err;
+	if (0 != (err = conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir/"))) return err;
+	root_dir = conf_get_str("MDIR_ROOT_DIR");
+	if (root_dir[0] == '\0') {
+		error("MDIR_ROOT_DIR must not be empty");
+		return -EINVAL;
+	}
+	root_dir_len = strlen(root_dir);
+	if (root_dir[root_dir_len-1] != '/') root_dir_len--;
 	(void)pth_rwlock_init(&subscriptions_lock);
 	LIST_INIT(&subscribing);
 	LIST_INIT(&subscribed);
