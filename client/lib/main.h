@@ -19,12 +19,13 @@
 #define MAIN_H_080731
 
 #include <limits.h>
+#include <stdbool.h>
 #include <pth.h>
 #include "cnx.h"
 #include "queue.h"
 
 extern struct cnx_client cnx;
-char const *root_dir;
+char root_dir[PATH_MAX];	// without trailing '/'
 size_t root_dir_len;
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
@@ -43,8 +44,8 @@ void run_path_del(struct run_path *rp);
 
 extern LIST_HEAD(commands, command) subscribing, subscribed, unsubscribing;
 extern pth_rwlock_t subscriptions_lock;
-struct commands put_commands, rem_commands;
-pth_rwlock_t put_commands_lock, rem_commands_lock;
+struct commands pending_puts, pending_rems;
+pth_rwlock_t pending_puts_lock, pending_rems_lock;
 
 struct command {
 	LIST_ENTRY(command) entry;
@@ -53,11 +54,9 @@ struct command {
 	time_t creation;	// idem
 };
 
-int command_new(struct command **cmd, char const *path);
+int command_new(struct command **cmd, struct commands *list, char const *path, char const *token);
 void command_del(struct command *cmd);
-struct command *command_get(struct commands *list, char const *path);
-struct command *command_get_with_timeout(struct commands *list, char const *path);
-#include <stdbool.h>
+int command_get(struct command **cmd, struct commands *list, char const *path, bool do_timeout);
 bool command_timeouted(struct command *cmd);
 void command_touch_renew_seqnum(struct command *cmd);
 void command_change_list(struct command *cmd, struct commands *list);

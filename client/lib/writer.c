@@ -15,9 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "scambio.h"
 #include "main.h"
-#include "cmd.h"
 
 /* A run goes like this :
  * - wait until root queue not empty ;
@@ -54,6 +56,8 @@
 #include "misc.h"
 #include "hide.h"
 
+#define PUTDIR_NAME ".put"
+#define REMDIR_NAME ".rem"
 enum dir_type { PUT_DIR, REM_DIR, FOLDER_DIR };
 
 static char const *dirtype2str(enum dir_type dir_type)
@@ -68,64 +72,70 @@ static char const *dirtype2str(enum dir_type dir_type)
 
 bool terminate_writer;
 
-static int try_subscribe(char const *path)
+static int try_command(char const *path, struct commands *list, char const *token, pth_rwlock_t *lock)
 {
 	int err = 0;
-	char buf[SEQ_BUF_LEN];
 	assert(path);
-	debug("try_subscribe(%s)", path);
-	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	if (path[0] == '\0') path = "/";
+	debug("try_command(%s on '%s')", token, path);
+	(void)pth_rwlock_acquire(lock, PTH_RWLOCK_RW, FALSE, NULL);
 	do {
-		struct command *subscription = command_get(&subscribed, path);
-		if (subscription) break;
-		subscription = command_get_with_timeout(&subscribing, path);
-		if (subscription) break;
-		if (0 != (err = command_new(&subscription, path))) break;
-		if (0 != (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, subscription->seqnum), " SUB ", path, NULL))) {
-			command_del(subscription);
-			break;
-		}
+		struct command *dummy;
+		if (-ENOENT != (err = command_get(&dummy, list, path, true))) break;
+		err = command_new(&dummy, list, path, token);
 	} while (0);
-	(void)pth_rwlock_release(&subscriptions_lock);
+	(void)pth_rwlock_release(lock);
 	return err;
 }
-static int try_unsubscribe(char const *path)
-{
-	int err = 0;
-	char buf[SEQ_BUF_LEN];
-	assert(path);
-	debug("try_unsubscribe(%s)", path);
-	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
-	do {
-		struct command *subscription = command_get(&subscribed, path);
-		if (! subscription) {
-			subscription = command_get(&unsubscribing, path);
-			if (subscription && !command_timeouted(subscription)) subscription = NULL;
-		}
-		// If we have a subscription here, we must renew it
-		if (! subscription) break;
-		command_touch_renew_seqnum(subscription);
-		if (0 != (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, subscription->seqnum), " UNSUB ", path, NULL))) break;
-		command_change_list(subscription, &unsubscribing);
-	} while (0);
-	(void)pth_rwlock_release(&subscriptions_lock);
-	return err;
-}
-// Path is a file that must be added or removed
+// Path is a file (relative to root_dir, with PUTDIR_NAME) that must be added
 static int try_put(char const *path)
 {
 	int err = 0;
+	char folder[PATH_MAX];
+	int fd;
 	assert(path);
-	debug("try_put(%s)", path);
-	(void)pth_rwlock_acquire(&put_commands_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	debug("try_put('%s')", path);
+	snprintf(folder, sizeof(folder), "%s/%s", root_dir, path);
+	fd = open(folder, O_RDONLY);
+	if (fd < 0) return -errno;
 	do {
-		struct command *cmd = command_get(&put_commands, path);
-		if (cmd) break;
-		cmd = command_new(&put_commands, path);
-		...
+		path_pop(folder);	// chop filename
+		path_pop(folder);	// chop PUTDIR_NAME
+		assert(strlen(folder) >= root_dir_len);
+		if (0 != (err = try_command(folder+root_dir_len, &pending_puts, " PUT ", &pending_puts_lock))) break;
+		if (0 != (err = Copy(cnx.sock_fd, fd))) break;
+		if (0 != (err = Write(cnx.sock_fd, "::\n", 3))) break;
 	} while (0);
-	(void)pth_rwlock_release(&put_commands_lock);
-	return 0;
+	(void)close(fd);
+	return err;
+}
+
+// Path is the file to be removed, which name the meta's digest
+static int try_rem(char const *path)
+{
+	int err = 0;
+	char folder[PATH_MAX];
+	assert(path);
+	size_t path_len = strlen(path);
+	char const *digest = path+path_len;
+	while (digest > path && *digest != '/') digest--;
+	snprintf(folder, sizeof(folder), "%s", path);
+	path_pop(folder);	// chop filename
+	path_pop(folder); // chop PUTREM_NAME
+	do {
+		if (0 != (err = try_command(folder, &pending_rems, " REM ", &pending_rems_lock))) break;
+		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n::\n"))) break;
+	} while (0);
+	return err;
+}
+
+static bool is_already_subscribed(char const *path)
+{
+	struct command *dummy;
+	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	int err = command_get(&dummy, &subscribed, path, false);
+	(void)pth_rwlock_release(&subscriptions_lock);
+	return err == 0;
 }
 
 static bool always_skip(char const *name)
@@ -135,8 +145,6 @@ static bool always_skip(char const *name)
 		0 == strcmp(name, "..");
 }
 
-#define PUTDIR_NAME ".put"
-#define REMDIR_NAME ".rem"
 static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 {
 #	define MAX_DEPTH 30
@@ -168,11 +176,17 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 			} else if (0 == strcmp(dirent->d_name, REMDIR_NAME)) {
 				err = writer_run_rec(path, REM_DIR, depth+1);
 			} else if (show_this_dir(hide_cfg, dirent->d_name)) {
-				err = try_subscribe(path);
-				if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
+				if (! is_already_subscribed(path)) {
+					err = try_command(path, &subscribing, " SUB ", &subscriptions_lock);
+					if (-EINPROGRESS == err) err = 0;
+					if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
+				}
 			} else {	// hide this dir
-				err = try_unsubscribe(path);
-				if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
+				if (is_already_subscribed(path)) {
+					err = try_command(path, &unsubscribing, " UNSUB ", &subscriptions_lock);
+					if (-EINPROGRESS == err) err = 0;
+					if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
+				}
 			}
 		} else {	// dir entry is not itself a directory
 			switch (dir_type) {
@@ -213,7 +227,8 @@ void *writer_thread(void *args)
 	terminate_writer = false;
 	do {
 		while (NULL != (rp = shift_run_queue())) {
-			(void)writer_run_rec(rp->root, FOLDER_DIR, 0);	// root is the full path
+			int err = writer_run_rec(rp->root, FOLDER_DIR, 0);	// root is the full path
+			if (err) warning("While scanning root dir : %s", strerror(-err));
 			run_path_del(rp);
 		}
 		wait_signal();

@@ -73,6 +73,22 @@ int Read(void *buf, int fd, off_t offset, size_t len)
 	return 0;
 }
 
+int Copy(int dst, int src)
+{
+	char byte;
+	do {
+		ssize_t ret = pth_read(src, &byte, 1);
+		if (ret < 0) {
+			if (errno != EINTR) return -errno;
+			continue;
+		}
+		if (ret == 0) return 0;
+		ret = Write(dst, &byte, 1);
+		if (ret < 0) return ret;
+	} while (1);
+	return -1;	// never reached
+}
+
 static int Mkdir_single(char const *path)
 {
 	if (0 != mkdir(path, 0744) && errno != EEXIST) {

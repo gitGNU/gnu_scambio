@@ -25,13 +25,15 @@
 #include <errno.h>
 #include "scambio.h"
 #include "main.h"
+#include "misc.h"
+#include "cmd.h"
 
 /* Those two threads share some structures related to the shared socket :
  * First the socket itself
  */
 
 struct cnx_client cnx;
-char const *root_dir;
+char root_dir[PATH_MAX];
 size_t root_dir_len;
 
 
@@ -61,19 +63,27 @@ void command_touch_renew_seqnum(struct command *cmd)
 	cmd->creation = time(NULL);
 }
 
-static void command_ctor(struct command *cmd, struct commands *list, char const *path)
+static int command_ctor(struct command *cmd, struct commands *list, char const *path, char const *token)
 {
+	int err = 0;
+	char buf[SEQ_BUF_LEN];
 	snprintf(cmd->path, sizeof(cmd->path), "%s", path);
 	command_touch_renew_seqnum(cmd);
-	LIST_INSERT_HEAD(list, cmd, entry);
+	if (0 == (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), token, path, "\n", NULL))) {
+		LIST_INSERT_HEAD(list, cmd, entry);
+	}
+	return err;
 }
 
-int command_new(struct command **cmd, char const *path)
+int command_new(struct command **cmd, struct commands *list, char const *path, char const *token)
 {
+	int err = 0;
 	*cmd = malloc(sizeof(**cmd));
 	if (! *cmd) return -ENOMEM;
-	command_ctor(*cmd, &subscribing, path);
-	return 0;
+	if (0 != (err = command_ctor(*cmd, list, path, token))) {
+		free(*cmd);
+	}
+	return err;
 }
 
 void command_del(struct command *cmd)
@@ -89,30 +99,26 @@ void command_change_list(struct command *cmd, struct commands *list)
 }
 
 #include <string.h>
-struct command *command_get(struct commands *list, char const *path)
+int command_get(struct command **cmd, struct commands *list, char const *path, bool do_timeout)
 {
-	struct command *cmd;
-	LIST_FOREACH(cmd, list, entry) {
-		if (0 == strcmp(path, cmd->path)) return cmd;
+	struct command *tmp;
+	LIST_FOREACH_SAFE(*cmd, list, entry, tmp) {
+		if (0 == strcmp(path, (*cmd)->path)) {
+			if (! do_timeout) return 0;
+			if (! command_timeouted(*cmd)) return -EINPROGRESS;
+			command_del(*cmd);
+		}
 	}
-	return NULL;
-}
-struct command *command_get_with_timeout(struct commands *list, char const *path)
-{
-	struct command *cmd = command_get(list, path);
-	if (cmd && command_timeouted(cmd)) {
-		command_del(cmd);
-		cmd = NULL;
-	}
-	return cmd;
+	*cmd = NULL;
+	return -ENOENT;
 }
 
 /* Then PUT/REM commands.
  * Same notes as above.
  */
 
-struct commands put_commands, rem_commands;
-pth_rwlock_t put_commands_lock, rem_commands_lock;
+struct commands pending_puts, pending_rems;
+pth_rwlock_t pending_puts_lock, pending_rems_lock;
 
 /* The writer thread works by traversing a directory tree from a given root.
  * It dies this for every run path on its run queue.
@@ -120,7 +126,7 @@ pth_rwlock_t put_commands_lock, rem_commands_lock;
  * the location of this action into the root queue, as well as a flag telling if the
  * traversall should be recursive or not. For instance, adding a message means
  * adding a tempfile in the folder's .put directory and pushing this folder
- * into the root queue while removing one means linking its meta onto the .rem
+ * into the root queue while removing one means linking its digest name onto the .rem
  * directory (the actual meta will be deleted on reception of the suppression patch).
  * If the so called plugin is an external program instead, it can signal the client
  * programm that it should, recursively, reparse the whole tree.
@@ -162,21 +168,24 @@ int client_begin(void)
 	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) return err;
 	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) return err;
 	if (0 != (err = conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir/"))) return err;
-	root_dir = conf_get_str("MDIR_ROOT_DIR");
-	if (root_dir[0] == '\0') {
+	root_dir_len = snprintf(root_dir, sizeof(root_dir), "%s", conf_get_str("MDIR_ROOT_DIR"));
+	if (root_dir_len >= sizeof(root_dir)) {
+		error("MDIR_ROOT_DIR too long");
+		return -EINVAL;
+	}
+	while (root_dir_len > 0 && root_dir[root_dir_len-1] == '/') root_dir[--root_dir_len] = '\0';
+	if (root_dir_len == 0) {
 		error("MDIR_ROOT_DIR must not be empty");
 		return -EINVAL;
 	}
-	root_dir_len = strlen(root_dir);
-	if (root_dir[root_dir_len-1] != '/') root_dir_len--;
 	(void)pth_rwlock_init(&subscriptions_lock);
 	LIST_INIT(&subscribing);
 	LIST_INIT(&subscribed);
 	LIST_INIT(&unsubscribing);
-	(void)pth_rwlock_init(&put_commands_lock);
-	(void)pth_rwlock_init(&rem_commands_lock);
-	LIST_INIT(&put_commands);
-	LIST_INIT(&rem_commands);
+	(void)pth_rwlock_init(&pending_puts_lock);
+	(void)pth_rwlock_init(&pending_rems_lock);
+	LIST_INIT(&pending_puts);
+	LIST_INIT(&pending_rems);
 	(void)pth_rwlock_init(&run_queue_lock);
 	TAILQ_INIT(&run_queue);
 	atexit(client_end);
