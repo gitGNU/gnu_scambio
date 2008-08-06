@@ -170,7 +170,7 @@ static void *serve_cnx(void *arg)
 	int err = answer(env, 220, my_hostname);
 	while (! quit && ! err) {	// read a command and exec it
 		struct cmd cmd;
-		if (0 != (err = cmd_read(&cmd, false, env->fd))) break;
+		if (0 != (err = cmd_read(&cmd, env->fd))) break;
 		debug("Read keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_ehlo) {
 			err = exec_ehlo(env, cmd.args[0].val.string);

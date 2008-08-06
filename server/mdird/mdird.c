@@ -36,12 +36,12 @@
 static struct cnx_server server;
 static sig_atomic_t terminate = 0;
 
-char const *const kw_sub   = "sub";
-char const *const kw_unsub = "unsub";
-char const *const kw_put   = "put";
-char const *const kw_class = "class";
-char const *const kw_rem   = "rem";
-char const *const kw_quit  = "quit";
+static char const *const kw_sub   = "sub";
+static char const *const kw_unsub = "unsub";
+static char const *const kw_put   = "put";
+static char const *const kw_class = "class";
+static char const *const kw_rem   = "rem";
+static char const *const kw_quit  = "quit";
 
 /*
  * Init functions
@@ -163,7 +163,7 @@ static void *serve_cnx(void *arg)
 	bool quit = false;
 	do {	// read a command and exec it
 		struct cmd cmd;
-		if (0 != (err = cmd_read(&cmd, true, env->fd))) break;
+		if (0 != (err = cmd_read(&cmd, env->fd))) break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		if (cmd.keyword == kw_sub) {
 			err = exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);

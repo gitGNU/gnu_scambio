@@ -70,39 +70,38 @@ static char const *dirtype2str(enum dir_type dir_type)
 	return "INVALID";
 }
 
-bool terminate_writer;
+static bool terminate_writer;
 
-static int try_command(char const *path, struct commands *list, char const *token, pth_rwlock_t *lock)
+static int try_command(char const *folder, char const *path, enum command_type type)
 {
 	int err = 0;
 	assert(path);
 	if (path[0] == '\0') path = "/";
-	debug("try_command(%s on '%s')", token, path);
-	(void)pth_rwlock_acquire(lock, PTH_RWLOCK_RW, FALSE, NULL);
+	debug("try_command(%s on '%s')", command_types[type].keyword, path);
+	(void)pth_rwlock_acquire(&command_types_lock, PTH_RWLOCK_RW, FALSE, NULL);
 	do {
 		struct command *dummy;
-		if (-ENOENT != (err = command_get(&dummy, list, path, true))) break;
-		err = command_new(&dummy, list, path, token);
+		if (-ENOENT != (err = command_get_by_path(&dummy, &command_types[type].list, path, true))) break;
+		err = command_new(&dummy, type, folder, path);
 	} while (0);
-	(void)pth_rwlock_release(lock);
+	(void)pth_rwlock_release(&command_types_lock);
 	return err;
 }
-// Path is a file (relative to root_dir, with PUTDIR_NAME) that must be added
-static int try_put(char const *path)
+// filename is the absolute name of a file (in a PUTDIR_NAME)
+static int try_put(char const *filename)
 {
 	int err = 0;
-	char folder[PATH_MAX];
 	int fd;
-	assert(path);
-	debug("try_put('%s')", path);
-	snprintf(folder, sizeof(folder), "%s/%s", root_dir, path);
-	fd = open(folder, O_RDONLY);
+	debug("try_put('%s')", filename);
+	fd = open(filename, O_RDONLY);
 	if (fd < 0) return -errno;
 	do {
+		char folder[PATH_MAX];
+		snprintf(folder, sizeof(folder), "%s", filename);
 		path_pop(folder);	// chop filename
 		path_pop(folder);	// chop PUTDIR_NAME
 		assert(strlen(folder) >= root_dir_len);
-		if (0 != (err = try_command(folder+root_dir_len, &pending_puts, " PUT ", &pending_puts_lock))) break;
+		if (0 != (err = try_command(folder, filename, PUT_CMD_TYPE))) break;
 		if (0 != (err = Copy(cnx.sock_fd, fd))) break;
 		if (0 != (err = Write(cnx.sock_fd, "::\n", 3))) break;
 	} while (0);
@@ -111,19 +110,18 @@ static int try_put(char const *path)
 }
 
 // Path is the file to be removed, which name the meta's digest
-static int try_rem(char const *path)
+static int try_rem(char const *filename)
 {
 	int err = 0;
-	char folder[PATH_MAX];
-	assert(path);
-	size_t path_len = strlen(path);
-	char const *digest = path+path_len;
-	while (digest > path && *digest != '/') digest--;
-	snprintf(folder, sizeof(folder), "%s", path);
-	path_pop(folder);	// chop filename
-	path_pop(folder); // chop PUTREM_NAME
+	char const *digest = filename + strlen(filename);
+	while (digest > filename && *digest != '/') digest--;
+	debug("try_rem(file=%s, digest=%s)", filename, digest);
 	do {
-		if (0 != (err = try_command(folder, &pending_rems, " REM ", &pending_rems_lock))) break;
+		char folder[PATH_MAX];
+		snprintf(folder, sizeof(folder), "%s", filename);
+		path_pop(folder);	// chop filename
+		path_pop(folder); // chop REMDIR_NAME
+		if (0 != (err = try_command(folder, filename, REM_CMD_TYPE))) break;
 		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n::\n"))) break;
 	} while (0);
 	return err;
@@ -132,10 +130,7 @@ static int try_rem(char const *path)
 static bool is_already_subscribed(char const *path)
 {
 	struct command *dummy;
-	(void)pth_rwlock_acquire(&subscriptions_lock, PTH_RWLOCK_RW, FALSE, NULL);
-	int err = command_get(&dummy, &subscribed, path, false);
-	(void)pth_rwlock_release(&subscriptions_lock);
-	return err == 0;
+	return 0 == command_get_by_path(&dummy, &subscribed, path, false);
 }
 
 static bool always_skip(char const *name)
@@ -177,13 +172,13 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 				err = writer_run_rec(path, REM_DIR, depth+1);
 			} else if (show_this_dir(hide_cfg, dirent->d_name)) {
 				if (! is_already_subscribed(path)) {
-					err = try_command(path, &subscribing, " SUB ", &subscriptions_lock);
+					err = try_command(path, path, SUB_CMD_TYPE);
 					if (-EINPROGRESS == err) err = 0;
 					if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 				}
 			} else {	// hide this dir
 				if (is_already_subscribed(path)) {
-					err = try_command(path, &unsubscribing, " UNSUB ", &subscriptions_lock);
+					err = try_command(path, path, UNSUB_CMD_TYPE);
 					if (-EINPROGRESS == err) err = 0;
 					if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 				}

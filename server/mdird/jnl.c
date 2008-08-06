@@ -369,7 +369,7 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 	// Write the index
 	if (0 != (err = Write(jnl->idx_fd, &ie, sizeof(ie)))) return err;
 	// Then the patch
-	if (action == '-' && header->nb_fields > 1) {
+	if (action == '-') {
 		// if this is a suppression, we can replace the content by a single field header with the digest,
 		// at the condition that the incomming header itself is not a digest (or any single field header ?).
 		struct varbuf vb;

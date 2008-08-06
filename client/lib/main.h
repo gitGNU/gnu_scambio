@@ -30,10 +30,19 @@ size_t root_dir_len;
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
 
+int client_begin(void);
+void client_end(void);
 int reader_begin(void);
 void reader_end(void);
 int writer_begin(void);
 void writer_end(void);
+struct command;
+int finalize_sub(struct command *cmd, int status);
+int finalize_unsub(struct command *cmd, int status);
+int finalize_put(struct command *cmd, int status);
+int finalize_rem(struct command *cmd, int status);
+int finalize_class(struct command *cmd, int status);
+int finalize_quit(struct command *cmd, int status);
 
 struct run_path {
 	char root[PATH_MAX];
@@ -42,21 +51,33 @@ struct run_path {
 struct run_path *shift_run_queue(void);
 void run_path_del(struct run_path *rp);
 
-extern LIST_HEAD(commands, command) subscribing, subscribed, unsubscribing;
+extern LIST_HEAD(commands, command) pending_subs, pending_unsub, subscribed;
 extern pth_rwlock_t subscriptions_lock;
 struct commands pending_puts, pending_rems;
 pth_rwlock_t pending_puts_lock, pending_rems_lock;
 
 struct command {
 	LIST_ENTRY(command) entry;
-	char path[PATH_MAX];	// folder's path relative to root dir
+	char folder[PATH_MAX];	// folder's path (absolute)
+	char path[PATH_MAX];	// the involved, discriminent, absolute filename
 	long long seqnum;	// irrelevant if SUBSCRIBED
 	time_t creation;	// idem
 };
+enum command_type {
+	SUB_CMD_TYPE, UNSUB_CMD_TYPE, PUT_CMD_TYPE, REM_CMD_TYPE, CLASS_CMD_TYPE, QUIT_CMD_TYPE, NB_COMMAND_TYPES
+};
+extern struct command_types {
+	char const *const keyword;
+	struct commands list;
+	int (*finalize)(struct command *cmd, int status);
+} command_types[NB_COMMAND_TYPES];
+pth_rwlock_t command_types_lock;	// protect all previous array
 
-int command_new(struct command **cmd, struct commands *list, char const *path, char const *token);
+// give absolute filename/path
+int command_new(struct command **cmd, enum command_type type, char const *folder, char const *filename);
 void command_del(struct command *cmd);
-int command_get(struct command **cmd, struct commands *list, char const *path, bool do_timeout);
+int command_get_by_path(struct command **cmd, struct commands *list, char const *path, bool do_timeout);
+int command_get_by_seqnum(struct command **cmd, struct commands *list, long long seqnum);
 bool command_timeouted(struct command *cmd);
 void command_touch_renew_seqnum(struct command *cmd);
 void command_change_list(struct command *cmd, struct commands *list);

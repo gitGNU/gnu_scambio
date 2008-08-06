@@ -21,8 +21,10 @@
  */
 
 #include <stdlib.h>
-#include <pth.h>
+#include <string.h>
 #include <errno.h>
+#include <assert.h>
+#include <pth.h>
 #include "scambio.h"
 #include "main.h"
 #include "misc.h"
@@ -36,7 +38,6 @@ struct cnx_client cnx;
 char root_dir[PATH_MAX];
 size_t root_dir_len;
 
-
 /* Then, lists of pending commands, starting with subscriptions.
  *
  * The writer will add entries to these lists while the reader will remove them once completed,
@@ -46,8 +47,17 @@ size_t root_dir_len;
 #include <limits.h>
 #include <time.h>
 #include "queue.h"
-struct commands subscribing, subscribed, unsubscribing;
-pth_rwlock_t subscriptions_lock;
+// NOTE: respect enum command_type order ! (FIXME with something like .0:{...}, .1:{...}, ... ?)
+struct command_types command_types[NB_COMMAND_TYPES] = {
+	{ .keyword = "sub",   .finalize = finalize_sub },
+	{ .keyword = "unsub", .finalize = finalize_unsub },
+	{ .keyword = "put",   .finalize = finalize_put },
+	{ .keyword = "rem",   .finalize = finalize_rem },
+	{ .keyword = "class", .finalize = finalize_class },
+	{ .keyword = "quit",  .finalize = finalize_quit},
+};
+struct commands subscribed;
+pth_rwlock_t command_types_lock;
 
 #include <time.h>
 bool command_timeouted(struct command *cmd)
@@ -63,24 +73,26 @@ void command_touch_renew_seqnum(struct command *cmd)
 	cmd->creation = time(NULL);
 }
 
-static int command_ctor(struct command *cmd, struct commands *list, char const *path, char const *token)
+static int command_ctor(struct command *cmd, enum command_type type, char const *folder, char const *path)
 {
 	int err = 0;
 	char buf[SEQ_BUF_LEN];
-	snprintf(cmd->path, sizeof(cmd->path), "%s", path);
+	snprintf(cmd->folder, sizeof(cmd->folder), "%s", folder);
+	snprintf(cmd->path,   sizeof(cmd->path),   "%s", path);
 	command_touch_renew_seqnum(cmd);
-	if (0 == (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), token, path, "\n", NULL))) {
-		LIST_INSERT_HEAD(list, cmd, entry);
+	assert(strlen(folder) > root_dir_len);
+	if (0 == (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder+root_dir_len, "\n", NULL))) {
+		LIST_INSERT_HEAD(&command_types[type].list, cmd, entry);
 	}
 	return err;
 }
 
-int command_new(struct command **cmd, struct commands *list, char const *path, char const *token)
+int command_new(struct command **cmd, enum command_type type, char const *folder, char const *path)
 {
 	int err = 0;
 	*cmd = malloc(sizeof(**cmd));
 	if (! *cmd) return -ENOMEM;
-	if (0 != (err = command_ctor(*cmd, list, path, token))) {
+	if (0 != (err = command_ctor(*cmd, type, folder, path))) {
 		free(*cmd);
 	}
 	return err;
@@ -99,7 +111,7 @@ void command_change_list(struct command *cmd, struct commands *list)
 }
 
 #include <string.h>
-int command_get(struct command **cmd, struct commands *list, char const *path, bool do_timeout)
+int command_get_by_path(struct command **cmd, struct commands *list, char const *path, bool do_timeout)
 {
 	struct command *tmp;
 	LIST_FOREACH_SAFE(*cmd, list, entry, tmp) {
@@ -109,16 +121,20 @@ int command_get(struct command **cmd, struct commands *list, char const *path, b
 			command_del(*cmd);
 		}
 	}
-	*cmd = NULL;
+	return -ENOENT;
+}
+
+int command_get_by_seqnum(struct command **cmd, struct commands *list, long long seqnum)
+{
+	LIST_FOREACH(*cmd, list, entry) {
+		if ((*cmd)->seqnum == seqnum) return 0;
+	}
 	return -ENOENT;
 }
 
 /* Then PUT/REM commands.
  * Same notes as above.
  */
-
-struct commands pending_puts, pending_rems;
-pth_rwlock_t pending_puts_lock, pending_rems_lock;
 
 /* The writer thread works by traversing a directory tree from a given root.
  * It dies this for every run path on its run queue.
@@ -156,39 +172,40 @@ void run_path_del(struct run_path *rp)
  */
 #include <stdlib.h>
 #include "conf.h"
-static void client_end(void)
+void client_end(void)
 {
 	writer_end();
 	reader_end();
+	cmd_end();
 }
 
 int client_begin(void)
 {
 	int err;
-	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) return err;
-	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) return err;
-	if (0 != (err = conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir/"))) return err;
+	debug("init client lib");
+	cmd_begin();
+	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) goto q0;
+	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) goto q0;
+	if (0 != (err = conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir/"))) goto q0;
 	root_dir_len = snprintf(root_dir, sizeof(root_dir), "%s", conf_get_str("MDIR_ROOT_DIR"));
 	if (root_dir_len >= sizeof(root_dir)) {
 		error("MDIR_ROOT_DIR too long");
-		return -EINVAL;
+		err = -EINVAL;
+		goto q0;
 	}
 	while (root_dir_len > 0 && root_dir[root_dir_len-1] == '/') root_dir[--root_dir_len] = '\0';
 	if (root_dir_len == 0) {
 		error("MDIR_ROOT_DIR must not be empty");
-		return -EINVAL;
+		err = -EINVAL;
+		goto q0;
 	}
-	(void)pth_rwlock_init(&subscriptions_lock);
-	LIST_INIT(&subscribing);
+	for (unsigned t=0; t<sizeof_array(command_types); t++) {
+		LIST_INIT(&command_types[t].list);
+	}
+	(void)pth_rwlock_init(&command_types_lock);
 	LIST_INIT(&subscribed);
-	LIST_INIT(&unsubscribing);
-	(void)pth_rwlock_init(&pending_puts_lock);
-	(void)pth_rwlock_init(&pending_rems_lock);
-	LIST_INIT(&pending_puts);
-	LIST_INIT(&pending_rems);
 	(void)pth_rwlock_init(&run_queue_lock);
 	TAILQ_INIT(&run_queue);
-	atexit(client_end);
 	if (0 != (err = writer_begin())) goto q0;
 	if (0 != (err = reader_begin())) goto q1;
 	if (NULL == pth_spawn(PTH_ATTR_DEFAULT, connecter_thread, NULL)) {
@@ -201,6 +218,7 @@ q2:
 q1:
 	writer_end();
 q0:
+	cmd_end();
 	return err;
 }
 

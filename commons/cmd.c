@@ -21,6 +21,7 @@
 #include <limits.h>
 #include <strings.h>
 #include <errno.h>
+#include <ctype.h>
 #include "scambio.h"
 #include "cmd.h"
 #include "varbuf.h"
@@ -186,7 +187,7 @@ static int read_seq(long long *seq, char const *str)
 	return 0;
 }
 
-static int parse_line(struct cmd *cmd, bool with_seq, struct varbuf *vb, int fd)
+static int parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
 {
 	int err = 0;
 	varbuf_clean(vb);
@@ -194,10 +195,12 @@ static int parse_line(struct cmd *cmd, bool with_seq, struct varbuf *vb, int fd)
 	struct cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
 	if (nb_tokens <= 0) return nb_tokens;	// Ignore blank lines
+	bool with_seq = isdigit(tokens[0].val.string[0]);
 	if (with_seq && nb_tokens < 2) return -EINVAL;
 	char const *const keyword = tokens[with_seq ? 1:0].val.string;
 	unsigned nb_args = nb_tokens - (with_seq ? 2:1);
 	struct cmd_arg *const args = tokens + (with_seq ? 2:1);
+	cmd->seq = -1;
 	if (with_seq && 0 != (err = read_seq(&cmd->seq, tokens[0].val.string))) return err;
 	struct registered_cmd *reg;
 	err = -ENOENT;
@@ -210,14 +213,14 @@ static int parse_line(struct cmd *cmd, bool with_seq, struct varbuf *vb, int fd)
 	return err;
 }
 
-int cmd_read(struct cmd *cmd, bool with_seq, int fd)
+int cmd_read(struct cmd *cmd, int fd)
 {
 	int err = 0;
 	struct varbuf vb;
 	if (0 != (err = varbuf_ctor(&vb, 1024, true))) return err;
 	cmd->keyword = NULL;
 	while (! cmd->keyword) {
-		if (0 > (err = parse_line(cmd, with_seq, &vb, fd))) break;
+		if (0 > (err = parse_line(cmd, &vb, fd))) break;
 	}
 	varbuf_dtor(&vb);
 	return err;

@@ -43,7 +43,7 @@ struct cmd_arg {
 
 struct cmd {
 	char const *keyword;	// the same pointer than the one registered
-	long long seq;
+	long long seq;	// -1 if no seqnum was read
 	unsigned nb_args;
 	struct cmd_arg args[CMD_MAX_ARGS];
 };
@@ -55,7 +55,7 @@ void cmd_unregister_keyword(char const *keyword);
 void cmd_end(void);
 // Returns cmd->keyword = NULL on EOF.
 // construct a struct cmd that must be destroyed with cmd_dtor
-int cmd_read(struct cmd *cmd, bool with_seq, int fd);
+int cmd_read(struct cmd *cmd, int fd);
 void cmd_dtor(struct cmd *cmd);
 #define SEQ_BUF_LEN 21
 char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
