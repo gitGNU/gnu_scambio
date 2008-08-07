@@ -201,7 +201,7 @@ int header_write(struct header const *h, int fd)
 		int err;
 		if (0 != (err = field_write(h->fields+f, fd))) return err;
 	}
-	return 0;
+	return Write(fd, "::\n", 3);
 }
 
 int header_dump(struct header const *h, struct varbuf *vb)

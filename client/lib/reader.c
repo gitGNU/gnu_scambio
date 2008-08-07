@@ -100,6 +100,35 @@ int finalize_quit(struct command *cmd, int status)
 	return 0;
 }
 
+static int patch_ctor(struct patch *patch, char const *folder, long long version)
+{
+	int err = 0;
+	if (0 != (err = varbuf_ctor(&patch->vb, 10000, true))) goto q0;
+	if (0 != (err = header_read(&patch->header, &patch->vb, cnx.sock_fd))) goto q1;
+	
+	err = add_header(dir, h, action);
+	header_del(h);
+q1:
+	varbuf_dtor(&patch->vb);
+q0:
+	return err;
+}
+
+static int patch_fetch(char const *folder, long long version)
+{
+	debug("reading patch for version %lld of '%s'", version, folder);
+	int err = 0;
+	struct patch *patch = malloc(sizeof(*patch));
+	if (! patch) return -ENOMEM;
+	if (0 != (err = patch_ctor(patch, folder, version))) {
+		free(patch);
+		return err;
+	}
+
+	// Then aply patches while first patch->version == this mdir->version
+
+}
+
 static char const *const kw_patch = "patch";
 
 void *reader_thread(void *args)
@@ -114,9 +143,11 @@ void *reader_thread(void *args)
 		if (0 != (err = cmd_read(&cmd, cnx.sock_fd))) break;
 		for (unsigned t=0; t<sizeof_array(command_types); t++) {
 			if (cmd.keyword == kw_patch) {
-				// read header, then command
-				struct header *header = header_new(msg); // FIXME: il faudrait un header_new_fd() ?
-				
+				char const *const folder = cmd.args[0].val.string;
+				long long const version = cmd.args[1].val.integer;
+				long long const next_version = cmd.args[2].val.integer;
+				char const action = cmd.args[3].val.string[0];
+				err = patch_fetch(folder, version, next_version, action);
 			}
 			if (cmd.keyword == command_types[t].keyword) {
 				struct command *command = NULL;
@@ -138,7 +169,7 @@ int reader_begin(void)
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
 		cmd_register_keyword(command_types[t].keyword,  0, UINT_MAX, CMD_EOA);
 	}
-	cmd_register_keyword(kw_patch, 1, 2, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
 	return 0;
 }
 

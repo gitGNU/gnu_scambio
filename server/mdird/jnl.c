@@ -363,20 +363,23 @@ int strib_get(struct stribution **stribp, char const *path)
 static int write_patch(struct jnl *jnl, char action, struct header *header)
 {
 	int err = 0;
-	long long version = jnl->version + jnl->nb_patches;
 	struct index_entry ie;
 	if (0 != (err = filesize(&ie.offset, jnl->patch_fd))) return err;
 	// Write the index
 	if (0 != (err = Write(jnl->idx_fd, &ie, sizeof(ie)))) return err;
-	// Then the patch
+	// Then the patch command
+	char action_str[2] = { action, '\n' };
+	if (0 != (err = Write(jnl->patch_fd, action_str, sizeof(action_str)))) return err;
+	// Then the patch (meta datas)
 	if (action == '-') {
 		// if this is a suppression, we can replace the content by a single field header with the digest,
 		// at the condition that the incomming header itself is not a digest (or any single field header ?).
+		// TODO: why not use the version number, again ?
 		struct varbuf vb;
 		if (0 != (err = varbuf_ctor(&vb, 5000, true))) return err;
 		err = header_dump(header, &vb);
 		if (! err) {
-			char digest_field[8+MAX_DIGEST_LEN+1+1] = "digest: ";	// + NL + NUL
+			char digest_field[8+MAX_DIGEST_LEN+1+1] = "scambio-digest: ";	// + NL + NUL
 			size_t dig_len = digest(digest_field+8, vb.used, vb.buf);
 			digest_field[8 + dig_len] = '\n';
 			digest_field[8 + dig_len + 1] = '\0';
@@ -393,10 +396,6 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 		err = header_write(header, jnl->patch_fd);
 	}
 	if (0 != err) return err;
-	char action_str[32];
-	size_t const len = snprintf(action_str, sizeof(action_str), ":%c %lld\n", action, version);	// TODO: add ctime ?
-	assert(len < sizeof(action_str));
-	if (0 != (err = Write(jnl->patch_fd, action_str, len))) return err;
 	jnl->nb_patches ++;
 	return 0;
 }
@@ -464,44 +463,52 @@ static int load_index_entry(off_t *offset, size_t *size, struct jnl *jnl, unsign
 	return err;
 }
 
-int jnl_send_patch(long long *actual_version, struct dir *dir, long long version, int fd)
+static int get_next_version(long long *next, struct dir *dir, long long version)
 {
-	int err = 0;
-	(void)pth_rwlock_acquire(&dir->rwlock, PTH_RWLOCK_RD, FALSE, NULL);
-	// FIXME: split en plusieurs fonctions
 	// Look for the version number that comes after the given version, and jnl
 	struct jnl *jnl;
 	STAILQ_FOREACH(jnl, &dir->jnls, entry) {
 		// look first for version+1
 		if (jnl->version <= version+1 && jnl->version + jnl->nb_patches > version+1) {
-			*actual_version = version+1;
+			*next = version+1;
 			break;
 		} else if (jnl->version > version+1) {	// if we can't find it, skip the gap
-			*actual_version = jnl->version;
+			*next = jnl->version;
 			break;
 		}
 	}
-	if (! jnl) err = -ENOMSG;
-	if (! err) { // Read the patch
+	return jnl ? 0:-ENOMSG;
+}
+
+static int copy(int dst, int src, off_t offset, size_t size)
+{
+	char *buf = malloc(size);
+	if (! buf) return -ENOMEM;
+	int err = 0;
+	do {
+		if (0 != (err = Read(buf, src, offset, size))) break;
+		if (0 != (err = Write(dst, buf, size))) break;
+	} while (0);
+	free(buf);
+	return err;
+}
+
+int jnl_send_patch(long long *next_version, struct dir *dir, long long version, int fd)
+{
+	int err = 0;
+	(void)pth_rwlock_acquire(&dir->rwlock, PTH_RWLOCK_RD, FALSE, NULL);
+	do {
 		off_t patch_offset;
 		size_t patch_size;
-		err = load_index_entry(&patch_offset, &patch_size, jnl, *actual_version - jnl->version);
-		if (! err) {	// Copy from file to socket
-			struct varbuf vb;
-			char cmdstr[5+1+PATH_MAX+1+20+1];
-			size_t cmdlen = snprintf(cmdstr, sizeof(cmdstr), "PATCH /%s %lld\n", dir->path + rootdir_len, version);
-			assert(cmdlen < sizeof(cmdstr)-1);
-			err = varbuf_ctor(&vb, cmdlen + patch_size, true);
-			if (! err) {
-				err = varbuf_append(&vb, cmdlen, cmdstr);
-				char *buf = vb.buf + vb.used;
-				if (! err) err = varbuf_put(&vb, patch_size);
-				if (! err) err = Read(buf, jnl->patch_fd, patch_offset, patch_size);
-				if (! err) err = Write(fd, vb.buf, vb.used);
-				varbuf_dtor(&vb);
-			}
-		}
-	}
+		if (0 != (err = get_next_version(next_version, dir, version))) break;
+		if (0 != (err = load_index_entry(&patch_offset, &patch_size, jnl, *next_version - jnl->version))) break;
+		// the command (and this line) will be finished by the first line of the patch, which start with "+/-\n"
+		char cmdstr[5+1+PATH_MAX+1+20+1+20+1+1];
+		size_t cmdlen = snprintf(cmdstr, sizeof(cmdstr), "PATCH /%s %lld %lld ", dir->path + rootdir_len, version, *next_version);
+		assert(cmdlen < sizeof(cmdstr));
+		if (0 != (err = Write(fd, cmdstr, cmdlen))) break;
+		if (0 != (err = copy(fd, jnl->patch_fd, patch_offset, patch_size))) break;
+	} while (0);
 	(void)pth_rwlock_release(&dir->rwlock);
 	return err;
 }
