@@ -8,4 +8,4 @@ smtpd_SOURCES = \
 	queries.c \
 	parse.c
 
-smtpd_LDADD = ../../commons/libcommons.la ../../client/lib/libmdir.la
+smtpd_LDADD = ../../client/lib/libmdir.la ../../commons/libcommons.la

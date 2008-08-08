@@ -75,6 +75,8 @@ struct dir {
 
 static LIST_HEAD(dirs, dir) dirs;
 
+static char const *digest_field = "scambio-digest";
+
 /*
  * Jnls
  */
@@ -379,15 +381,14 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 		if (0 != (err = varbuf_ctor(&vb, 5000, true))) return err;
 		err = header_dump(header, &vb);
 		if (! err) {
-			char digest_field[8+MAX_DIGEST_LEN+1+1] = "scambio-digest: ";	// + NL + NUL
-			size_t dig_len = digest(digest_field+8, vb.used, vb.buf);
-			digest_field[8 + dig_len] = '\n';
-			digest_field[8 + dig_len + 1] = '\0';
-			struct header *alternate_header = header_new(digest_field);
-			if (! alternate_header) {
-				err = -1;
-			} else {
-				err = header_write(alternate_header, jnl->patch_fd);
+			char digest_val[MAX_DIGEST_LEN+1];
+			size_t dig_len = digest(digest_val, vb.used, vb.buf);
+			digest_val[dig_len] = '\0';
+			struct header *alternate_header;
+			if (0 == (err = header_new(&alternate_header))) {
+				if (0 == (err = header_add_field(alternate_header, digest_field, digest_val))) {
+					err = header_write(alternate_header, jnl->patch_fd);
+				}
 				header_del(alternate_header);
 			}
 		}
@@ -463,21 +464,20 @@ static int load_index_entry(off_t *offset, size_t *size, struct jnl *jnl, unsign
 	return err;
 }
 
-static int get_next_version(long long *next, struct dir *dir, long long version)
+static int get_next_version(struct jnl **jnl, long long *next, struct dir *dir, long long version)
 {
 	// Look for the version number that comes after the given version, and jnl
-	struct jnl *jnl;
-	STAILQ_FOREACH(jnl, &dir->jnls, entry) {
+	STAILQ_FOREACH(*jnl, &dir->jnls, entry) {
 		// look first for version+1
-		if (jnl->version <= version+1 && jnl->version + jnl->nb_patches > version+1) {
+		if ((*jnl)->version <= version+1 && (*jnl)->version + (*jnl)->nb_patches > version+1) {
 			*next = version+1;
 			break;
-		} else if (jnl->version > version+1) {	// if we can't find it, skip the gap
-			*next = jnl->version;
+		} else if ((*jnl)->version > version+1) {	// if we can't find it, skip the gap
+			*next = (*jnl)->version;
 			break;
 		}
 	}
-	return jnl ? 0:-ENOMSG;
+	return (*jnl) ? 0:-ENOMSG;
 }
 
 static int copy(int dst, int src, off_t offset, size_t size)
@@ -500,7 +500,8 @@ int jnl_send_patch(long long *next_version, struct dir *dir, long long version, 
 	do {
 		off_t patch_offset;
 		size_t patch_size;
-		if (0 != (err = get_next_version(next_version, dir, version))) break;
+		struct jnl *jnl;
+		if (0 != (err = get_next_version(&jnl, next_version, dir, version))) break;
 		if (0 != (err = load_index_entry(&patch_offset, &patch_size, jnl, *next_version - jnl->version))) break;
 		// the command (and this line) will be finished by the first line of the patch, which start with "+/-\n"
 		char cmdstr[5+1+PATH_MAX+1+20+1+20+1+1];

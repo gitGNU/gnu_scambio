@@ -82,12 +82,15 @@ static int parse_multipart(struct msg_tree *node, char *msg, size_t size, char *
 static int parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 {
 	// First read the header
-	node->header = header_new(msg);
-	if (! node->header) return -EINVAL;	// TODO FIX header_new
+	int err = 0;
+	if (0 != (err = header_new(&node->header))) return err;
+	if (0 != (err = header_parse(node->header, msg))) {
+		header_del(node->header);
+		return err;
+	}
 	// Find out weither the body is total with a decoding method, or
 	// is another message up to a given boundary.
-	char const *content_type = header_search(node->header,
-		well_known_headers[WKH_CONTENT_TYPE].name, well_known_headers[WKH_CONTENT_TYPE].key);
+	char const *content_type = header_search(node->header, well_known_headers[WKH_CONTENT_TYPE].name);
 	if (content_type && 0 == strncasecmp(content_type, "multipart/", 10)) {
 		debug("message is multipart");
 #		define PREFIX "\n--"

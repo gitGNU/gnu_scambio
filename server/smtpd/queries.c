@@ -55,10 +55,10 @@
 #define TRANSAC_FAILED  554 // Transaction failed  (Or, in the case of a connection-opening response, "No SMTP service here")
 
 struct well_known_header well_known_headers[] = {
-	{ 0, "subject" },
-	{ 0, "message-id" },
-	{ 0, "content-type" },
-	{ 0, "content-transfer-encoding" },
+	{ "subject" },
+	{ "message-id" },
+	{ "content-type" },
+	{ "content-transfer-encoding" },
 };
 
 /*
@@ -67,9 +67,6 @@ struct well_known_header well_known_headers[] = {
 
 int exec_begin(void)
 {
-	for (unsigned i=0; i<sizeof_array(well_known_headers); i++) {
-		well_known_headers[i].key = header_key(well_known_headers[i].name);
-	}
 	return 0;
 }
 
@@ -220,8 +217,8 @@ static int process_mail(struct cnx_env *env)
 	int err = msg_tree_read(&msg_tree, env->fd);
 	if (err) return err;
 	// Extract the values that will be used for all meta-data blocs from top-level header
-	env->subject = header_search(msg_tree->header, "subject", well_known_headers[WKH_SUBJECT].key);
-	env->message_id = header_search(msg_tree->header, "message-id", well_known_headers[WKH_MESSAGE_ID].key);
+	env->subject = header_search(msg_tree->header, well_known_headers[WKH_SUBJECT].name);
+	env->message_id = header_search(msg_tree->header, well_known_headers[WKH_MESSAGE_ID].name);
 	// Then store each file in the mdir
 	err = store_file_rec(env, msg_tree);
 	msg_tree_del(msg_tree);

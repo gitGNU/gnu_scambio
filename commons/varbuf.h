@@ -46,17 +46,25 @@ static inline int varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocata
 
 static inline void varbuf_dtor(struct varbuf *vb)
 {
-	debug("varbuf_dtor(vb=%p)", vb);
 	free(vb->buf);
+}
+
+static inline void *varbuf_unbox(struct varbuf *vb)
+{
+	// unboxing mean that the caller wants the buffer, but not the varbuf
+	// we merely returns here, since we have nothing to destruct in the varbuf.
+	return vb->buf;
 }
 
 int varbuf_make_room(struct varbuf *, size_t new_size);
 int varbuf_append(struct varbuf *, size_t size, void const *buf);
 int varbuf_put(struct varbuf *, size_t size);
+int varbuf_chop(struct varbuf *, size_t size);
 // reads one more line of text into varbuf (converting CRLF into LF)
 // returns 1 on EOF, <0 on error
 int varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
 //off_t varbuf_read_line_off(struct varbuf *, int fd, size_t maxlen, off_t, char **new);
 void varbuf_clean(struct varbuf *);
+int varbuf_stringifies(struct varbuf *vb);
 
 #endif

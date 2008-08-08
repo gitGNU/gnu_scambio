@@ -52,7 +52,6 @@ struct cnx_env {
 #define WKH_CONTENT_TRANSFERT_ENCODING 3
 
 struct well_known_header {
-	unsigned key;
 	char *name;
 };
 

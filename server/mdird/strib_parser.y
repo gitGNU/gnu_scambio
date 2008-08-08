@@ -127,7 +127,6 @@ condition:
 field:
 	FIELDNAME {
 		TEST.condition.field_name = strdup($1);
-		TEST.condition.field_key  = header_key(TEST.condition.field_name);
 	}
 	;
 
@@ -143,7 +142,6 @@ value:
 	| deref {
 		TEST.condition.value_type       = TYPE_DEREF;
 		TEST.condition.value.deref.name = strdup($1);
-		TEST.condition.value.deref.key  = header_key($1);
 	}
 	;
 
@@ -164,7 +162,6 @@ dest:
 	| deref {
 		TEST.action.dest_type       = DEST_DEREF;
 		TEST.action.dest.deref.name = strdup($1);
-		TEST.action.dest.deref.key  = header_key($1);
 	}
 	;
 

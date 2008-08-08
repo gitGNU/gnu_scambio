@@ -26,14 +26,12 @@ struct strib_test {
 	struct strib_condition {
 		enum strib_op { OP_ALWAYS, OP_SET, OP_UNSET, OP_GT, OP_GE, OP_LT, OP_LE, OP_EQ, OP_RE } op;
 		char *field_name;
-		unsigned field_key;
 		enum value_type { TYPE_STRING, TYPE_NUMBER, TYPE_DEREF } value_type;
 		union strib_value {
 			long long number;
 			char *string;
 			struct strib_deref {
 				char *name;
-				unsigned key;
 			} deref;
 		} value;
 		bool re_match_set;

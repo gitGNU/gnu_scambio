@@ -36,14 +36,10 @@
  * (De)Init
  */
 
-static unsigned type_key, dirid_key, name_key;
 struct persist dirid_seq;
 
 int exec_begin(void)
 {
-	type_key  = header_key("type");
-	dirid_key = header_key("dirId");
-	name_key  = header_key("name");
 	conf_set_default_str("MDIRD_DIRSEQ", "/tmp/.dirid.seq");
 	return persist_ctor(&dirid_seq, sizeof(long long), conf_get_str("MDIRD_DIRSEQ"));
 }
@@ -100,39 +96,8 @@ int exec_unsub(struct cnx_env *env, long long seq, char const *dir)
  */
 
 static bool is_directory(struct header *h) {
-	char const *type = header_search(h, "type", type_key);
+	char const *type = header_search(h, "type");
 	return type && 0 == strncmp("dir", type, 3);
-}
-
-// Reads fd until a "::" line, then build a header object
-static int read_header(struct header **hp, struct varbuf *vb, int fd)
-{
-	debug("read_header(%p, %p, %d)", hp, vb, fd);
-	int err = 0;
-	int nb_lines = 0;
-	char *line;
-	bool eoh_reached = false;
-	while (0 == (err = varbuf_read_line(vb, fd, MAX_HEADLINE_LENGTH, &line))) {
-		if (++ nb_lines > MAX_HEADER_LINES) {
-			err = -E2BIG;
-			break;
-		}
-		if (line_match(line, "::")) {
-			// forget this line
-			vb->used = line - vb->buf + 1;
-			vb->buf[vb->used-1] = '\0';
-			eoh_reached = true;
-			break;
-		}
-	}
-	if (nb_lines == 0) err = -EINVAL;
-	if (! eoh_reached) err = -EINVAL;
-	if (err == 1) err = 0;	// no more use for EOF
-	if (! err) {
-		*hp = header_new(vb->buf);
-		if (! *hp) err = -1;	// FIXME
-	}
-	return err;
 }
 
 // dir is the directory user name instead of dirId, because we wan't the client
@@ -141,8 +106,8 @@ static int add_header(char const *dir, struct header *h, char action)
 {
 	int err = 0;
 	if (is_directory(h)) {
-		char const *dirid_str = header_search(h, "dirId", dirid_key);
-		char const *dirname   = header_search(h, "name", name_key);
+		char const *dirid_str = header_search(h, "dirId");
+		char const *dirname   = header_search(h, "name");
 		long long dirid;
 		debug("header is for directory id=%s, name=%s", dirid_str, dirname);
 		if (action == '+') {
@@ -152,10 +117,9 @@ static int add_header(char const *dir, struct header *h, char action)
 				char dirid_add[20+1];	// storage for additional temporary header field
 				dirid = (*(long long *)dirid_seq.data)++;
 				snprintf(dirid_add, sizeof(dirid_add), "%lld", dirid);
-				err = header_add_field(h, "dirId", dirid_key, dirid_add);
+				err = header_add_field(h, "dirId", dirid_add);
 				if (! err) {
 					err = jnl_createdir(dir, dirid, dirname);
-					(void)header_chop_field(h, dirid_key);
 				}
 			}
 		} else {
@@ -175,14 +139,10 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 	debug("doing %s in '%s'", cmdtag, dir);
 	int err = 0;
 	struct header *h;
-	struct varbuf vb;
-	if (0 != (err = varbuf_ctor(&vb, 10000, true))) return err;
-	err = read_header(&h, &vb, env->fd);
-	if (! err) {
-		err = add_header(dir, h, action);
-		header_del(h);
-	}
-	varbuf_dtor(&vb);
+	if (0 != (err = header_new(&h))) return err;
+	err = header_read(h, env->fd);
+	if (! err) err = add_header(dir, h, action);
+	header_del(h);
 	return answer(env, seq, cmdtag, err ? 500:200, err ? strerror(-err):"OK");
 }
 
@@ -220,9 +180,12 @@ static int create_if_missing(char const *dir, char const *subdir)
 	if (err > 0) return 0;
 	if (err < 0) return err;
 	snprintf(str, sizeof(str), DIRFIELD, subdir);
-	struct header *h = header_new(str);
-	if (! h) return -1;	// FIXME
-	err = add_header(dir, h, '+');
+	struct header *h;
+	if (0 != (err = header_new(&h))) return err;
+	do {
+		if (0 != (err = header_parse(h, str))) break;
+		err = add_header(dir, h, '+');
+	} while (0);
 	header_del(h);
 	return err;
 }
@@ -234,7 +197,7 @@ static int goto_dir(struct cnx_env *env, long long seq, char const *dir, struct 
 	char const *dest;
 	switch (action->dest_type) {
 		case DEST_DEREF:
-			dest = header_search(h, action->dest.deref.name, action->dest.deref.key);
+			dest = header_search(h, action->dest.deref.name);
 			if (! dest) {
 				error("dereferencing unset field '%s'", action->dest.deref.name);
 				return -ENOENT;
@@ -286,19 +249,16 @@ int exec_class(struct cnx_env *env, long long seq, char const *dir)
 	debug("doing CLASS in '%s'", dir);
 	int err = 0;
 	struct header *h;
-	struct varbuf vb;
-	if (0 != (err = varbuf_ctor(&vb, 10000, true))) goto answ;
-	if (0 != (err = read_header(&h, &vb, env->fd))) goto q1;
-	if (is_directory(h)) {
-		err = -EISDIR;
-		goto q2;
-	}
-	err = class_rec(env, seq, dir, h);
-q2:
+	if (0 != (err = header_new(&h))) return err;
+	do {
+		if (0 != (err = header_read(h, env->fd))) break;
+		if (is_directory(h)) {
+			err = -EISDIR;
+			break;
+		}
+		err = class_rec(env, seq, dir, h);
+	} while(0);
 	header_del(h);
-q1:
-	varbuf_dtor(&vb);
-answ:
 	return answer(env, seq, "CLASS", err ? 500:200, err ? strerror(-err):"OK");
 }
 

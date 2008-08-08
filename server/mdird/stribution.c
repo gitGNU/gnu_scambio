@@ -208,9 +208,9 @@ static int str2num(long long *num, char const *str)
 	return *end == '\0' ? 0:-1;
 }
 
-static bool field_is_set(char const *field_name, unsigned field_key, struct header const *head)
+static bool field_is_set(char const *field_name, struct header const *head)
 {
-	return NULL != header_search(head, field_name, field_key);
+	return NULL != header_search(head, field_name);
 }
 
 static bool condition_eval(struct strib_condition *cond, struct header const *head)
@@ -218,14 +218,14 @@ static bool condition_eval(struct strib_condition *cond, struct header const *he
 	switch (cond->op) {
 		case OP_ALWAYS: return true;
 		// Unary opes
-		case OP_SET:    return field_is_set(cond->field_name, cond->field_key, head);
-		case OP_UNSET:  return !field_is_set(cond->field_name, cond->field_key, head);
+		case OP_SET:    return field_is_set(cond->field_name, head);
+		case OP_UNSET:  return !field_is_set(cond->field_name, head);
 		// Binary ops
 		default:        break;
 	}
 	assert(is_binary(cond->op));
 	// We need the field value
-	char const *field_value = header_search(head, cond->field_name, cond->field_key);
+	char const *field_value = header_search(head, cond->field_name);
 	long long field_num;
 	if (! field_value) return false;
 	// We need value for binary ops
@@ -241,7 +241,7 @@ static bool condition_eval(struct strib_condition *cond, struct header const *he
 			has_num = true;
 			break;
 		case TYPE_DEREF:
-			str_value = header_search(head, cond->value.deref.name, cond->value.deref.key);
+			str_value = header_search(head, cond->value.deref.name);
 			break;
 	}
 	// Now cast field value to what we need

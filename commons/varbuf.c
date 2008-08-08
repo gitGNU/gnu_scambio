@@ -69,26 +69,33 @@ int varbuf_put(struct varbuf *vb, size_t size)
 	return err;
 }
 
+int varbuf_chop(struct varbuf *vb, size_t size)
+{
+	if (vb->used < size) return -EINVAL;
+	vb->used -= size;
+	return 0;
+}
+
 void varbuf_clean(struct varbuf *vb)
 {
 	vb->used = 0;
 	// TODO: realloc buf toward initial guess ?
 }
 
-static int stringifies(struct varbuf *vb)
+int varbuf_stringifies(struct varbuf *vb)
 {
+	int err = 0;
 	if (! vb->used || vb->buf[vb->used-1] != '\0') {	// if this is a new varbuf, start with an empty string
-		int err;
-		if (0 != (err = varbuf_append(vb, 1, ""))) return err;
+		err = varbuf_append(vb, 1, "");
 	}
-	return 0;
+	return err;
 }
 
 int varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
 	debug("varbuf_read_line(vb=%p, fd=%d)", vb, fd);
 	int err = 0;
-	if (0 != (err = stringifies(vb))) return err;
+	if (0 != (err = varbuf_stringifies(vb))) return err;
 	vb->used--;	// chop nul char
 	size_t prev_used = vb->used;
 	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
@@ -113,7 +120,7 @@ int varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 			}
 		}
 	}
-	stringifies(vb);
+	varbuf_stringifies(vb);
 	return err;
 }
 

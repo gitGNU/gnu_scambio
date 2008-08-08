@@ -21,6 +21,8 @@
 #include "main.h"
 #include "scambio.h"
 #include "cmd.h"
+#include "header.h"
+#include "persist.h"
 
 /* The reader listens for commands.
  * On a put response, it removes the temporary filename stored in the action
@@ -100,33 +102,132 @@ int finalize_quit(struct command *cmd, int status)
 	return 0;
 }
 
-static int patch_ctor(struct patch *patch, char const *folder, long long version)
+struct patch {
+	LIST_ENTRY(patch) entry;
+	long long old_version, new_version;
+	struct header *header;
+	char action;
+};
+// One per directory
+struct mdir {
+	LIST_ENTRY(mdir) entry;
+	char path[PATH_MAX];	// FIXME: use either dirId or inode number
+	LIST_HEAD(patches, patch) patches;
+	struct persist stored_version;
+};
+// List of patched folders lists
+static LIST_HEAD(mdirs, mdir) mdirs;
+
+static int patch_ctor(struct patch *patch, struct mdir *mdir, long long old_version, long long new_version, char action)
 {
 	int err = 0;
-	if (0 != (err = varbuf_ctor(&patch->vb, 10000, true))) goto q0;
-	if (0 != (err = header_read(&patch->header, &patch->vb, cnx.sock_fd))) goto q1;
-	
-	err = add_header(dir, h, action);
-	header_del(h);
-q1:
-	varbuf_dtor(&patch->vb);
+	patch->old_version = old_version;
+	patch->new_version = new_version;
+	patch->action = action;
+	if (0 != (err = header_read(patch->header, cnx.sock_fd))) goto q0;
+	// Insert this patch into this mdir
+	struct patch *p, *prev_p = NULL;
+	LIST_FOREACH(p, &mdir->patches, entry) {
+		if (p->old_version > old_version) break;
+		prev_p = p;
+	}
+	if (! prev_p) {
+		LIST_INSERT_HEAD(&mdir->patches, patch, entry);
+	} else {
+		LIST_INSERT_AFTER(prev_p, patch, entry);
+	}
+	return 0;
+	header_del(patch->header);
 q0:
 	return err;
 }
 
-static int patch_fetch(char const *folder, long long version)
+static void patch_dtor(struct patch *patch)
 {
-	debug("reading patch for version %lld of '%s'", version, folder);
+	LIST_REMOVE(patch, entry);
+	header_del(patch->header);
+}
+
+static void patch_del(struct patch *patch)
+{
+	patch_dtor(patch);
+	free(patch);
+}
+
+static int mdir_ctor(struct mdir *mdir, char const *folder)
+{
+	int err = 0;
+	LIST_INIT(&mdir->patches);
+#	define VERSION_FNAME ".version"
+#	define VERSION_FNAME_LEN 8
+	size_t len = snprintf(mdir->path, sizeof(mdir->path), "%s/%s/"VERSION_FNAME, root_dir, folder);
+	if (0 != (err = persist_ctor(&mdir->stored_version, sizeof(long long), mdir->path))) return err;
+	mdir->path[len - (VERSION_FNAME_LEN+1)] = '\0';
+	LIST_INSERT_HEAD(&mdirs, mdir, entry);
+	return 0;
+}
+static void mdir_dtor(struct mdir *mdir)
+{
+	struct patch *patch;
+	while (NULL != (patch = LIST_FIRST(&mdir->patches))) {
+		patch_del(patch);
+	}
+	LIST_REMOVE(mdir, entry);
+	persist_dtor(&mdir->stored_version);
+}
+static int mdir_new(struct mdir **mdir, char const *folder)
+{
+	int err = 0;
+	*mdir = malloc(sizeof(**mdir));
+	if (! *mdir) return -ENOMEM;
+	if (0 != (err = mdir_ctor(*mdir, folder))) {
+		free(*mdir);
+		*mdir = NULL;
+	}
+	return err;
+}
+static void mdir_del(struct mdir *mdir)
+{
+	mdir_dtor(mdir);
+	free(mdir);
+}
+static long long *mdir_version(struct mdir *mdir)
+{
+	return mdir->stored_version.data;
+}
+
+static int mdir_get(struct mdir **mdir, char const *folder)
+{
+	LIST_FOREACH(*mdir, &mdirs, entry) {
+		if (0 == strcmp(folder, (*mdir)->path+root_dir_len+1)) break;
+	}
+	if (*mdir) return 0;
+	return mdir_new(mdir, folder);
+}
+
+static int mdir_try_apply(struct mdir *mdir)
+{
+	int err = 0;
+	struct patch *patch;
+	while (NULL != (patch = LIST_FIRST(&mdir->patches)) && *mdir_version(mdir) == patch->old_version) {
+		if (0 != (err = mdir_add_header(mdir, patch->header))) break;
+		*mdir_version(mdir) = patch->new_version;
+		patch_del(patch);
+	}
+	return err;
+}
+
+static int patch_fetch(struct mdir *mdir, long long old_version, long long new_version, char action)
+{
+	debug("fetching patch : do %c for %lld->%lld of '%s'", action, old_version, new_version, mdir->path);
 	int err = 0;
 	struct patch *patch = malloc(sizeof(*patch));
 	if (! patch) return -ENOMEM;
-	if (0 != (err = patch_ctor(patch, folder, version))) {
+	if (0 != (err = patch_ctor(patch, mdir, old_version, new_version, action))) {
 		free(patch);
 		return err;
 	}
-
-	// Then aply patches while first patch->version == this mdir->version
-
+	return 0;
 }
 
 static char const *const kw_patch = "patch";
@@ -143,11 +244,10 @@ void *reader_thread(void *args)
 		if (0 != (err = cmd_read(&cmd, cnx.sock_fd))) break;
 		for (unsigned t=0; t<sizeof_array(command_types); t++) {
 			if (cmd.keyword == kw_patch) {
-				char const *const folder = cmd.args[0].val.string;
-				long long const version = cmd.args[1].val.integer;
-				long long const next_version = cmd.args[2].val.integer;
-				char const action = cmd.args[3].val.string[0];
-				err = patch_fetch(folder, version, next_version, action);
+				struct mdir *mdir;
+				err = mdir_get(&mdir, cmd.args[0].val.string);
+				if (! err) err = patch_fetch(mdir, cmd.args[1].val.integer, cmd.args[2].val.integer, cmd.args[3].val.string[0]);
+				if (! err) err = mdir_try_apply(mdir);
 			}
 			if (cmd.keyword == command_types[t].keyword) {
 				struct command *command = NULL;
@@ -170,6 +270,7 @@ int reader_begin(void)
 		cmd_register_keyword(command_types[t].keyword,  0, UINT_MAX, CMD_EOA);
 	}
 	cmd_register_keyword(kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
+	LIST_INIT(&mdirs);
 	return 0;
 }
 
@@ -179,5 +280,10 @@ void reader_end(void)
 		cmd_unregister_keyword(command_types[t].keyword);
 	}
 	cmd_unregister_keyword(kw_patch);
+	// Free all patches
+	struct mdir *mdir;
+	while (NULL != (mdir = LIST_FIRST(&mdirs))) {
+		mdir_del(mdir);
+	}
 }
 

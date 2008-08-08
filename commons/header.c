@@ -32,7 +32,7 @@
  * Data Definitions
  */
 
-#define NB_MAX_FIELDS 5000
+#define NB_MAX_FIELDS 5000	// FIXME
 
 /*
  * Private Functions
@@ -44,36 +44,43 @@ static bool iseol(char c)
 }
 
 // Read a value until given delimiter, and compact it inplace (remove comments, new lines and useless spaces).
-static ssize_t parse(char *msg, char **ptr, bool (*is_delimiter)(char const *))
+static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char const *))
 {
-	char *dst, *src;
-	*ptr = dst = src = msg;
+	int err = 0;
+	char const *src = msg;
+	struct varbuf vb;
+	if (0 != (err = varbuf_ctor(&vb, 1000, true))) return err;
 	bool rem_space = true;
 	while (! is_delimiter(src)) {
 		if (*src == '\0') {
 			error("Unterminated string in header : '%s'", msg);
-			return -1;	// we are supposed to reach the delimiter first
+			err = -1;	// FIXME
+			break;
 		}
 		if (isspace(*src)) {
-			*src = ' ';	// simplify by using only one kind of space char
 			if (rem_space) {
 				// just ignore this char
 			} else {
 				rem_space = true;
-				if (dst != src) *dst = *src;
-				dst++;
+				varbuf_append(&vb, 1, " ");
 			}
 		} else {
 			rem_space = false;
-			if (dst != src) *dst = *src;
-			dst++;
+			varbuf_append(&vb, 1, src);
 		}
 		src++;
 	}
-	// Trim the tail of the value
-	while (dst > msg && isspace(dst[-1])) dst--;
-	// Zero terminate it, may overwrite the delimiter
-	*dst = '\0';
+	if (! err) {
+		// Trim the tail of the value
+		while (vb.used && isspace(vb.buf[vb.used-1])) varbuf_chop(&vb, 1);
+		err = varbuf_stringifies(&vb);
+	}
+	if (err) {
+		varbuf_dtor(&vb);
+		*ptr = NULL;
+		return err;
+	}
+	*ptr = varbuf_unbox(&vb);
 	return src - msg;
 }
 
@@ -87,14 +94,17 @@ static bool is_end_of_value(char const *msg)
 	return iseol(msg[0]) && !isblank(msg[1]);
 }
 
-static ssize_t parse_field(char *msg, char **name, char **value)
+static ssize_t parse_field(char const *msg, char **name, char **value)
 {
 	ssize_t parsedN = parse(msg, name, is_end_of_name);
-	if (parsedN == -1) return -1;
+	if (parsedN < 0) return parsedN;
 	if (parsedN == 0) return 0;
 	parsedN++;	// skip delimiter
 	ssize_t parsedV = parse(msg + parsedN, value, is_end_of_value);
-	if (parsedV <= 0) return -1;
+	if (parsedV <= 0) {
+		free(*name);
+		return parsedV == 0 ? -1:parsedV;	// FIXME: better error code
+	}
 	parsedV++;	// skip delimiter
 	return parsedN + parsedV;
 }
@@ -107,70 +117,49 @@ static void str_tolower(char *str)
 	}
 }
 
-static int header_ctor(struct header *h, char *msg)
+static int header_ctor(struct header *h)
 {
-	// h is already set to all 0
-	memset(h->hash, -1, sizeof(h->hash));
-	ssize_t parsed;
-	while (*msg) {
-		if (h->nb_fields >= NB_MAX_FIELDS) {
-			error("Too many fields in this header (max is "TOSTR(NB_MAX_FIELDS)")");
-			return -E2BIG;
-		}
-		struct head_field *field = h->fields + h->nb_fields;
-		parsed = parse_field(msg, &field->name, &field->value);
-		if (parsed == -1) return -1;
-		if (parsed == 0) break;	// end of message
-		msg += parsed;
-		// Lowercase inplace stored field names
-		str_tolower(field->name);
-		// Hash these values
-		unsigned hkey = header_key(field->name);
-		field->hash_next = h->hash[hkey];
-		h->hash[hkey] = h->nb_fields ++;
-	};
-	h->end = msg;
+	h->nb_fields = 0;
 	return 0;
+}
+
+static void header_dtor(struct header *h)
+{
+	while (h->nb_fields--) {
+		struct head_field *f = h->fields+h->nb_fields;
+		free(f->name);
+		free(f->value);
+	}
 }
 
 /*
  * Public Functions
  */
 
-struct header *header_new(char *msg)
+int header_new(struct header **h)
 {
-	debug("header_new(msg='%s')", msg);
-	struct header *h = calloc(1, sizeof(*h) + NB_MAX_FIELDS*sizeof(h->fields[0]));
-	if (! h) return NULL;
-	if (0 != header_ctor(h, msg)) {
-		free(h);
-		return NULL;
+	int err = 0;
+	assert(h);
+	*h = malloc(sizeof(**h) + NB_MAX_FIELDS*sizeof((*h)->fields[0]));
+	if (! *h) return -ENOMEM;
+	if (0 != (err = header_ctor(*h))) {
+		free(*h);
 	}
-	return h;
+	return err;
 }
 
 void header_del(struct header *h)
 {
+	header_dtor(h);
 	free(h);
 }
 
-unsigned header_key(char const *str)
+char const *header_search(struct header const *h, char const *name)
 {
-	size_t max_len = 25;
-	unsigned hkey = 0;
-	while (*str != '\0' && max_len--) hkey += *str;
-	return hkey % FIELD_HASH_SIZE;
-}
-
-char const *header_search(struct header const *h, char const *name, unsigned key)
-{
-	int f = h->hash[key];
-	while (f != -1) {
-		assert(f < h->nb_fields);
+	for (unsigned f=0; f<h->nb_fields; f++) {
 		if (0 == strcmp(h->fields[f].name, name)) {
 			return h->fields[f].value;
 		}
-		f = h->fields[f].hash_next;
 	}
 	return NULL;
 }
@@ -197,38 +186,82 @@ static int field_dump(struct head_field const *f, struct varbuf *vb)
 
 int header_write(struct header const *h, int fd)
 {
-	for (int f=0; f<h->nb_fields; f++) {
+	for (unsigned f=0; f<h->nb_fields; f++) {
 		int err;
 		if (0 != (err = field_write(h->fields+f, fd))) return err;
 	}
 	return Write(fd, "::\n", 3);
 }
 
+int header_parse(struct header *h, char const *msg) {
+	ssize_t parsed;
+	while (*msg) {
+		if (h->nb_fields >= NB_MAX_FIELDS) {
+			error("Too many fields in this header (max is "TOSTR(NB_MAX_FIELDS)")");
+			return -E2BIG;
+		}
+		struct head_field *field = h->fields + h->nb_fields;
+		parsed = parse_field(msg, &field->name, &field->value);
+		if (parsed < 0) return parsed;
+		if (parsed == 0) break;	// end of message
+		msg += parsed;
+		// Lowercase stored field names
+		str_tolower(field->name);
+	};
+	return 0;
+}
+
+int header_read(struct header *h, int fd)
+{
+	int err = 0;
+	int nb_lines = 0;
+	struct varbuf vb;
+	char *line;
+	bool eoh_reached = false;
+	if (0 != (err = varbuf_ctor(&vb, 10240, true))) return err;
+	while (0 == (err = varbuf_read_line(&vb, fd, MAX_HEADLINE_LENGTH, &line))) {
+		if (++ nb_lines > MAX_HEADER_LINES) {
+			err = -E2BIG;
+			break;
+		}
+		if (line_match(line, "")) {
+			// forget this line
+			vb.used = line - vb.buf + 1;
+			vb.buf[vb.used-1] = '\0';
+			eoh_reached = true;
+			break;
+		}
+	}
+	if (err == 1) err = 0;	// no more use for EOF
+	if (nb_lines == 0) err = -EINVAL;
+	if (! eoh_reached) err = -EINVAL;
+	if (! err) err = header_parse(h, vb.buf);
+	varbuf_dtor(&vb);
+	return err;
+}
+
 int header_dump(struct header const *h, struct varbuf *vb)
 {
 	varbuf_clean(vb);
-	for (int f=0; f<h->nb_fields; f++) {
+	for (unsigned f=0; f<h->nb_fields; f++) {
 		int err;
 		if (0 != (err = field_dump(h->fields+f, vb))) return err;
 	}
 	return 0;
 }
 
-int header_add_field(struct header *h, char const *name, unsigned key, char const *value)
+int header_add_field(struct header *h, char const *name, char const *value)
 {
 	if (h->nb_fields >= NB_MAX_FIELDS) return -E2BIG;
 	struct head_field *field = h->fields + h->nb_fields;
-	field->name = (char *)name;	// won't be written to from now on
-	field->value = (char *)value;
-	field->hash_next = h->hash[key];
-	h->hash[key] = h->nb_fields ++;
-	return 0;
-}
-int header_chop_field(struct header *h, unsigned key)
-{
-	if (! h->nb_fields) return -ENOENT;
-	if (h->hash[key] != h->nb_fields-1) return -EINVAL;
-	h->hash[key] = h->fields[--h->nb_fields].hash_next;
+	field->name = strdup(name);	// won't be written to from now on
+	if (! field->name) return -ENOMEM;
+	str_tolower(field->name);
+	field->value = strdup(value);
+	if (! field->value) {
+		free(field->name);
+		return -ENOMEM;
+	}
 	return 0;
 }
 
