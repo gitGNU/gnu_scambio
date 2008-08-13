@@ -26,7 +26,7 @@
 struct h_test {
 	char const *name;
 	char const *msg;
-	int nb_fields;
+	unsigned nb_fields;
 	struct {
 		char const *name, *value;
 	} results[5];
@@ -39,13 +39,13 @@ static void do_test(struct h_test const *test)
 	char *rw_msg = malloc(msg_len);
 	assert(rw_msg);
 	memcpy(rw_msg, test->msg, msg_len);
-	struct header *head = header_new(rw_msg);
-	assert(head);
+	struct header *head;
+	assert(0 == header_new(&head));
+	assert(0 == header_parse(head, rw_msg));
 	assert(head->nb_fields == test->nb_fields);
 	for (unsigned r=0; r<sizeof_array(test->results); r++) {
 		if (! test->results[r].name) break;
-		unsigned key = header_key(test->results[r].name);
-		char const *value = header_search(head, test->results[r].name, key);
+		char const *value = header_search(head, test->results[r].name);
 		if (value) {
 			assert(test->results[r].value);
 			assert(0==strcmp(value, test->results[r].value));

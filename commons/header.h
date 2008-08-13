@@ -66,4 +66,7 @@ int header_find_parameter(char const *name, char const *field_value, char const 
 // Same result. Error may be -EMSGSIZE or -ENOENT
 int header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
 
+#include "digest.h"
+int header_digest(struct header *h, size_t, char *buffer);
+
 #endif

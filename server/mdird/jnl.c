@@ -377,22 +377,15 @@ static int write_patch(struct jnl *jnl, char action, struct header *header)
 		// if this is a suppression, we can replace the content by a single field header with the digest,
 		// at the condition that the incomming header itself is not a digest (or any single field header ?).
 		// TODO: why not use the version number, again ?
-		struct varbuf vb;
-		if (0 != (err = varbuf_ctor(&vb, 5000, true))) return err;
-		err = header_dump(header, &vb);
-		if (! err) {
-			char digest_val[MAX_DIGEST_LEN+1];
-			size_t dig_len = digest(digest_val, vb.used, vb.buf);
-			digest_val[dig_len] = '\0';
-			struct header *alternate_header;
-			if (0 == (err = header_new(&alternate_header))) {
-				if (0 == (err = header_add_field(alternate_header, digest_field, digest_val))) {
-					err = header_write(alternate_header, jnl->patch_fd);
-				}
-				header_del(alternate_header);
+		char digest_val[MAX_DIGEST_STRLEN+1];
+		if (0 != (err = header_digest(header, sizeof(digest_val), digest_val))) return err;
+		struct header *alternate_header;
+		if (0 == (err = header_new(&alternate_header))) {
+			if (0 == (err = header_add_field(alternate_header, digest_field, digest_val))) {
+				err = header_write(alternate_header, jnl->patch_fd);
 			}
+			header_del(alternate_header);
 		}
-		varbuf_dtor(&vb);
 	} else {	// plain header
 		err = header_write(header, jnl->patch_fd);
 	}
