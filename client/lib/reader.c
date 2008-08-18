@@ -239,7 +239,7 @@ void *reader_thread(void *args)
 	debug("starting reader thread");
 	terminate_reader = false;
 	do {
-		// read and parse one line of input
+		// read and parse one command
 		struct cmd cmd;
 		if (0 != (err = cmd_read(&cmd, cnx.sock_fd))) break;
 		for (unsigned t=0; t<sizeof_array(command_types); t++) {
