@@ -308,3 +308,17 @@ int header_copy_parameter(char const *name, char const *field_value, size_t max_
 	return str_len;
 }
 
+int header_digest(struct header *header, size_t size, char *buffer)
+{
+	(void)size;	// FIXME: not me but the digest interface
+	int err = 0;
+	struct varbuf vb;
+	if (0 != (err = varbuf_ctor(&vb, 5000, true))) return err;
+	do {
+		if (0 != (err = header_dump(header, &vb))) break;
+		size_t dig_len = digest(buffer, vb.used, vb.buf);
+		buffer[dig_len] = '\0';
+	} while (0);
+	varbuf_dtor(&vb);
+	return err;
+}

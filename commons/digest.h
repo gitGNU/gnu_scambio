@@ -18,6 +18,7 @@
 #ifndef DIGEST_H_080725
 #define DIGEST_H_080725
 
+#define MAX_DIGEST_STRLEN 64	// FIXME: CHECKME
 #define MAX_DIGEST_LEN 128
 #include <stddef.h> // size_t
 

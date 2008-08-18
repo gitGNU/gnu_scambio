@@ -45,8 +45,9 @@ int main(void)
 		"Content-Length: 7\n"
 		"Subject: [TODO] manger titi\n"
 	);
-	struct header *head = header_new(head_mutable);
-	assert(head);
+	struct header *head;
+	assert(0 == header_new(&head));
+	assert(0 == header_parse(head, head_mutable));
 	struct strib_action const *actions[strib->nb_tests];
 	unsigned nb_actions = strib_eval(strib, head, actions);
 	assert(nb_actions == 3);

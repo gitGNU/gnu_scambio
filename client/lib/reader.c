@@ -18,11 +18,15 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "main.h"
 #include "scambio.h"
 #include "cmd.h"
 #include "header.h"
 #include "persist.h"
+#include "digest.h"
 
 /* The reader listens for commands.
  * On a put response, it removes the temporary filename stored in the action
@@ -111,7 +115,7 @@ struct patch {
 // One per directory
 struct mdir {
 	LIST_ENTRY(mdir) entry;
-	char path[PATH_MAX];	// FIXME: use either dirId or inode number
+	char path[PATH_MAX];	// FIXME: use either dirId or inode number rather than path to identify dir
 	LIST_HEAD(patches, patch) patches;
 	struct persist stored_version;
 };
@@ -205,12 +209,27 @@ static int mdir_get(struct mdir **mdir, char const *folder)
 	return mdir_new(mdir, folder);
 }
 
+static int mdir_add_header(struct mdir *mdir, struct header *h)
+{
+	int err = 0;
+	char name[PATH_MAX];
+	size_t len = snprintf(name, sizeof(name), "%s/.meta/", mdir->path);
+	if (len + MAX_DIGEST_STRLEN >= sizeof(name)) return -ENAMETOOLONG;
+	if (0 != (err = header_digest(h, MAX_DIGEST_STRLEN+1, name+len))) return err;
+	int fd = open(name, O_RDWR|O_CREAT|O_EXCL);
+	if (fd < 0) return -errno;
+	err = header_write(h, fd);
+	if (0 != close(fd) && !err) err = -errno;
+	// And then, based on content-type, advertise this new message
+	return err;
+}
+
 static int mdir_try_apply(struct mdir *mdir)
 {
 	int err = 0;
 	struct patch *patch;
 	while (NULL != (patch = LIST_FIRST(&mdir->patches)) && *mdir_version(mdir) == patch->old_version) {
-		if (0 != (err = mdir_add_header(mdir, patch->header))) break;
+		if (0 != (err = mdir_add_header(mdir, patch->header)) && err != -EEXIST) break;
 		*mdir_version(mdir) = patch->new_version;
 		patch_del(patch);
 	}
