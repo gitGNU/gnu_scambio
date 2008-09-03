@@ -27,6 +27,7 @@
 #include "varbuf.h"
 #include "cmd.h"
 #include "smtpd.h"
+#include "mdir.h"
 
 /*
  * Data Definitions
@@ -111,14 +112,23 @@ static int init_server(void)
 	return 0;
 }
 
+static int init_mdir(void)
+{
+	int err;
+	debug("init mdir client");
+	if (0 != (err = client_begin())) return err;
+	if (0 != atexit(client_end)) return -1;
+	return 0;
+}
+
 static int init(void)
 {
 	int err;
 	if (0 != (err = init_conf())) return err;
 	if (0 != (err = init_log())) return err;
 	if (0 != (err = init_cmd())) return err;
+	if (0 != (err = init_mdir())) return err;
 	if (0 != (err = daemonize())) return err;
-	if (! pth_init()) return err;
 	if (0 != (err = init_server())) return err;
 	return 0;
 }
@@ -209,8 +219,10 @@ static void *serve_cnx(void *arg)
 int main(void)
 {
 	int err;
+	if (! pth_init()) return EXIT_FAILURE;
 	if (0 != (err = init())) {
 		fprintf(stderr, "Init error : %s\n", strerror(-err));
+		pth_kill();
 		return EXIT_FAILURE;
 	}
 	// Run server
@@ -226,5 +238,6 @@ int main(void)
 			(void)pth_spawn(PTH_ATTR_DEFAULT, serve_cnx, env);
 		}
 	}
-	pth_exit(EXIT_SUCCESS);
+	pth_kill();
+	return EXIT_SUCCESS;
 }

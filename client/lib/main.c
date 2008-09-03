@@ -137,7 +137,7 @@ int command_get_by_seqnum(struct command **cmd, struct commands *list, long long
  */
 
 /* The writer thread works by traversing a directory tree from a given root.
- * It dies this for every run path on its run queue.
+ * It does this for every run path on its run queue.
  * When a plugin adds/removes content or change the subscription state, it adds
  * the location of this action into the root queue, as well as a flag telling if the
  * traversall should be recursive or not. For instance, adding a message means
@@ -161,9 +161,35 @@ struct run_path *shift_run_queue(void)
 	return rp;
 }
 
+void push_run_queue(struct run_path *rp)
+{
+	(void)pth_rwlock_acquire(&run_queue_lock, PTH_RWLOCK_RW, FALSE, NULL);
+	TAILQ_INSERT_TAIL(&run_queue, rp, entry);
+	(void)pth_rwlock_release(&run_queue_lock);
+	(void)pth_raise(writer_pthid, SIGHUP);
+}
+
+int run_path_new(struct run_path **rp)
+{
+	*rp = malloc(sizeof(**rp));
+	if (! *rp) return -ENOMEM;
+	(*rp)->root[0] = '\0';
+	return 0;
+}
+
 void run_path_del(struct run_path *rp)
 {
 	free(rp);
+}
+
+int push_path(char const *path)
+{
+	int err;
+	struct run_path *rp;
+	if (0 != (err = run_path_new(&rp))) return err;	// will be freed by writer
+	snprintf(rp->root, sizeof(rp->root), "%s", path);
+	push_run_queue(rp);
+	return 0;
 }
 
 /* Initialisation function init all these shared datas, then call other modules

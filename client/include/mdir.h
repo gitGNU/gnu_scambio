@@ -20,8 +20,10 @@
 
 /* Interface to a mdird client mdir */
 
-struct mdir;
-int mdir_get(struct mdir **, char const *path);
-void mdir_unref(struct mdir *);
+int client_begin(void);
+void client_end(void);
+int push_path(char const *path);
+#include <stdbool.h>
+bool mdir_exists(char const *folder);
 
 #endif

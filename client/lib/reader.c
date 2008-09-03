@@ -209,6 +209,13 @@ static int mdir_get(struct mdir **mdir, char const *folder)
 	return mdir_new(mdir, folder);
 }
 
+bool mdir_exists(char const *folder)
+{
+	struct mdir *dummy;
+	int err = mdir_get(&dummy, folder);
+	return err == 0;
+}
+
 static int mdir_add_header(struct mdir *mdir, struct header *h)
 {
 	int err = 0;

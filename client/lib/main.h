@@ -23,15 +23,15 @@
 #include <pth.h>
 #include "cnx.h"
 #include "queue.h"
+#include "mdir.h"
 
 extern struct cnx_client cnx;
 char root_dir[PATH_MAX];	// without trailing '/'
 size_t root_dir_len;
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
+pth_t reader_pthid, writer_pthid;
 
-int client_begin(void);
-void client_end(void);
 int reader_begin(void);
 void reader_end(void);
 int writer_begin(void);
@@ -48,8 +48,10 @@ struct run_path {
 	char root[PATH_MAX];
 	TAILQ_ENTRY(run_path) entry;
 };
-struct run_path *shift_run_queue(void);
 void run_path_del(struct run_path *rp);
+int run_path_new(struct run_path **rp);	// return an empty run path
+struct run_path *shift_run_queue(void);
+void push_run_queue(struct run_path *rp);
 
 extern LIST_HEAD(commands, command) pending_subs, pending_unsub, subscribed;
 extern pth_rwlock_t subscriptions_lock;

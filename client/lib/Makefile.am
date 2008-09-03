@@ -8,5 +8,4 @@ libmdir_la_SOURCES = \
 	connecter.c \
 	reader.c \
 	writer.c \
-	hide.c \
-	mdir.c
+	hide.c
