@@ -19,14 +19,15 @@
 #include <pth.h>
 #include "scambio.h"
 #include "cnx.h"
-#include "main.h"
+#include "client.h"
 
 /* Connecter try to establish the connection, and keep trying once in a while
  * untill success, then spawn reader and writer until one of them return, when
- * it kills the remaining one, close the connection, and restart.
+ * it kills the remaining one, close the connection, and is ready to be restarted.
  */
 void *connecter_thread(void *arg)
 {
+	debug("Starting connecter");
 	(void)arg;
 	if (0 != cnx_client_ctor(&cnx, conf_get_str("MDIRD_SERVER"), conf_get_str("MDIRD_PORT"))) return NULL;
 	// TODO: wait until completion if assynchronous ?
@@ -40,7 +41,7 @@ void *connecter_thread(void *arg)
 		pth_event_t ev_occurred;
 		// TODO: check that pth_event_walk returns NULL at end of ring
 		while (NULL != (ev_occurred = pth_event_walk(ev_ring, PTH_WALK_NEXT|PTH_UNTIL_OCCURRED))) {
-			assert(pth_event_typeof(ev_occurred) == (PTH_EVENT_TID|PTH_UNTIL_TID_DEAD));
+			assert(pth_event_typeof(ev_occurred) == (PTH_EVENT_TID|PTH_UNTIL_TID_DEAD));	// FIXME:  FAILS
 			pth_t dead_one;
 			pth_event_extract(ev_occurred, &dead_one);
 			if (dead_one == reader_pthid) reader_pthid = NULL;
@@ -51,6 +52,7 @@ void *connecter_thread(void *arg)
 	if (reader_pthid) (void)pth_cancel(reader_pthid);
 	if (writer_pthid) (void)pth_cancel(writer_pthid);
 	cnx_client_dtor(&cnx);
+	debug("Ending connecter");
 	return NULL;
 }
 

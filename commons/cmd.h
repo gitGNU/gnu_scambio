@@ -53,7 +53,7 @@ void cmd_begin(void);
 void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
 void cmd_unregister_keyword(char const *keyword);
 void cmd_end(void);
-// Returns cmd->keyword = NULL on EOF.
+// Returns -1 on EOF.
 // construct a struct cmd that must be destroyed with cmd_dtor
 int cmd_read(struct cmd *cmd, int fd);
 void cmd_dtor(struct cmd *cmd);

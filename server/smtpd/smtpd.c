@@ -112,22 +112,14 @@ static int init_server(void)
 	return 0;
 }
 
-static int init_mdir(void)
-{
-	int err;
-	debug("init mdir client");
-	if (0 != (err = client_begin())) return err;
-	if (0 != atexit(client_end)) return -1;
-	return 0;
-}
-
 static int init(void)
 {
 	int err;
+	if (0 != (err = mdir_begin())) return err;
+	if (0 != atexit(mdir_end)) return -1;
 	if (0 != (err = init_conf())) return err;
 	if (0 != (err = init_log())) return err;
 	if (0 != (err = init_cmd())) return err;
-	if (0 != (err = init_mdir())) return err;
 	if (0 != (err = daemonize())) return err;
 	if (0 != (err = init_server())) return err;
 	return 0;
@@ -205,6 +197,8 @@ static void *serve_cnx(void *arg)
 		} else if (cmd.keyword == kw_quit) {
 			err = exec_quit(env);
 			quit = true;
+		} else {
+			// ignore ?
 		}
 		cmd_dtor(&cmd);
 	}

@@ -4,6 +4,11 @@ AM_CPPFLAGS = -I$(top_srcdir)/client/include -I$(top_srcdir)/commons -D_GNU_SOUR
 bin_PROGRAMS = mdsync
 
 mdsync_SOURCES = \
+	connecter.c \
+	reader.c \
+	writer.c \
+	hide.c \
+	client.c \
 	mdsync.c
 
 mdsync_LDADD = ../../client/lib/libmdir.la ../../commons/libcommons.la

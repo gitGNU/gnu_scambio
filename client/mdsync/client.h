@@ -26,8 +26,6 @@
 #include "mdir.h"
 
 extern struct cnx_client cnx;
-char root_dir[PATH_MAX];	// without trailing '/'
-size_t root_dir_len;
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
 pth_t reader_pthid, writer_pthid;
@@ -43,15 +41,6 @@ int finalize_put(struct command *cmd, int status);
 int finalize_rem(struct command *cmd, int status);
 int finalize_class(struct command *cmd, int status);
 int finalize_quit(struct command *cmd, int status);
-
-struct run_path {
-	char root[PATH_MAX];
-	TAILQ_ENTRY(run_path) entry;
-};
-void run_path_del(struct run_path *rp);
-int run_path_new(struct run_path **rp);	// return an empty run path
-struct run_path *shift_run_queue(void);
-void push_run_queue(struct run_path *rp);
 
 extern LIST_HEAD(commands, command) pending_subs, pending_unsub, subscribed;
 extern pth_rwlock_t subscriptions_lock;
@@ -83,5 +72,9 @@ int command_get_by_seqnum(struct command **cmd, struct commands *list, long long
 bool command_timeouted(struct command *cmd);
 void command_touch_renew_seqnum(struct command *cmd);
 void command_change_list(struct command *cmd, struct commands *list);
+
+int client_begin(void);
+void client_end(void);
+int push_path(char const *path);
 
 #endif

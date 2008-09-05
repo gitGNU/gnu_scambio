@@ -26,7 +26,7 @@
 #include <pth.h>
 #include "scambio.h"
 #include "daemon.h"
-#include "mdir.h"
+#include "client.h"
 
 static int init_conf(void)
 {
@@ -39,7 +39,7 @@ static int init_conf(void)
 static int init_log(void)
 {
 	int err;
-	if (0 != (err = log_begin(conf_get_str("MDSYNC_LOG_DIR"), "fsync.log"))) return err;
+	if (0 != (err = log_begin(conf_get_str("MDSYNC_LOG_DIR"), "mdsync.log"))) return err;
 	debug("init log");
 	if (0 != atexit(log_end)) return -1;
 	log_level = conf_get_int("MDSYNC_LOG_LEVEL");
@@ -58,8 +58,6 @@ static int init(void)
 	return 0;
 }
 
-
-
 int main(int nb_args, char **args)
 {
 	(void)nb_args;
@@ -67,7 +65,9 @@ int main(int nb_args, char **args)
 	int ret = EXIT_FAILURE;
 	if (! pth_init()) return EXIT_FAILURE;
 	if (0 != init()) goto q0;
-	// TODO
+	while (1) {
+		connecter_thread(NULL);
+	}
 	ret = EXIT_SUCCESS;
 q0:
 	pth_kill();

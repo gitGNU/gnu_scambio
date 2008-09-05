@@ -63,7 +63,6 @@ int varbuf_chop(struct varbuf *, size_t size);
 // reads one more line of text into varbuf (converting CRLF into LF)
 // returns 1 on EOF, <0 on error
 int varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
-//off_t varbuf_read_line_off(struct varbuf *, int fd, size_t maxlen, off_t, char **new);
 void varbuf_clean(struct varbuf *);
 int varbuf_stringifies(struct varbuf *vb);
 

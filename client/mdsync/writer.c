@@ -19,7 +19,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "scambio.h"
-#include "main.h"
+#include "client.h"
 
 /* A run goes like this :
  * - wait until root queue not empty ;
@@ -94,16 +94,19 @@ static int try_put(char const *filename)
 	int fd;
 	debug("try_put('%s')", filename);
 	fd = open(filename, O_RDONLY);
-	if (fd < 0) return -errno;
+	if (fd < 0) {
+		error("Cannot open(%s) : %s", filename, strerror(errno));
+		return -errno;
+	}
 	do {
 		char folder[PATH_MAX];
 		snprintf(folder, sizeof(folder), "%s", filename);
 		path_pop(folder);	// chop filename
 		path_pop(folder);	// chop PUTDIR_NAME
-		assert(strlen(folder) >= root_dir_len);
+		assert(strlen(folder) >= mdir_root_len);
 		if (0 != (err = try_command(folder, filename, PUT_CMD_TYPE))) break;
 		if (0 != (err = Copy(cnx.sock_fd, fd))) break;
-		if (0 != (err = Write(cnx.sock_fd, "::\n", 3))) break;
+		if (0 != (err = Write(cnx.sock_fd, "\n", 1))) break;
 	} while (0);
 	(void)close(fd);
 	return err;
@@ -122,7 +125,7 @@ static int try_rem(char const *filename)
 		path_pop(folder);	// chop filename
 		path_pop(folder); // chop REMDIR_NAME
 		if (0 != (err = try_command(folder, filename, REM_CMD_TYPE))) break;
-		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n::\n"))) break;
+		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n::\n", NULL))) break;
 	} while (0);
 	return err;
 }
@@ -150,22 +153,32 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 	if (0 != (err = hide_cfg_get(&hide_cfg, path))) goto q0;	// load the .hide file
 	DIR *dir = opendir(path);
 	if (! dir) {
+		error("Cannot opendir(%s) : %s", path, strerror(errno));
 		err = -errno;
 		goto q1;
 	}
 	struct dirent *dirent;
 	errno = 0;
 	while (!err && NULL != (dirent = readdir(dir))) {
+		debug("g errno = %d", errno);
 		if (always_skip(dirent->d_name)) continue;
-		pth_yield(NULL);
+		if (TRUE != pth_yield(NULL)) warning("pth_yield leads FALSE !?");
+		debug("h errno = %d", errno);
+		path_push(path, dirent->d_name);
 		struct stat statbuf;
-		if (0 != stat(dirent->d_name, &statbuf)) {
+		if (0 != stat(path, &statbuf)) {
+			error("Cannot stat '%s' : %s", path, strerror(errno));
 			err = -errno;
+			path_pop(path);
 			break;
 		}
-		path_push(path, dirent->d_name);
+		debug("a errno = %d", errno);
 		if (S_ISDIR(statbuf.st_mode)) {
-			if (dir_type == PUT_DIR || dir_type == REM_DIR) continue;
+			if (dir_type == PUT_DIR || dir_type == REM_DIR) {
+				path_pop(path);
+				continue;
+			}
+			debug("b errno = %d", errno);
 			if (0 == strcmp(dirent->d_name, PUTDIR_NAME)) {
 				err = writer_run_rec(path, PUT_DIR, depth+1);
 			} else if (0 == strcmp(dirent->d_name, REMDIR_NAME)) {
@@ -183,19 +196,25 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 					if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 				}
 			}
+			debug("c errno = %d", errno);
 		} else {	// dir entry is not itself a directory
+			debug("d errno = %d", errno);
 			switch (dir_type) {
 				case FOLDER_DIR: break;
 				case PUT_DIR:    err = try_put(path); break;
 				case REM_DIR:    err = try_rem(path); break;
 			}
+			debug("f errno = %d", errno);
 		}
+		debug("e errno = %d", errno);
 		path_pop(path);
 	}
-	if (!err && errno) {
+	// FIXME: pth_yield fails at saving errno
+/*	if (!err && errno) {
+		error("Cannot readdir : %s", strerror(errno));
 		err = -errno;
-	}
-	closedir(dir);
+	}*/
+	if (closedir(dir) < 0) error("Cannot closedir");
 q1:
 	hide_cfg_release(hide_cfg);
 q0:
@@ -205,6 +224,7 @@ q0:
 #include <signal.h>
 static void wait_signal(void)
 {
+	debug("wait signal");
 	int err, sig;
 	sigset_t set;
 	sigemptyset(&set);
@@ -212,20 +232,19 @@ static void wait_signal(void)
 	if (0 != (err = pth_sigwait(&set, &sig))) {	// this is a cancel point
 		error("Cannot sigwait : %d", err);
 	}
+	debug("got signal");
 }
 
 void *writer_thread(void *args)
 {
 	(void)args;
 	debug("starting writer thread");
-	struct run_path *rp;
 	terminate_writer = false;
 	do {
-		while (NULL != (rp = shift_run_queue())) {
-			int err = writer_run_rec(rp->root, FOLDER_DIR, 0);	// root is the full path
-			if (err) warning("While scanning root dir : %s", strerror(-err));
-			run_path_del(rp);
-		}
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s", mdir_root);
+		int err = writer_run_rec(path, FOLDER_DIR, 0);
+		if (err) warning("While scanning dir '%s' : %s", path, strerror(-err));
 		wait_signal();
 	} while (! terminate_writer);
 	return NULL;
