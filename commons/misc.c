@@ -34,7 +34,10 @@ int Write(int fd, void const *buf, size_t len)
 	while (done < len) {
 		ssize_t ret = pth_write(fd, buf + done, len - done);
 		if (ret < 0) {
-			if (errno != EINTR) return -errno;
+			if (errno != EINTR) {
+				error("Cannot write %zu bytes : %s", len-done, strerror(errno));
+				return -errno;
+			}
 			continue;
 		}
 		done += ret;
@@ -50,6 +53,7 @@ int Write_strs(int fd, ...)
 	char const *str;
 	int err = 0;
 	while (NULL != (str = va_arg(ap, char const *)) && !err) {
+		debug("will write string '%s'", str);
 		size_t len = strlen(str);
 		err = Write(fd, str, len);
 	}
@@ -75,11 +79,15 @@ int Read(void *buf, int fd, off_t offset, size_t len)
 
 int Copy(int dst, int src)
 {
+	debug("Copy from %d to %d", src, dst);
 	char byte;
 	do {
 		ssize_t ret = pth_read(src, &byte, 1);
 		if (ret < 0) {
-			if (errno != EINTR) return -errno;
+			if (errno != EINTR) {
+				error("Cannot pth_read : %s", strerror(errno));
+				return -errno;
+			}
 			continue;
 		}
 		if (ret == 0) return 0;

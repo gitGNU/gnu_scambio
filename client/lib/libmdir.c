@@ -15,27 +15,43 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <stdlib.h>
+#include <stdio.h>
 #include <errno.h>
 #include "scambio.h"
 #include "mdir.h"
 
-struct mdir {
-	int count;
-};
+size_t mdir_root_len;
+char mdir_root[PATH_MAX];
 
-/*
- * Get a mdir reference
- */
-
-int mdir_get(struct mdir **mdir, char const *path)
+int mdir_begin(void)
 {
-	debug("mdir_get(path='%s')", path);
-	*mdir = NULL;
-	return -ENOENT;
+	int err;
+	debug("init libmdir");
+	if (0 != (err = conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir/"))) return err;
+	mdir_root_len = snprintf(mdir_root, sizeof(mdir_root), "%s", conf_get_str("MDIR_ROOT_DIR"));
+	if (mdir_root_len >= sizeof(mdir_root)) {
+		error("MDIR_ROOT_DIR too long");
+		return -EINVAL;
+	}
+	while (mdir_root_len > 0 && mdir_root[mdir_root_len-1] == '/') mdir_root[--mdir_root_len] = '\0';
+	if (mdir_root_len == 0) {
+		error("MDIR_ROOT_DIR must not be empty");
+		return -EINVAL;
+	}
+	return 0;
 }
 
-void mdir_unref(struct mdir *mdir)
+void mdir_end(void)
 {
-	mdir->count--;
+	debug("end libmdir");
 }
+
+bool mdir_folder_exists(char const *folder)
+{
+	(void)folder;
+	// TODO
+	return true;
+}
+
 

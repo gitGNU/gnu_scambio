@@ -40,6 +40,7 @@ AC_CONFIG_FILES([
 	client/Makefile
 	client/include/Makefile
 	client/lib/Makefile
+	client/mdsync/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

@@ -152,10 +152,7 @@ static bool is_valid_mailbox(char const *name)
 	static char mbox_dir[PATH_MAX] = "mailboxes/";	// TODO: make this configurable ?
 #	define MB_LEN 10
 	snprintf(mbox_dir+MB_LEN, sizeof(mbox_dir)-MB_LEN, "%s", name);
-	struct mdir *mdir;
-	if (0 != mdir_get(&mdir, mbox_dir)) return false;
-	mdir_unref(mdir);
-	return true;
+	return mdir_folder_exists(mbox_dir);
 }
 
 int exec_mail(struct cnx_env *env, char const *from)

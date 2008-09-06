@@ -213,6 +213,7 @@ int header_parse(struct header *h, char const *msg) {
 
 int header_read(struct header *h, int fd)
 {
+	debug("reading from fd %d", fd);
 	int err = 0;
 	int nb_lines = 0;
 	struct varbuf vb;
@@ -225,6 +226,7 @@ int header_read(struct header *h, int fd)
 			break;
 		}
 		if (line_match(line, "")) {
+			debug("end of headers");
 			// forget this line
 			vb.used = line - vb.buf + 1;
 			vb.buf[vb.used-1] = '\0';
@@ -232,7 +234,10 @@ int header_read(struct header *h, int fd)
 			break;
 		}
 	}
-	if (err == 1) err = 0;	// no more use for EOF
+	if (err == 1) {
+		debug("BTW, its EOF");
+		err = 0;	// no more use for EOF
+	}
 	if (nb_lines == 0) err = -EINVAL;
 	if (! eoh_reached) err = -EINVAL;
 	if (! err) err = header_parse(h, vb.buf);

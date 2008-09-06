@@ -21,7 +21,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "main.h"
+#include "client.h"
 #include "scambio.h"
 #include "cmd.h"
 #include "header.h"
@@ -72,7 +72,7 @@ int finalize_put(struct command *cmd, int status)
 {
 	if (! cmd) return -ENOENT;
 	if (status != 200) {
-		error("Cannot put file '%s' : error %d", cmd->path, status);
+		error("Cannot put/rem file '%s' : status %d", cmd->path, status);
 		command_del(cmd);
 		return -EINVAL;
 	}
@@ -164,7 +164,7 @@ static int mdir_ctor(struct mdir *mdir, char const *folder)
 	LIST_INIT(&mdir->patches);
 #	define VERSION_FNAME ".version"
 #	define VERSION_FNAME_LEN 8
-	size_t len = snprintf(mdir->path, sizeof(mdir->path), "%s/%s/"VERSION_FNAME, root_dir, folder);
+	size_t len = snprintf(mdir->path, sizeof(mdir->path), "%s/%s/"VERSION_FNAME, mdir_root, folder);
 	if (0 != (err = persist_ctor(&mdir->stored_version, sizeof(long long), mdir->path))) return err;
 	mdir->path[len - (VERSION_FNAME_LEN+1)] = '\0';
 	LIST_INSERT_HEAD(&mdirs, mdir, entry);
@@ -203,7 +203,7 @@ static long long *mdir_version(struct mdir *mdir)
 static int mdir_get(struct mdir **mdir, char const *folder)
 {
 	LIST_FOREACH(*mdir, &mdirs, entry) {
-		if (0 == strcmp(folder, (*mdir)->path+root_dir_len+1)) break;
+		if (0 == strcmp(folder, (*mdir)->path+mdir_root_len+1)) break;
 	}
 	if (*mdir) return 0;
 	return mdir_new(mdir, folder);
@@ -271,8 +271,8 @@ void *reader_thread(void *args)
 			if (cmd.keyword == command_types[t].keyword) {
 				struct command *command = NULL;
 				(void)pth_rwlock_acquire(&command_types_lock, PTH_RWLOCK_RW, FALSE, NULL);
-				(void)command_get_by_seqnum(&command, &command_types[t].list, cmd.seq);
-				err = command_types[t].finalize(command, cmd.args[0].val.integer);
+				err = command_get_by_seqnum(&command, &command_types[t].list, cmd.seq);
+				if (! err) err = command_types[t].finalize(command, cmd.args[0].val.integer);
 				(void)pth_rwlock_release(&command_types_lock);
 				break;
 			}
@@ -286,7 +286,7 @@ void *reader_thread(void *args)
 int reader_begin(void)
 {
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		cmd_register_keyword(command_types[t].keyword,  0, UINT_MAX, CMD_EOA);
+		cmd_register_keyword(command_types[t].keyword,  1, UINT_MAX, CMD_INTEGER, CMD_EOA);
 	}
 	cmd_register_keyword(kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
 	LIST_INIT(&mdirs);

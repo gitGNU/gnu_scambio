@@ -26,7 +26,7 @@
 #include <assert.h>
 #include <pth.h>
 #include "scambio.h"
-#include "main.h"
+#include "client.h"
 #include "misc.h"
 #include "cmd.h"
 
@@ -35,8 +35,6 @@
  */
 
 struct cnx_client cnx;
-char root_dir[PATH_MAX];
-size_t root_dir_len;
 
 /* Then, lists of pending commands, starting with subscriptions.
  *
@@ -80,8 +78,9 @@ static int command_ctor(struct command *cmd, enum command_type type, char const 
 	snprintf(cmd->folder, sizeof(cmd->folder), "%s", folder);
 	snprintf(cmd->path,   sizeof(cmd->path),   "%s", path);
 	command_touch_renew_seqnum(cmd);
-	assert(strlen(folder) > root_dir_len);
-	if (0 == (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder+root_dir_len, "\n", NULL))) {
+	debug("folder = '%s', mdir_root = '%s' (len=%zu)", folder, mdir_root, mdir_root_len);
+	assert(strlen(folder) >= mdir_root_len);
+	if (0 == (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder+mdir_root_len, "/\n", NULL))) {
 		LIST_INSERT_HEAD(&command_types[type].list, cmd, entry);
 	}
 	return err;
@@ -129,42 +128,13 @@ int command_get_by_seqnum(struct command **cmd, struct commands *list, long long
 	LIST_FOREACH(*cmd, list, entry) {
 		if ((*cmd)->seqnum == seqnum) return 0;
 	}
+	error("No command was sent with seqnum %lld", seqnum);
 	return -ENOENT;
 }
 
 /* Then PUT/REM commands.
  * Same notes as above.
  */
-
-/* The writer thread works by traversing a directory tree from a given root.
- * It dies this for every run path on its run queue.
- * When a plugin adds/removes content or change the subscription state, it adds
- * the location of this action into the root queue, as well as a flag telling if the
- * traversall should be recursive or not. For instance, adding a message means
- * adding a tempfile in the folder's .put directory and pushing this folder
- * into the root queue while removing one means linking its digest name onto the .rem
- * directory (the actual meta will be deleted on reception of the suppression patch).
- * If the so called plugin is an external program instead, it can signal the client
- * programm that it should, recursively, reparse the whole tree.
- * This run queue is of course shared by several threads (writer and plugins).
- */
-static TAILQ_HEAD(run_paths, run_path) run_queue;
-static pth_rwlock_t run_queue_lock;
-
-struct run_path *shift_run_queue(void)
-{
-	(void)pth_rwlock_acquire(&run_queue_lock, PTH_RWLOCK_RW, FALSE, NULL);
-	struct run_path *rp = TAILQ_FIRST(&run_queue);
-	if (! rp) return NULL;
-	TAILQ_REMOVE(&run_queue, rp, entry);
-	(void)pth_rwlock_release(&run_queue_lock);
-	return rp;
-}
-
-void run_path_del(struct run_path *rp)
-{
-	free(rp);
-}
 
 /* Initialisation function init all these shared datas, then call other modules
  * init function, then spawn the connecter threads, which will spawn the reader
@@ -176,6 +146,7 @@ void client_end(void)
 {
 	writer_end();
 	reader_end();
+	mdir_end();
 	cmd_end();
 }
 
@@ -184,39 +155,21 @@ int client_begin(void)
 	int err;
 	debug("init client lib");
 	cmd_begin();
-	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) goto q0;
-	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) goto q0;
-	if (0 != (err = conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir/"))) goto q0;
-	root_dir_len = snprintf(root_dir, sizeof(root_dir), "%s", conf_get_str("MDIR_ROOT_DIR"));
-	if (root_dir_len >= sizeof(root_dir)) {
-		error("MDIR_ROOT_DIR too long");
-		err = -EINVAL;
-		goto q0;
-	}
-	while (root_dir_len > 0 && root_dir[root_dir_len-1] == '/') root_dir[--root_dir_len] = '\0';
-	if (root_dir_len == 0) {
-		error("MDIR_ROOT_DIR must not be empty");
-		err = -EINVAL;
-		goto q0;
-	}
+	if (0 != (err = mdir_begin())) goto q0;
+	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) goto q1;
+	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) goto q1;
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
 		LIST_INIT(&command_types[t].list);
 	}
 	(void)pth_rwlock_init(&command_types_lock);
 	LIST_INIT(&subscribed);
-	(void)pth_rwlock_init(&run_queue_lock);
-	TAILQ_INIT(&run_queue);
-	if (0 != (err = writer_begin())) goto q0;
-	if (0 != (err = reader_begin())) goto q1;
-	if (NULL == pth_spawn(PTH_ATTR_DEFAULT, connecter_thread, NULL)) {
-		err = -EINVAL;
-		goto q2;
-	}
+	if (0 != (err = writer_begin())) goto q1;
+	if (0 != (err = reader_begin())) goto q2;
 	return 0;
 q2:
-	reader_end();
-q1:
 	writer_end();
+q1:
+	mdir_end();
 q0:
 	cmd_end();
 	return err;

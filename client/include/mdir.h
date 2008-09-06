@@ -18,10 +18,16 @@
 #ifndef MDIR_H_080708
 #define MDIR_H_080708
 
-/* Interface to a mdird client mdir */
+/* Various tools to deal with a mdir tree */
 
-struct mdir;
-int mdir_get(struct mdir **, char const *path);
-void mdir_unref(struct mdir *);
+#include <limits.h>
+extern size_t mdir_root_len;
+extern char mdir_root[PATH_MAX];
+
+int mdir_begin(void);
+void mdir_end(void);
+
+#include <stdbool.h>
+bool mdir_folder_exists(char const *folder);
 
 #endif

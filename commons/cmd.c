@@ -191,7 +191,7 @@ static int parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
 {
 	int err = 0;
 	varbuf_clean(vb);
-	if (0 > (err = varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL))) return err;
+	if (0 != (err = varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL))) return err;
 	struct cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
 	if (nb_tokens <= 0) return nb_tokens;	// Ignore blank lines
@@ -220,7 +220,7 @@ int cmd_read(struct cmd *cmd, int fd)
 	if (0 != (err = varbuf_ctor(&vb, 1024, true))) return err;
 	cmd->keyword = NULL;
 	while (! cmd->keyword) {
-		if (0 > (err = parse_line(cmd, &vb, fd))) break;
+		if (0 != (err = parse_line(cmd, &vb, fd))) break;
 	}
 	varbuf_dtor(&vb);
 	return err;
