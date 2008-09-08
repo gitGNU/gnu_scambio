@@ -101,9 +101,13 @@ static ssize_t parse_field(char const *msg, char **name, char **value)
 	if (parsedN == 0) return 0;
 	parsedN++;	// skip delimiter
 	ssize_t parsedV = parse(msg + parsedN, value, is_end_of_value);
-	if (parsedV <= 0) {
+	if (parsedV == 0) {
+		error("Field '%s' has no value", *name);
+		parsedV = -EINVAL;
+	}
+	if (parsedV < 0) {
 		free(*name);
-		return parsedV == 0 ? -1:parsedV;	// FIXME: better error code
+		return parsedV;
 	}
 	parsedV++;	// skip delimiter
 	return parsedN + parsedV;
@@ -190,10 +194,11 @@ int header_write(struct header const *h, int fd)
 		int err;
 		if (0 != (err = field_write(h->fields+f, fd))) return err;
 	}
-	return Write(fd, "::\n", 3);
+	return Write(fd, "\n", 1);
 }
 
 int header_parse(struct header *h, char const *msg) {
+	debug("msg = '%s'", msg);
 	ssize_t parsed;
 	while (*msg) {
 		if (h->nb_fields >= NB_MAX_FIELDS) {
@@ -204,6 +209,8 @@ int header_parse(struct header *h, char const *msg) {
 		parsed = parse_field(msg, &field->name, &field->value);
 		if (parsed < 0) return parsed;
 		if (parsed == 0) break;	// end of message
+		debug("parsed field '%s' to value '%s'", field->name, field->value);
+		h->nb_fields ++;
 		msg += parsed;
 		// Lowercase stored field names
 		str_tolower(field->name);
@@ -225,6 +232,7 @@ int header_read(struct header *h, int fd)
 			err = -E2BIG;
 			break;
 		}
+		debug("line is '%s'", line);
 		if (line_match(line, "")) {
 			debug("end of headers");
 			// forget this line
@@ -237,6 +245,7 @@ int header_read(struct header *h, int fd)
 	if (err == 1) {
 		debug("BTW, its EOF");
 		err = 0;	// no more use for EOF
+		eoh_reached = true;
 	}
 	if (nb_lines == 0) err = -EINVAL;
 	if (! eoh_reached) err = -EINVAL;
@@ -252,7 +261,16 @@ int header_dump(struct header const *h, struct varbuf *vb)
 		int err;
 		if (0 != (err = field_dump(h->fields+f, vb))) return err;
 	}
+	varbuf_stringifies(vb);	// so that empty headers leads to empty lines
 	return 0;
+}
+
+void header_debug(struct header *h)
+{
+	struct varbuf vb;
+	if (0 != varbuf_ctor(&vb, 1000, true)) return;
+	if (0 == header_dump(h, &vb)) debug("header : %s", vb.buf);
+	varbuf_dtor(&vb);
 }
 
 int header_add_field(struct header *h, char const *name, char const *value)

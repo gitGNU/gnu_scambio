@@ -125,7 +125,7 @@ static int try_rem(char const *filename)
 		path_pop(folder);	// chop filename
 		path_pop(folder); // chop REMDIR_NAME
 		if (0 != (err = try_command(folder, filename, REM_CMD_TYPE))) break;
-		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n::\n", NULL))) break;
+		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n\n", NULL))) break;
 	} while (0);
 	return err;
 }

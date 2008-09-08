@@ -141,7 +141,10 @@ static int exec_putrem(char const *cmdtag, char action, struct cnx_env *env, lon
 	struct header *h;
 	if (0 != (err = header_new(&h))) return err;
 	err = header_read(h, env->fd);
-	if (! err) err = add_header(dir, h, action);
+	if (! err) {
+		header_debug(h);
+		err = add_header(dir, h, action);
+	}
 	header_del(h);
 	return answer(env, seq, cmdtag, err ? 500:200, err ? strerror(-err):"OK");
 }
