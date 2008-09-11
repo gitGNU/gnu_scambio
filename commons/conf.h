@@ -27,8 +27,8 @@
 
 #define DEFAULT_MDIRD_PORT 21654
 
-int conf_set_default_str(char const *name, char const *value);
-int conf_set_default_int(char const *name, long long value);
+void conf_set_default_str(char const *name, char const *value);
+void conf_set_default_int(char const *name, long long value);
 
 // abort if not found !
 // set default values first !

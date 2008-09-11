@@ -27,6 +27,7 @@
 #include "log.h"
 #include "queue.h"
 #include "conf.h"
+#include "error.h"
 
 #define MAX_URL_LENGTH 8000
 #define MAX_HEADLINE_LENGTH 10000

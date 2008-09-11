@@ -33,21 +33,19 @@
  * Configuration queries
  */
 
-int conf_set_default_str(char const *name, char const *value)
+void conf_set_default_str(char const *name, char const *value)
 {
-	if (0 != setenv(name, value, 0)) return -errno;
-	return 0;
+	if (0 != setenv(name, value, 0)) error_push(errno, "Cannot setenv");
 }
 
-int conf_set_default_int(char const *name, long long value)
+void conf_set_default_int(char const *name, long long value)
 {
 	int len = snprintf(NULL, 0, "%lld", value);
 	char *str = malloc(len+1);	// is the string _copied_ into the environment ?
-	if (! str) return -ENOMEM;
+	if (! str) with_error(ENOMEM, "Cannot malloc for env value (len = %d)", len) return;
 	snprintf(str, len+1, "%lld", value);
-	int ret = conf_set_default_str(name, str);
+	conf_set_default_str(name, str);
 	free(str);
-	return ret;
 }
 
 char const *conf_get_str(char const *name)
@@ -58,11 +56,10 @@ char const *conf_get_str(char const *name)
 long long conf_get_int(char const *name)
 {
 	char const *str = conf_get_str(name);
-	assert(str);
-	if (! str) return -ENOENT;
+	if (! str) with_error(ENOENT, "No such envvar '%s'") return;
 	char *end;
 	long long value = strtoll(str, &end, 0);
-	assert(*end == '\0');
+	if (*end != '\0') push_error(EINVAL, "bad integer '%s' for envvar '%s'", str, name);
 	return value;
 }
 

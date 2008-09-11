@@ -33,18 +33,14 @@ struct varbuf {
 	char *buf;
 };
 
-static inline int varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocatable)
+static inline void varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocatable)
 {
 	vb->used = 0;
 	vb->actual = init_size;
 	vb->relocatable = relocatable;
 	vb->buf = malloc(init_size);
 	debug("ctor @%p, size=%zu, buf=%p", vb, init_size, vb->buf);
-	if (! vb->buf) {
-		error("Cannot malloc for varbuf");
-		return -ENOMEM;
-	}
-	return 0;
+	if (! vb->buf) with_error(ENOMEM, "Cannot malloc for varbuf") return;
 }
 
 static inline void varbuf_dtor(struct varbuf *vb)
@@ -61,14 +57,14 @@ static inline void *varbuf_unbox(struct varbuf *vb)
 	return vb->buf;
 }
 
-int varbuf_make_room(struct varbuf *, size_t new_size);
-int varbuf_append(struct varbuf *, size_t size, void const *buf);
-int varbuf_put(struct varbuf *, size_t size);
-int varbuf_chop(struct varbuf *, size_t size);
+void varbuf_make_room(struct varbuf *, size_t new_size);
+void varbuf_append(struct varbuf *, size_t size, void const *buf);
+void varbuf_put(struct varbuf *, size_t size);
+void varbuf_chop(struct varbuf *, size_t size);
 // reads one more line of text into varbuf (converting CRLF into LF)
-// returns 1 on EOF, <0 on error
-int varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
+// returns ENOENT on EOF
+void varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
 void varbuf_clean(struct varbuf *);
-int varbuf_stringifies(struct varbuf *vb);
+void varbuf_stringifies(struct varbuf *vb);
 
 #endif

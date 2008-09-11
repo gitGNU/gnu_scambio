@@ -20,7 +20,6 @@
 #include "scambio.h"
 #include "daemon.h"
 
-int daemonize(void)
+void daemonize(void)
 {
-	return 0;
 }

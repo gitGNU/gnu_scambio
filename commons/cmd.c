@@ -45,7 +45,7 @@ static LIST_HEAD(rcmds, registered_cmd) rcmds;
  * Command (un)registration
  */
 
-static int rcmd_ctor(struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
+static void rcmd_ctor(struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
 {
 	reg->keyword = keyword;
 	reg->nb_arg_min = nb_arg_min;
@@ -53,11 +53,10 @@ static int rcmd_ctor(struct registered_cmd *reg, char const *keyword, unsigned n
 	reg->nb_types = 0;
 	enum cmd_arg_type type;
 	while (CMD_EOA != (type = va_arg(ap, enum cmd_arg_type))) {
-		if (reg->nb_types >= sizeof_array(reg->types)) return -E2BIG;
+		if (reg->nb_types >= sizeof_array(reg->types)) with_error(E2BIG, "Too many commands") return;
 		reg->types[ reg->nb_types++ ] = type;
 	}
 	LIST_INSERT_HEAD(&rcmds, reg, entry);	// will shadow previously registered keywords
-	return 0;
 }
 
 static void rcmd_dtor(struct registered_cmd *reg)
@@ -68,8 +67,9 @@ static void rcmd_dtor(struct registered_cmd *reg)
 static struct registered_cmd *rcmd_new(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
 {
 	struct registered_cmd *reg = malloc(sizeof(*reg));
-	if (! reg) return NULL;
-	if (0 != rcmd_ctor(reg, keyword, nb_arg_min, nb_arg_max, ap)) {
+	if (! reg) with_error(ENOMEM, "Cannot alloc cmd") return NULL;
+	rcmd_ctor(reg, keyword, nb_arg_min, nb_arg_max, ap);
+	on_error {
 		free(reg);
 		return NULL;
 	}
@@ -127,16 +127,16 @@ static bool same_keyword(char const *a, char const *b)
 	return 0 == strcasecmp(a, b);
 }
 
-static int build_cmd(struct cmd *cmd, struct registered_cmd *reg, unsigned nb_args, struct cmd_arg *args)
+static void build_cmd(struct cmd *cmd, struct registered_cmd *reg, unsigned nb_args, struct cmd_arg *args)
 {
 	cmd->keyword = reg->keyword;	// set original pointer
 	cmd->nb_args = nb_args;
-	if (nb_args < reg->nb_arg_min || nb_args > reg->nb_arg_max) return -EDOM;
+	if (nb_args < reg->nb_arg_min || nb_args > reg->nb_arg_max) with_error(EDOM, "Bad nb args") return;
 	for (unsigned a=0; a<nb_args; a++) {	// Copy and transcode args
 		if (a < reg->nb_types && reg->types[a] == CMD_INTEGER) {	// transcode
 			char *end;
 			long long integer = strtoll(args[a].val.string, &end, 0);
-			if (*end != '\0') return -EINVAL;
+			if (*end != '\0') with_error(EINVAL, "'%s' is not integer", args[a].val.string) return;
 			cmd->args[a].type = CMD_INTEGER;
 			cmd->args[a].val.integer = integer;
 		} else {
@@ -144,7 +144,7 @@ static int build_cmd(struct cmd *cmd, struct registered_cmd *reg, unsigned nb_ar
 			cmd->args[a].val.string = strdup(args[a].val.string);
 		}
 	}
-	return 0;
+	return;
 }
 
 void cmd_dtor(struct cmd *cmd)
@@ -186,43 +186,43 @@ static int read_seq(long long *seq, char const *str)
 	return 0;
 }
 
-static int parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
+static void parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
 {
-	int err = 0;
 	varbuf_clean(vb);
-	if (0 != (err = varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL))) return err;
+	varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL);
+	on_error return;
 	struct cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
-	if (nb_tokens <= 0) return nb_tokens;	// Ignore blank lines
+	on_error return;
 	bool with_seq = isdigit(tokens[0].val.string[0]);
-	if (with_seq && nb_tokens < 2) return -EINVAL;
+	if (with_seq && nb_tokens < 2) with_error(EINVAL, "Bad number of tokens (%d)", nb_tokens) return;
 	char const *const keyword = tokens[with_seq ? 1:0].val.string;
 	unsigned nb_args = nb_tokens - (with_seq ? 2:1);
 	struct cmd_arg *const args = tokens + (with_seq ? 2:1);
 	cmd->seq = -1;
-	if (with_seq && 0 != (err = read_seq(&cmd->seq, tokens[0].val.string))) return err;
+	if (with_seq && read_seq(&cmd->seq, tokens[0].val.string) && is_error()) return;
 	struct registered_cmd *reg;
-	err = -ENOENT;
 	LIST_FOREACH(reg, &rcmds, entry) {
 		if (same_keyword(reg->keyword, keyword)) {
-			err = build_cmd(cmd, reg, nb_args, args);	// will check args types and number, and convert some args from string to integer, and copy nb_args and keyword
-			break;
+			build_cmd(cmd, reg, nb_args, args);	// will check args types and number, and convert some args from string to integer, and copy nb_args and keyword
+			return;
 		}
 	}
-	return err;
+	with_error(ENOENT, "No such keyword '%s'", keyword) return;
 }
 
-int cmd_read(struct cmd *cmd, int fd)
+void cmd_read(struct cmd *cmd, int fd)
 {
-	int err = 0;
 	struct varbuf vb;
-	if (0 != (err = varbuf_ctor(&vb, 1024, true))) return err;
+	varbuf_ctor(&vb, 1024, true);
+	on_error return;
 	cmd->keyword = NULL;
 	while (! cmd->keyword) {
-		if (0 != (err = parse_line(cmd, &vb, fd))) break;
+		parse_line(cmd, &vb, fd);
+		on_error break;
 	}
 	varbuf_dtor(&vb);
-	return err;
+	return;
 }
 
 char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq)

@@ -27,104 +27,88 @@
 #include "scambio.h"
 #include "misc.h"
 
-int Write(int fd, void const *buf, size_t len)
+void Write(int fd, void const *buf, size_t len)
 {
 	debug("Write(%d, %p, %zu)", fd, buf, len);
 	size_t done = 0;
 	while (done < len) {
 		ssize_t ret = pth_write(fd, buf + done, len - done);
 		if (ret < 0) {
-			if (errno != EINTR) {
-				int err = -errno;
-				error("Cannot write %zu bytes : %s", len-done, strerror(-err));
-				return err;
-			}
+			if (errno != EINTR) with_error(errno, "Cannot write %zu bytes", len-done) return;
 			continue;
 		}
 		done += ret;
 	}
 	assert(done == len);
-	return 0;
 }
 
-int Write_strs(int fd, ...)
+void Write_strs(int fd, ...)
 {
 	va_list ap;
 	va_start(ap, fd);
 	char const *str;
-	int err = 0;
-	while (NULL != (str = va_arg(ap, char const *)) && !err) {
+	while (NULL != (str = va_arg(ap, char const *)) && !is_error()) {
 		debug("will write string '%s'", str);
 		size_t len = strlen(str);
-		err = Write(fd, str, len);
+		Write(fd, str, len);
 	}
 	va_end(ap);
-	return err;
 }
 
-int Read(void *buf, int fd, off_t offset, size_t len)
+void Read(void *buf, int fd, off_t offset, size_t len)
 {
 	debug("Read(%p, %d, %zu)", buf, fd, len);
 	size_t done = 0;
 	while (done < len) {
 		ssize_t ret = pth_pread(fd, buf + done, len - done, offset + done);
 		if (ret < 0) {
-			if (errno != EINTR) return -errno;
+			if (errno != EINTR) with_error(errno, "Cannot pth_pread") return;
 			continue;
 		}
 		done += ret;
 	}
 	assert(done == len);
-	return 0;
 }
 
-int Copy(int dst, int src)
+void Copy(int dst, int src)
 {
 	debug("Copy from %d to %d", src, dst);
 	char byte;
 	do {
 		ssize_t ret = pth_read(src, &byte, 1);
 		if (ret < 0) {
-			if (errno != EINTR) {
-				int err = -errno;
-				error("Cannot pth_read : %s", strerror(-err));
-				return err;
-			}
+			if (errno != EINTR) with_error(errno, "Cannot pth_read") return;
 			continue;
 		}
-		if (ret == 0) return 0;
-		ret = Write(dst, &byte, 1);
-		if (ret < 0) return ret;
+		if (ret == 0) return;
+		Write(dst, &byte, 1);
+		on_error return;
 	} while (1);
-	return -1;	// never reached
 }
 
-static int Mkdir_single(char const *path)
+static void Mkdir_single(char const *path)
 {
-	int err = 0;
 	if (0 != mkdir(path, 0744) && errno != EEXIST) {
-		err = -errno;
-		error("mkdir '%s' : %s", path, strerror(-err));
+		error_push(errno, "mkdir '%s'", path);
 	}
-	return err;
 }
 
-int Mkdir(char const *path_)
+void Mkdir(char const *path_)
 {
 	debug("Mkdir(%s)", path_);
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s", path_);
 	char *c = path;
-	if (! *c) return -EINVAL;
+	if (! *c) with_error(EINVAL, "Cannot mkdir empty path") return;
 	for (c = path + 1; *c != '\0'; c++) {
 		if (*c == '/') {
 			*c = '\0';
-			int err = Mkdir_single(path);
-			if (err) return err;
+			Mkdir_single(path);
+			on_error return;
 			*c = '/';
 		}
 	}
-	return Mkdir_single(path);
+	Mkdir_single(path);
 }
 
 bool line_match(char *restrict line, char *restrict delim)

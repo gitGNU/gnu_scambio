@@ -30,9 +30,8 @@
  * (De)Initialization.
  */
 
-int cnx_begin(void)
+void cnx_begin(void)
 {
-	return 0;
 }
 
 void cnx_end(void)
@@ -46,7 +45,6 @@ void cnx_end(void)
 // TODO: use getaddrinfo(3)
 int cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 {
-	int err = 0;
 	int const one = 1;
 	struct sockaddr_in any_addr;
 	memset(&any_addr, sizeof(any_addr), 0);
@@ -55,17 +53,16 @@ int cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 	any_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	serv->sock_fd = socket(PF_INET, SOCK_STREAM, 0);
 	if (serv->sock_fd == -1) {
-		err = -errno;
+		error_push(errno, "Cannot create socket");
 	} else if (
 		0 != setsockopt(serv->sock_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) ||
 		0 != bind(serv->sock_fd, (struct sockaddr *)&any_addr, sizeof(any_addr)) ||
 		0 != listen(serv->sock_fd, 10)
 	) {
-		err = -errno;
+		error_push(errno, "Cannot use cocket");
 		(void)close(serv->sock_fd);
 		serv->sock_fd = -1;
 	}
-	return err;
 }
 
 void cnx_server_dtor(struct cnx_server *serv)
@@ -95,32 +92,26 @@ static int gaierr2errno(int err)
 	return -1;	// FIXME
 }
 
-int cnx_client_ctor(struct cnx_client *cnx, char const *host, char const *service)
+void cnx_client_ctor(struct cnx_client *cnx, char const *host, char const *service)
 {
 	// Resolve hostname into sockaddr
 	struct addrinfo *info_head, *info;
 	int err;
 	if (0 != (err = getaddrinfo(host, service, NULL, &info_head))) {
 		// TODO: check that freeaddrinfo is not required in this case
-		error("Cannot getaddrinfo : %s", gai_strerror(err));
-		return -gaierr2errno(err);
+		with_error(gaierr2errno(err), "Cannot getaddrinfo") return;
 	}
-
-	int last_err = -1;
+	err = ENOENT;
 	for (info = info_head; info; info = info->ai_next) {
 		cnx->sock_fd = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
 		if (cnx->sock_fd == -1) continue;
 		if (0 == connect(cnx->sock_fd, info->ai_addr, info->ai_addrlen)) break;
-		last_err = -errno;
-		close(cnx->sock_fd);
+		err = errno;
+		(void)close(cnx->sock_fd);
 		cnx->sock_fd = -1;
 	}
-	if (! info) {
-		error("No suitable address found for host '%s'", host);
-		return last_err;
-	}
+	if (! info) with_error(err, "No suitable address found for host '%s'", host) return;
 	freeaddrinfo(info_head);
-	return 0;
 }
 
 void cnx_client_dtor(struct cnx_client *cnx)

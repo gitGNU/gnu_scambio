@@ -28,27 +28,25 @@ static int open_or_create(char const *fname, size_t size)
 {
 	int fd = open(fname, O_RDWR);
 	if (fd >= 0) return fd;	// FIXME: check size nonetheless
-	if (errno != ENOENT) return -errno;
+	if (errno != ENOENT) with_error(errno, "Cannot open '%s'", fname) return -1;
 	fd = open(fname, O_RDWR|O_CREAT|O_EXCL, 0660);
-	if (fd < 0) return -errno;
+	if (fd < 0) with_error(errno, "Cannot create '%s'", fname) return -1;
 	if (0 != ftruncate(fd, size)) {
-		int err = -errno;
+		push_error(errno, "Cannot truncate '%s'", fname);
 		(void)close(fd);
-		return err;
+		return -1;
 	}
 	return fd;
 }
 
-int persist_ctor(struct persist *p, size_t size, char const *fname)
+void persist_ctor(struct persist *p, size_t size, char const *fname)
 {
 	p->size = size;
 	int fd = open_or_create(fname, size);
-	if (fd < 0) return fd;
+	on_error return;
 	p->data = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-	int err = 0;
-	if (MAP_FAILED == p->data) err = -errno;
+	if (MAP_FAILED == p->data) push_error(errno, "Cannot mmap '%s'", fname);
 	(void)close(fd);
-	return err;
 }
 
 void persist_dtor(struct persist *p)

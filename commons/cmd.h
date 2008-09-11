@@ -53,9 +53,8 @@ void cmd_begin(void);
 void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
 void cmd_unregister_keyword(char const *keyword);
 void cmd_end(void);
-// Returns -1 on EOF.
 // construct a struct cmd that must be destroyed with cmd_dtor
-int cmd_read(struct cmd *cmd, int fd);
+void cmd_read(struct cmd *cmd, int fd);
 void cmd_dtor(struct cmd *cmd);
 #define SEQ_BUF_LEN 21
 char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);

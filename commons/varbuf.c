@@ -33,51 +33,45 @@
  * Public Functions
  */
 
-extern inline int varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocatable);
+extern inline void varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocatable);
 extern inline void varbuf_dtor(struct varbuf *vb);
 
-int varbuf_make_room(struct varbuf *vb, size_t new_size)
+void varbuf_make_room(struct varbuf *vb, size_t new_size)
 {
-	if (vb->actual >= new_size) return 0;
+	if (vb->actual >= new_size) return;
 	void *new_buf = realloc(vb->buf, new_size);
-	if (! new_buf) {
-		error("Cannot realloc varbug to %zu bytes", new_size);
-		return -ENOMEM;
-	}
+	if (! new_buf) with_error(ENOMEM, "Cannot realloc varbug to %zu bytes", new_size) return;
 	if (new_buf != vb->buf && !vb->relocatable) {
+		error_push(ENOMEM, "Cannot extend not relocatable varbuf");
 		free(new_buf);
-		error("Cannot extend not relocatable varbuf");
-		return -ENOMEM;
+		return;
 	}
 	vb->buf = new_buf;
 	vb->actual = new_size;
-	return 0;
 }
 
-int varbuf_append(struct varbuf *vb, size_t size, void const *buf)
+void varbuf_append(struct varbuf *vb, size_t size, void const *buf)
 {
 	size_t pos = vb->used;
-	int err = varbuf_put(vb, size);
-	if (! err) memcpy(vb->buf + pos, buf, size);
-	return err;
+	varbuf_put(vb, size);
+	on_error return;
+	memcpy(vb->buf + pos, buf, size);
 }
 
-int varbuf_put(struct varbuf *vb, size_t size)
+void varbuf_put(struct varbuf *vb, size_t size)
 {
-	int err = 0;
 	if (vb->used + size > vb->actual) {
 		size_t inc = vb->used + size - vb->actual;
-		if (0 != (err = varbuf_make_room(vb, vb->actual + inc + (inc + 1)/2))) return err;
+		varbuf_make_room(vb, vb->actual + inc + (inc + 1)/2);
+		on_error return;
 	}
 	vb->used += size;
-	return err;
 }
 
-int varbuf_chop(struct varbuf *vb, size_t size)
+void varbuf_chop(struct varbuf *vb, size_t size)
 {
-	if (vb->used < size) return -EINVAL;
+	if (vb->used < size) with_error(EINVAL, "Chop would extend") return;
 	vb->used -= size;
-	return 0;
 }
 
 void varbuf_clean(struct varbuf *vb)
@@ -86,31 +80,29 @@ void varbuf_clean(struct varbuf *vb)
 	// TODO: realloc buf toward initial guess ?
 }
 
-int varbuf_stringifies(struct varbuf *vb)
+void varbuf_stringifies(struct varbuf *vb)
 {
-	int err = 0;
 	if (! vb->used || vb->buf[vb->used-1] != '\0') {	// if this is a new varbuf, start with an empty string
-		err = varbuf_append(vb, 1, "");
+		varbuf_append(vb, 1, "");
 	}
-	return err;
 }
 
-int varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
+void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
 	debug("varbuf_read_line(vb=%p, fd=%d)", vb, fd);
-	int err = 0;
-	if (0 != (err = varbuf_stringifies(vb))) return err;
+	varbuf_stringifies(vb);
+	on_error return;
 	vb->used--;	// chop nul char
 	size_t prev_used = vb->used;
 	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
 	bool was_CR = false;
-	while (!err && vb->used - prev_used < maxlen) {
+	while (!is_error() && vb->used - prev_used < maxlen) {
 		int8_t byte;
 		ssize_t ret = pth_read(fd, &byte, 1);	// "If in doubt, use brute force"
 		if (ret < 0) {
-			if (errno != EINTR) err = -errno;
+			if (errno != EINTR) error_push(errno, "Cannot pth_read");
 		} else if (ret == 0) {
-			err = 1;	// EOF
+			error_push(ENOENT, "End of file");
 		} else {
 			assert(ret == 1);
 			if (byte == '\r') {
@@ -125,6 +117,5 @@ int varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 		}
 	}
 	varbuf_stringifies(vb);
-	return err;
 }
 

@@ -37,7 +37,7 @@ struct header {
 
 /* Build an empty header.
  */
-int header_new(struct header **h);
+struct header *header_new(void);
 
 void header_del(struct header *h);
 
@@ -45,29 +45,29 @@ void header_del(struct header *h);
 // or NULL if undefined.
 char const *header_search(struct header const *h, char const *name);
 
-int header_parse(struct header *h, char const *msg);
+void header_parse(struct header *h, char const *msg);
 
 // Write a header onto a filedescr
 // FIXME: file is written to on error
-int header_write(struct header const *h, int fd);
+void header_write(struct header const *h, int fd);
 
 // Read a header from a filedescr (until blank line)
-int header_read(struct header *h, int fd);
+void header_read(struct header *h, int fd);
 
 #include "varbuf.h"
 // Write a header onto a variable buffer
-int header_dump(struct header const *h, struct varbuf *vb);
+void header_dump(struct header const *h, struct varbuf *vb);
 void header_debug(struct header *h);
 
-int header_add_field(struct header *h, char const *name, char const *value);
+void header_add_field(struct header *h, char const *name, char const *value);
 
 // Return a pointer to the beginning of the value.
-// Return -ENOENT if not found, or the length of the value if *value!=NULL.
+// Return the length of the value if *value!=NULL.
 int header_find_parameter(char const *name, char const *field_value, char const **value);
 // Same result. Error may be -EMSGSIZE or -ENOENT
-int header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
+void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
 
 #include "digest.h"
-int header_digest(struct header *h, size_t, char *buffer);
+void header_digest(struct header *h, size_t, char *buffer);
 
 #endif
