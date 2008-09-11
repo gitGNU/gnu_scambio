@@ -57,6 +57,7 @@ int header_read(struct header *h, int fd);
 #include "varbuf.h"
 // Write a header onto a variable buffer
 int header_dump(struct header const *h, struct varbuf *vb);
+void header_debug(struct header *h);
 
 int header_add_field(struct header *h, char const *name, char const *value);
 

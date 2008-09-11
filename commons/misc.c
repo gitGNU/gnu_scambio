@@ -35,8 +35,9 @@ int Write(int fd, void const *buf, size_t len)
 		ssize_t ret = pth_write(fd, buf + done, len - done);
 		if (ret < 0) {
 			if (errno != EINTR) {
-				error("Cannot write %zu bytes : %s", len-done, strerror(errno));
-				return -errno;
+				int err = -errno;
+				error("Cannot write %zu bytes : %s", len-done, strerror(-err));
+				return err;
 			}
 			continue;
 		}
@@ -85,8 +86,9 @@ int Copy(int dst, int src)
 		ssize_t ret = pth_read(src, &byte, 1);
 		if (ret < 0) {
 			if (errno != EINTR) {
-				error("Cannot pth_read : %s", strerror(errno));
-				return -errno;
+				int err = -errno;
+				error("Cannot pth_read : %s", strerror(-err));
+				return err;
 			}
 			continue;
 		}
@@ -99,11 +101,12 @@ int Copy(int dst, int src)
 
 static int Mkdir_single(char const *path)
 {
+	int err = 0;
 	if (0 != mkdir(path, 0744) && errno != EEXIST) {
-		error("mkdir '%s' : %s", path, strerror(errno));
-		return -errno;
+		err = -errno;
+		error("mkdir '%s' : %s", path, strerror(-err));
 	}
-	return 0;
+	return err;
 }
 
 int Mkdir(char const *path_)

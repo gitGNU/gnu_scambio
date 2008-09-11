@@ -95,8 +95,9 @@ static int try_put(char const *filename)
 	debug("try_put('%s')", filename);
 	fd = open(filename, O_RDONLY);
 	if (fd < 0) {
-		error("Cannot open(%s) : %s", filename, strerror(errno));
-		return -errno;
+		err = -errno;
+		error("Cannot open(%s) : %s", filename, strerror(-err));
+		return err;
 	}
 	do {
 		char folder[PATH_MAX];
@@ -125,7 +126,7 @@ static int try_rem(char const *filename)
 		path_pop(folder);	// chop filename
 		path_pop(folder); // chop REMDIR_NAME
 		if (0 != (err = try_command(folder, filename, REM_CMD_TYPE))) break;
-		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n::\n", NULL))) break;
+		if (0 != (err = Write_strs(cnx.sock_fd, "digest: ", digest, "\n\n", NULL))) break;
 	} while (0);
 	return err;
 }
@@ -153,17 +154,15 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 	if (0 != (err = hide_cfg_get(&hide_cfg, path))) goto q0;	// load the .hide file
 	DIR *dir = opendir(path);
 	if (! dir) {
-		error("Cannot opendir(%s) : %s", path, strerror(errno));
 		err = -errno;
+		error("Cannot opendir(%s) : %s", path, strerror(-err));
 		goto q1;
 	}
 	struct dirent *dirent;
 	errno = 0;
 	while (!err && NULL != (dirent = readdir(dir))) {
-		debug("g errno = %d", errno);
 		if (always_skip(dirent->d_name)) continue;
 		if (TRUE != pth_yield(NULL)) warning("pth_yield leads FALSE !?");
-		debug("h errno = %d", errno);
 		path_push(path, dirent->d_name);
 		struct stat statbuf;
 		if (0 != stat(path, &statbuf)) {
@@ -172,13 +171,11 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 			path_pop(path);
 			break;
 		}
-		debug("a errno = %d", errno);
 		if (S_ISDIR(statbuf.st_mode)) {
 			if (dir_type == PUT_DIR || dir_type == REM_DIR) {
 				path_pop(path);
 				continue;
 			}
-			debug("b errno = %d", errno);
 			if (0 == strcmp(dirent->d_name, PUTDIR_NAME)) {
 				err = writer_run_rec(path, PUT_DIR, depth+1);
 			} else if (0 == strcmp(dirent->d_name, REMDIR_NAME)) {
@@ -196,24 +193,19 @@ static int writer_run_rec(char path[], enum dir_type dir_type, int depth)
 					if (! err) err = writer_run_rec(path, FOLDER_DIR, depth+1);
 				}
 			}
-			debug("c errno = %d", errno);
 		} else {	// dir entry is not itself a directory
-			debug("d errno = %d", errno);
 			switch (dir_type) {
 				case FOLDER_DIR: break;
 				case PUT_DIR:    err = try_put(path); break;
 				case REM_DIR:    err = try_rem(path); break;
 			}
-			debug("f errno = %d", errno);
 		}
-		debug("e errno = %d", errno);
 		path_pop(path);
 	}
-	// FIXME: pth_yield fails at saving errno
-/*	if (!err && errno) {
-		error("Cannot readdir : %s", strerror(errno));
+	if (!err && errno) {
 		err = -errno;
-	}*/
+		error("Cannot readdir : %s", strerror(-err));
+	}
 	if (closedir(dir) < 0) error("Cannot closedir");
 q1:
 	hide_cfg_release(hide_cfg);

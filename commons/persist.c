@@ -32,8 +32,9 @@ static int open_or_create(char const *fname, size_t size)
 	fd = open(fname, O_RDWR|O_CREAT|O_EXCL, 0660);
 	if (fd < 0) return -errno;
 	if (0 != ftruncate(fd, size)) {
+		int err = -errno;
 		(void)close(fd);
-		return -errno;
+		return err;
 	}
 	return fd;
 }
@@ -44,9 +45,10 @@ int persist_ctor(struct persist *p, size_t size, char const *fname)
 	int fd = open_or_create(fname, size);
 	if (fd < 0) return fd;
 	p->data = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	int err = 0;
+	if (MAP_FAILED == p->data) err = -errno;
 	(void)close(fd);
-	if (MAP_FAILED == p->data) return -errno;
-	return 0;
+	return err;
 }
 
 void persist_dtor(struct persist *p)

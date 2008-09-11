@@ -22,8 +22,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <assert.h>
+#include <errno.h>
 #include <pth.h>
 #include "scambio.h"
 #include "client.h"

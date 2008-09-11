@@ -40,9 +40,13 @@ int varbuf_make_room(struct varbuf *vb, size_t new_size)
 {
 	if (vb->actual >= new_size) return 0;
 	void *new_buf = realloc(vb->buf, new_size);
-	if (! new_buf) return -ENOMEM;
+	if (! new_buf) {
+		error("Cannot realloc varbug to %zu bytes", new_size);
+		return -ENOMEM;
+	}
 	if (new_buf != vb->buf && !vb->relocatable) {
 		free(new_buf);
+		error("Cannot extend not relocatable varbuf");
 		return -ENOMEM;
 	}
 	vb->buf = new_buf;

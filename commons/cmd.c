@@ -20,7 +20,6 @@
 #include <string.h>
 #include <limits.h>
 #include <strings.h>
-#include <errno.h>
 #include <ctype.h>
 #include "scambio.h"
 #include "cmd.h"
