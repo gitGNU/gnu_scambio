@@ -3,5 +3,5 @@ AM_CPPFLAGS = -I$(top_srcdir)/client/include -I$(top_srcdir)/commons -D_GNU_SOUR
 
 lib_LTLIBRARIES = libmdir.la
 
-libmdir_la_SOURCES = libmdir.c
+libmdir_la_SOURCES = init.c
 

@@ -78,8 +78,8 @@ int finalize_put(struct command *cmd, int status)
 	}
 	int err = 0;
 	if (0 != unlink(cmd->path)) {
-		error("Cannot unlink file '%s' : %s", cmd->path, strerror(errno));
 		err = -errno;
+		error("Cannot unlink file '%s' : %s", cmd->path, strerror(-err));
 	}
 	command_del(cmd);
 	return err;

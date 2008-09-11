@@ -20,7 +20,6 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <ctype.h>
-#include <errno.h>
 #include <unistd.h>
 #include "scambio.h"
 #include "config.h"
