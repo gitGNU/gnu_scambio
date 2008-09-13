@@ -1,6 +1,7 @@
 #include <stdarg.h>
-#include <strio.h>
-#include <strings.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 #include "scambio.h"
 #include "error.h"
 
@@ -44,11 +45,11 @@ void error_push(int code, char *fmt, ...)
 		va_list ap;
 		va_start(ap, fmt);
 		len = vsnprintf(err->str, sizeof(err->str), fmt, ap);
-		if (len >= sizeof(err->str)) len = sizeof(err->str)-1;
+		if (len >= (int)sizeof(err->str)) len = sizeof(err->str)-1;
 		va_end(ap);
 	}
-	snprintf(err->str+len, "%s%s", len > 0 ? " : ":"", strerror(code));
-	error(err->str);
+	snprintf(err->str+len, sizeof(err->str)-len, "%s%s", len > 0 ? " : ":"", strerror(code));
+	error1(err->str);
 }
 
 void error_pop()

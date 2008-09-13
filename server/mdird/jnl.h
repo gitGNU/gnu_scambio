@@ -15,10 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-/* Interface to read and write journals and snapshots,
- * and answer a DIFF query.
+/* Interface to read and write journals and snapshots.
  * Beware that many threads may access those files concurrently,
- * althoug they are non preemptibles.
+ * although they are non preemptibles.
  */
 #ifndef JNL_H_080623
 #define JNL_H_080623

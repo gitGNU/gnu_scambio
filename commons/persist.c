@@ -32,7 +32,7 @@ static int open_or_create(char const *fname, size_t size)
 	fd = open(fname, O_RDWR|O_CREAT|O_EXCL, 0660);
 	if (fd < 0) with_error(errno, "Cannot create '%s'", fname) return -1;
 	if (0 != ftruncate(fd, size)) {
-		push_error(errno, "Cannot truncate '%s'", fname);
+		error_push(errno, "Cannot truncate '%s'", fname);
 		(void)close(fd);
 		return -1;
 	}
@@ -45,7 +45,7 @@ void persist_ctor(struct persist *p, size_t size, char const *fname)
 	int fd = open_or_create(fname, size);
 	on_error return;
 	p->data = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-	if (MAP_FAILED == p->data) push_error(errno, "Cannot mmap '%s'", fname);
+	if (MAP_FAILED == p->data) error_push(errno, "Cannot mmap '%s'", fname);
 	(void)close(fd);
 }
 

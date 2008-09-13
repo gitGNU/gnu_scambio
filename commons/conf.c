@@ -56,10 +56,10 @@ char const *conf_get_str(char const *name)
 long long conf_get_int(char const *name)
 {
 	char const *str = conf_get_str(name);
-	if (! str) with_error(ENOENT, "No such envvar '%s'") return;
+	if (! str) with_error(ENOENT, "No such envvar '%s'") return 0;
 	char *end;
 	long long value = strtoll(str, &end, 0);
-	if (*end != '\0') push_error(EINVAL, "bad integer '%s' for envvar '%s'", str, name);
+	if (*end != '\0') error_push(EINVAL, "bad integer '%s' for envvar '%s'", str, name);
 	return value;
 }
 

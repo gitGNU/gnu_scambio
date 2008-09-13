@@ -109,9 +109,9 @@ void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 				was_CR = true;
 			} else {
 				static char const cr = '\r';
-				if (byte != '\n' && was_CR) err = varbuf_append(vb, 1, &cr);	// \r followed by anthing but \n are passed
+				if (byte != '\n' && was_CR) varbuf_append(vb, 1, &cr);	// \r followed by anthing but \n are passed
 				was_CR = false;
-				if (! err) err = varbuf_append(vb, 1, &byte);
+				if (! is_error()) varbuf_append(vb, 1, &byte);
 				if (byte == '\n') break;
 			}
 		}

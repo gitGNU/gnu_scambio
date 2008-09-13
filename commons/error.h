@@ -19,9 +19,9 @@ char const *error_str(void);
 void error_push(int code, char *fmt, ...);
 
 void error_ack();	// set the expected depth of the error stack to be as it is now
-void error_pop();	// pop all errors up to the acknoledged level, the pop this level
+void error_clear();	// pop all errors up to the acknoledged level, the pop this level
 
 #define on_error if (is_error())
-#define with_error(code, fmt, ...) if (1, error_push((code), (fmt), __VA_ARGS__))
+#define with_error(code, ...) if (error_push((code), __VA_ARGS__), 1)
 
 #endif

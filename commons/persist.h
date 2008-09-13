@@ -26,7 +26,7 @@ struct persist {
 	void *data;
 };
 
-int persist_ctor(struct persist *, size_t size, char const *fname);
+void persist_ctor(struct persist *, size_t size, char const *fname);
 void persist_dtor(struct persist *);
 
 #endif

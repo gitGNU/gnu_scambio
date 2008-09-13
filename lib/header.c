@@ -42,13 +42,13 @@ static bool iseol(char c)
 	return c == '\n' || c == '\r';
 }
 
-// Read a value until given delimiter, and compact it inplace (remove comments, new lines and useless spaces).
+// Read a value until given delimiter, and compact it inplace (remove comments, new lines and useless spaces). Returns the number of parsed chars
 static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char const *))
 {
 	char const *src = msg;
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1000, true);
-	on_error return;
+	on_error return 0;
 	bool rem_space = true;
 	while (! is_delimiter(src)) {
 		if (*src == '\0') {
@@ -74,10 +74,10 @@ static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char cons
 		varbuf_stringifies(&vb);
 	}
 	on_error {
-		error_acks();
+		error_ack();
 		varbuf_dtor(&vb);
 		*ptr = NULL;
-		error_pop();
+		error_clear();
 	} else {
 		*ptr = varbuf_unbox(&vb);
 	}
@@ -105,10 +105,7 @@ static ssize_t parse_field(char const *msg, char **name, char **value)
 		free(*name);
 		return 0;
 	}
-	if (parsedV == 0) {
-		error_push(EINVAL, "Field '%s' has no value", *name);
-		return;
-	}
+	if (parsedV == 0) with_error(EINVAL, "Field '%s' has no value", *name) return 0;
 	parsedV++;	// skip delimiter
 	return parsedN + parsedV;
 }
@@ -142,10 +139,10 @@ static void header_dtor(struct header *h)
 struct header *header_new(void)
 {
 	struct header *h = malloc(sizeof(*h) + NB_MAX_FIELDS*sizeof(h->fields[0]));
-	if (! h) with_error(errno, "Cannot malloc header");
-	header_ctor(*h);
+	if (! h) with_error(errno, "Cannot malloc header") return NULL;
+	header_ctor(h);
 	on_error {
-		free(*h);
+		free(h);
 		return NULL;
 	}
 	return h;
@@ -242,7 +239,7 @@ void header_read(struct header *h, int fd)
 		debug("BTW, its EOF");
 		eoh_reached = true;
 	}
-	error_pop();
+	error_clear();
 	if (nb_lines == 0) error_push(EINVAL, "No lines in header");
 	if (! eoh_reached) error_push(EINVAL, "End of file before end of header");
 	if (! is_error()) header_parse(h, vb.buf);
@@ -278,15 +275,15 @@ void header_add_field(struct header *h, char const *name, char const *value)
 	field->value = strdup(value);
 	if (! field->value) {
 		free(field->name);
-		with_error(ENOMEM, "Cannot strdup field value"), return
+		with_error(ENOMEM, "Cannot strdup field value") return;
 	}
 }
 
-unsigned header_find_parameter(char const *name, char const *field_value, char const **value)
+size_t header_find_parameter(char const *name, char const *field_value, char const **value)
 {
 	char const *v = field_value;
 	size_t len = strlen(name);
-	unsigned ret = 0;
+	size_t ret = 0;
 	*value = NULL;
 	do {
 		// First find next separator
@@ -311,7 +308,7 @@ unsigned header_find_parameter(char const *name, char const *field_value, char c
 			return ret;
 		}
 	} while (*v != '\0');
-	with_error(ENOENT, "No such parameter '%s'", name); return 0;
+	with_error(ENOENT, "No such parameter '%s'", name) return 0;
 }
 
 void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value)

@@ -14,5 +14,6 @@ libcommons_la_SOURCES = \
 	daemon.c \
 	persist.c \
 	digest.c \
+	jnl.c \
 	error.c
 

@@ -20,11 +20,11 @@
 
 #include <stddef.h>	// size_t (? FIXME)
 #include <stdbool.h>
-int Write(int fd, void const *buf, size_t len);
-int Write_strs(int fd, ...);
-int Read(void *buf, int fd, off_t offset, size_t len);
-int Copy(int dest, int src);	// will add a trailing newline if src lacks one
-int Mkdir(char const *path);
+void Write(int fd, void const *buf, size_t len);
+void Write_strs(int fd, ...);
+void Read(void *buf, int fd, off_t offset, size_t len);
+void Copy(int dest, int src);	// will add a trailing newline if src lacks one
+void Mkdir(char const *path);
 // a line is said to match a delim if it starts with the delim, and is followed only by optional spaces
 bool line_match(char *restrict line, char *restrict delim);
 

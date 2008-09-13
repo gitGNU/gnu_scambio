@@ -43,7 +43,7 @@ void cnx_end(void)
  */
 
 // TODO: use getaddrinfo(3)
-int cnx_server_ctor(struct cnx_server *serv, unsigned short port)
+void cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 {
 	int const one = 1;
 	struct sockaddr_in any_addr;
