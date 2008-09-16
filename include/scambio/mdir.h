@@ -31,8 +31,6 @@
 
 enum mdir_action { MDIR_ADD, MDIR_REM };
 
-extern size_t mdir_root_len;
-extern char mdir_root[PATH_MAX];
 typedef uint64_t mdir_version;
 #define PRIversion PRIu64
 
@@ -41,13 +39,13 @@ void mdir_begin(void);
 void mdir_end(void);
 
 // create a new mdir
-struct mdir *mdir_new(void);
+struct mdir *mdir_create(void);
 
 // add/remove a header into a directory
 void mdir_patch(struct mdir *, enum mdir_action, struct header *);
 
-// returns the mdir for this path (which must exists)
-struct mdir *mdir_lookup(char const *path);
+// returns the mdir for this name (which may countains "/"s, but must exists)
+struct mdir *mdir_lookup(char const *name);
 
 // name is not allowed to use '/' (ie no lookup is performed)
 void mdir_link(struct mdir *parent, char const *name, struct mdir *child);
@@ -55,9 +53,6 @@ void mdir_unlink(struct mdir *parent, char const *name);
 
 // returns the header, action and version following the given version
 struct header *mdir_read_next(struct mdir *, mdir_version *, enum mdir_action *);
-
-// returns the version after the given one
-mdir_version mdir_next_version(struct mdir *, mdir_version);
 
 // returns the last version of this mdir
 mdir_version mdir_last_version(struct mdir *);
