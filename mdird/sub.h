@@ -20,11 +20,10 @@
 
 #include <unistd.h>	// ssize_t
 #include <pth.h>
-#include "queue.h"
+#include "scambio/queue.h"
+#include "scambio/mdir.h"
 
-struct dir;
-struct jnl;
-struct cnx_env;
+struct mdir;
 
 /* Beware that this structure, being in two very different lists, may be changed
  * by THREE different threads :
@@ -34,20 +33,20 @@ struct cnx_env;
  * Use directory mutex for safety !
  */
 
+struct cnx_env;
 struct subscription {
 	// Managed by client thread
 	LIST_ENTRY(subscription) env_entry;	// in the client list of subscriptions.
 	struct cnx_env *env;
 	pth_t thread_id;
 	// Managed by JNL module from here
-	LIST_ENTRY(subscription) dir_entry;	// in the directory list of subscriptions
-	struct dir *dir;
-	long long version;	// last known version (updated when we send a patch)
+	struct mdir *mdir;
+	mdir_version version;	// last known version (updated when we send a patch)
 };
 
-int subscription_new(struct subscription **sub, struct cnx_env *env, char const *path, long long version);
+struct subscription *subscription_new(struct cnx_env *env, char const *name, mdir_version version);
 void subscription_del(struct subscription *sub);
 struct subscription *subscription_find(struct cnx_env *env, char const *path);
-void subscription_reset_version(struct subscription *sub, long long version);
+void subscription_reset_version(struct subscription *sub, mdir_version version);
 
 #endif

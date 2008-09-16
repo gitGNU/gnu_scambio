@@ -33,14 +33,9 @@ AC_CHECK_FUNCS([memset strtol strnstr])
 AC_CONFIG_FILES([
 	Makefile
 	commons/Makefile
-	server/Makefile
-	server/mdird/Makefile
-	server/mdird/checks/Makefile
-	server/smtpd/Makefile
-	client/Makefile
-	client/include/Makefile
-	client/lib/Makefile
-	client/mdsync/Makefile
+	include/Makefile
+	lib/Makefile
+	mdird/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

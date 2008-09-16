@@ -1,10 +1,9 @@
 AM_CFLAGS = -std=c99 -Wall -W
-AM_CPPFLAGS = -D_GNU_SOURCE
+AM_CPPFLAGS = -I $(top_srcdir)/include -D_GNU_SOURCE
 
 noinst_LTLIBRARIES = libcommons.la
 
 libcommons_la_SOURCES = \
-	header.c \
 	misc.c \
 	varbuf.c \
 	conf.c \
@@ -13,7 +12,5 @@ libcommons_la_SOURCES = \
 	cmd.c \
 	daemon.c \
 	persist.c \
-	digest.c \
-	jnl.c \
-	error.c
+	digest.c
 

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "scambio.h"
-#include "error.h"
+#include "scambio/error.h"
 
 static struct error {
 	int code;
@@ -52,7 +52,7 @@ void error_push(int code, char *fmt, ...)
 	error1(err->str);
 }
 
-void error_pop()
+void error_clear()
 {
 	assert(nb_errors >= nb_expected_errors());
 	nb_errors = nb_expected_errors();

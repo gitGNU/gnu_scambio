@@ -23,9 +23,10 @@
 #include <unistd.h>
 #include "scambio.h"
 #include "config.h"
-#include "header.h"
+#include "scambio/header.h"
 #include "log.h"
 #include "misc.h"
+#include "varbuf.h"
 
 /*
  * Data Definitions

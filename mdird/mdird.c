@@ -26,7 +26,6 @@
 #include "varbuf.h"
 #include "cmd.h"
 #include "mdird.h"
-#include "jnl.h"
 #include "sub.h"
 
 /*
@@ -39,7 +38,6 @@ static sig_atomic_t terminate = 0;
 static char const *const kw_sub   = "sub";
 static char const *const kw_unsub = "unsub";
 static char const *const kw_put   = "put";
-static char const *const kw_class = "class";
 static char const *const kw_rem   = "rem";
 static char const *const kw_quit  = "quit";
 
@@ -47,84 +45,71 @@ static char const *const kw_quit  = "quit";
  * Init functions
  */
 
-static int init_conf(void)
+static void init_conf(void)
 {
-	int err;
-	if (0 != (err = conf_set_default_str("MDIRD_LOG_DIR", "/var/log"))) return err;
-	if (0 != (err = conf_set_default_int("MDIRD_LOG_LEVEL", 3))) return err;
-	if (0 != (err = conf_set_default_int("MDIRD_PORT", DEFAULT_MDIRD_PORT))) return err;
-	return 0;
+	conf_set_default_str("MDIRD_LOG_DIR", "/var/log");
+	conf_set_default_int("MDIRD_LOG_LEVEL", 3);
+	conf_set_default_int("MDIRD_PORT", DEFAULT_MDIRD_PORT);
 }
 
-static int init_log(void)
+static void init_log(void)
 {
-	int err;
-	if (0 != (err = log_begin(conf_get_str("MDIRD_LOG_DIR"), "mdird.log"))) return err;
+	log_begin(conf_get_str("MDIRD_LOG_DIR"), "mdird.log");
+	on_error return;
 	debug("init log");
-	if (0 != atexit(log_end)) return -1;
+	if (0 != atexit(log_end)) with_error(0, "atexit") return;
 	log_level = conf_get_int("MDIRD_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
-	return 0;
 }
 
-static int init_cmd(void)
+static void init_cmd(void)
 {
 	debug("init cmd");
 	cmd_begin();
-	if (0 != atexit(cmd_end)) return -1;
+	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
 	// Put most used commands at end, so that they end up at the beginning of the commands list
 	cmd_register_keyword(kw_quit,  0, 0, CMD_EOA);
-	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_rem,   2, 2, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_class, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
-	return 0;
 }
 
 static void deinit_server(void)
 {
-	jnl_end();
 	cnx_server_dtor(&server);
-	cnx_end();
 }
 
-static int init_server(void)
+static void init_server(void)
 {
-	int err;
 	debug("init server");
-	if (0 != (err = cnx_begin())) return err;
-	if (0 != (err = cnx_server_ctor(&server, conf_get_int("MDIRD_PORT")))) return err;
-	if (0 != atexit(deinit_server)) return -1;
-	if (0 != (err = jnl_begin())) return err;
-	if (0 != atexit(jnl_end)) return -1;
-	if (0 != (err = exec_begin())) return err;
-	if (0 != atexit(exec_end)) return -1;
-	return 0;
+	cnx_begin();
+	on_error return;
+	if (0 != atexit(cnx_end)) with_error(0, "atexit") return;
+	cnx_server_ctor(&server, conf_get_int("MDIRD_PORT"));
+	on_error return;
+	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
+	mdir_begin();
+	on_error return;
+	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	exec_begin();
+	on_error return;
+	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
 }
 
-static int init(void)
+static void init(void)
 {
-	int err;
-	if (0 != (err = init_conf())) return err;
-	if (0 != (err = init_log())) return err;
-	if (0 != (err = init_cmd())) return err;
-	if (0 != (err = daemonize())) return err;
-	if (! pth_init()) return err;
-	if (0 != (err = init_server())) return err;
-	return 0;
+	init_conf(); on_error return;
+	init_log();  on_error return;
+	init_cmd();  on_error return;
+	daemonize(); on_error return;
+	if (! pth_init()) with_error(0, "pth_init") return;
+	init_server();
 }
 
 /*
  * Server
  */
-
-#define th_error(fmt, ...) error("%s: " fmt, th_name(), ##__VA_ARGS__)
-
-static char const *th_name(void)
-{
-	return "TODO";
-}
 
 static void cnx_env_del(void *env_)
 {
@@ -141,10 +126,7 @@ static void cnx_env_del(void *env_)
 static struct cnx_env *cnx_env_new(int fd)
 {
 	struct cnx_env *env = malloc(sizeof(*env));
-	if (! env) {
-		th_error("Cannot alloc a cnx_env");
-		return NULL;
-	}
+	if (! env) with_error(ENOMEM, "Cannot alloc a cnx_env") return NULL;
 	env->fd = fd;
 	pth_mutex_init(&env->wfd);
 	LIST_INIT(&env->subscriptions);
@@ -154,34 +136,32 @@ static struct cnx_env *cnx_env_new(int fd)
 static void *serve_cnx(void *arg)
 {
 	struct cnx_env *env = arg;
-	if (! pth_cleanup_push(cnx_env_del, env)) {
-		th_error("Cannot add cleanup function");
+	if (! pth_cleanup_push(cnx_env_del, env)) with_error(0, "Cannot add cleanup function") {
 		cnx_env_del(env);
 		return NULL;
 	}
-	int err = 0;
 	bool quit = false;
 	do {	// read a command and exec it
 		struct cmd cmd;
-		if (0 != (err = cmd_read(&cmd, env->fd))) break;
+		cmd_read(&cmd, env->fd);
+		on_error break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		if (cmd.keyword == kw_sub) {
-			err = exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
+			exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
 		} else if (cmd.keyword == kw_unsub) {
-			err = exec_unsub(env, cmd.seq, cmd.args[0].val.string);
+			exec_unsub(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_put) {
-			err = exec_put(env, cmd.seq, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_class) {
-			err = exec_class(env, cmd.seq, cmd.args[0].val.string);
+			exec_put(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_rem) {
-			err = exec_rem(env, cmd.seq, cmd.args[0].val.string);
+			exec_rem(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_quit) {
-			err = exec_quit(env, cmd.seq);
+			exec_quit(env, cmd.seq);
 			quit = true;
 		}
 		pth_mutex_release(&env->wfd);
 		cmd_dtor(&cmd);
-	} while (! err && ! quit);
+		on_error break;
+	} while (! quit);
 	return NULL;
 }
 
@@ -191,11 +171,8 @@ static void *serve_cnx(void *arg)
 
 int main(void)
 {
-	int err;
-	if (0 != (err = init())) {
-		fprintf(stderr, "Init error : %s\n", strerror(-err));
-		return EXIT_FAILURE;
-	}
+	init();
+	on_error return EXIT_FAILURE;
 	// Run server
 	while (! terminate) {
 		int fd = cnx_server_accept(&server);
@@ -205,9 +182,7 @@ int main(void)
 			continue;
 		}
 		struct cnx_env *env = cnx_env_new(fd);	// will be destroyed by sub-thread
-		if (env) {
-			(void)pth_spawn(PTH_ATTR_DEFAULT, serve_cnx, env);
-		}
+		unless_error (void)pth_spawn(PTH_ATTR_DEFAULT, serve_cnx, env);
 	}
 	pth_exit(EXIT_SUCCESS);
 }

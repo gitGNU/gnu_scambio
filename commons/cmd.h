@@ -28,7 +28,6 @@
 #ifndef CMD_H_080616
 #define CMD_H_080616
 #include <stdbool.h>
-#include <queue.h>
 #include "scambio.h"
 
 struct cmd_arg {

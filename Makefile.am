@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons client server doc
+SUBDIRS = commons lib mdird doc
 
 .PHONY: cscope
 

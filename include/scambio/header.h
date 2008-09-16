@@ -70,4 +70,9 @@ void header_copy_parameter(char const *name, char const *field_value, size_t max
 #include "digest.h"
 void header_digest(struct header *h, size_t, char *buffer);
 
+#define SCAMBIO_TYPE_FIELD  "scambio-type"
+#define SCAMBIO_KEY_FIELD   "scambio-key"
+#define SCAMBIO_DIRID_FIELD "scambio-dirId"
+#define SCAMBIO_NAME_FIELD  "scambio-name"
+
 #endif
