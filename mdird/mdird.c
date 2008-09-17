@@ -116,7 +116,6 @@ static void cnx_env_del(void *env_)
 	struct cnx_env *env = env_;
 	struct subscription *sub;
 	while (NULL != (sub = LIST_FIRST(&env->subscriptions))) {
-		LIST_REMOVE(sub, env_entry);
 		subscription_del(sub);
 	}
 	close(env->fd);

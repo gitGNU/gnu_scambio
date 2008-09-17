@@ -18,6 +18,7 @@
 #ifndef SUB_H_080627
 #define SUB_H_080627
 
+#include <stdbool.h>
 #include <unistd.h>	// ssize_t
 #include <pth.h>
 #include "scambio/queue.h"
@@ -42,6 +43,9 @@ struct subscription {
 	// Managed by JNL module from here
 	struct mdir *mdir;
 	mdir_version version;	// last known version (updated when we send a patch)
+	struct mdir_listener listener;
+	bool registered;	// is the listener registered to the mdir ?
+	pth_msgport_t msg_port;
 };
 
 struct subscription *subscription_new(struct cnx_env *env, char const *name, mdir_version version);

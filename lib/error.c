@@ -52,7 +52,13 @@ void error_push(int code, char *fmt, ...)
 	error1(err->str);
 }
 
-void error_clear()
+void error_ack(void)
+{
+	assert(nb_acks < sizeof_array(ack_stack));
+	ack_stack[nb_acks++] = nb_errors;
+}
+
+void error_clear(void)
 {
 	assert(nb_errors >= nb_expected_errors());
 	nb_errors = nb_expected_errors();

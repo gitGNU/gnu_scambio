@@ -22,7 +22,6 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -35,21 +34,12 @@
 #include "misc.h"
 #include "digest.h"
 #include "persist.h"
+#include "jnl.h"
 
 /*
  * Data Definitions
  *
  */
-
-struct jnl;
-struct mdir {
-	LIST_ENTRY(mdir) entry;	// entry in the list of cached dirs (FIXME: hash this!)
-	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
-	dev_t st_dev;	// st_dev and st_ino are used to identify directories
-	ino_t st_ino;
-	pth_rwlock_t rwlock;
-	char path[PATH_MAX];	// absolute path to the dir (actual one, not one of the symlinks)
-};
 
 static size_t mdir_root_len;
 static char const *mdir_root;
@@ -63,15 +53,12 @@ static struct persist dirid_seq;
 // path must be mdir_root + "/" + id
 static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 {
+	LIST_INIT(&mdir->listeners);
 	snprintf(mdir->path, sizeof(mdir->path), "%s/%s", mdir_root, id);
 	if (create) {
 		Mkdir(mdir->path);
 		on_error return;
 	}
-	struct stat statbuf;
-	if (0 != stat(mdir->path, &statbuf)) with_error(errno, "stat %s", mdir->path) return;
-	mdir->st_dev = statbuf.st_dev;
-	mdir->st_ino = statbuf.st_ino;
 	(void)pth_rwlock_init(&mdir->rwlock);	// FIXME: if this can schedule some other thread, we need to prevent addition of the same dir twice
 	STAILQ_INIT(&mdir->jnls);
 	// Find journals
@@ -80,7 +67,7 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 	struct dirent *dirent;
 	// We may yield the CPU here, but then we must acquire write lock
 	while (NULL != (dirent = readdir(d))) {
-		if (0 == strncmp("jnl", dirent->d_name, 3)) {
+		if (dirent->d_name[0] != '.') {
 			jnl_new(mdir, dirent->d_name);
 			on_error break;
 		}
@@ -107,6 +94,45 @@ struct mdir *mdir_create(void)
 	char id_str[20+1];
 	snprintf(id_str, sizeof(id_str), "%"PRIu64, id);
 	return mdir_new(id_str, true);
+}
+
+static void mdir_dtor(struct mdir *mdir)
+{
+	struct mdir_listener *l;
+	while (NULL != (l = LIST_FIRST(&mdir->listeners))) {
+		l->ops->del(l, mdir);	// which will unregister
+	}
+	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);
+	LIST_REMOVE(mdir, entry);
+	struct jnl *jnl;
+	while (NULL != (jnl = STAILQ_FIRST(&mdir->jnls))) {
+		jnl_del(jnl);
+	}
+	pth_rwlock_release(&mdir->rwlock);
+}
+
+static void mdir_del(struct mdir *mdir)
+{
+	mdir_dtor(mdir);
+	free(mdir);
+}
+
+/*
+ * Listeners
+ */
+
+extern inline void mdir_listener_ctor(struct mdir_listener *l, struct mdir_listener_ops const *ops);
+extern inline void mdir_listener_dtor(struct mdir_listener *l);
+
+void mdir_register_listener(struct mdir *mdir, struct mdir_listener *l)
+{
+	LIST_INSERT_HEAD(&mdir->listeners, l, entry);
+}
+
+void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l)
+{
+	(void)mdir;
+	LIST_REMOVE(l, entry);
 }
 
 /*
@@ -139,6 +165,8 @@ void mdir_begin(void)
 	conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir");
 	conf_set_default_str("MDIR_DIRSEQ", "/tmp/.dirid.seq");
 	on_error return;
+	jnl_begin();
+	on_error return;
 	// Inits
 	LIST_INIT(&mdirs);
 	mdir_root = conf_get_str("MDIR_ROOT_DIR");
@@ -146,25 +174,9 @@ void mdir_begin(void)
 	persist_ctor(&dirid_seq, sizeof(uint64_t), conf_get_str("MDIR_DIRSEQ"));
 }
 
-static void mdir_dtor(struct mdir *mdir)
-{
-	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);
-	LIST_REMOVE(mdir, entry);
-	struct jnl *jnl;
-	while (NULL != (jnl = STAILQ_FIRST(&mdir->jnls))) {
-		jnl_del(jnl);
-	}
-	pth_rwlock_release(&mdir->rwlock);
-}
-
-static void mdir_del(struct mdir *mdir)
-{
-	mdir_dtor(mdir);
-	free(mdir);
-}
-
 void mdir_end(void)
 {
+	jnl_end();
 	struct mdir *mdir;
 	while (NULL != (mdir = LIST_FIRST(&mdirs))) {
 		mdir_del(mdir);
@@ -194,20 +206,69 @@ void mdir_unlink(struct mdir *parent, char const *name)
  * read
  */
 
-struct header *mdir_read_next(struct mdir *, mdir_version, enum mdir_action *);
+static mdir_version get_next_version(struct mdir *mdir, struct jnl **jnl, mdir_version version)
+{
+	mdir_version next;
+	// Look for the version number that comes after the given version, and jnl
+	STAILQ_FOREACH(*jnl, &mdir->jnls, entry) {
+		// look first for version+1
+		if ((*jnl)->version <= version+1 && (*jnl)->version + (*jnl)->nb_patches > version+1) {
+			next = version+1;
+			break;
+		}
+		if ((*jnl)->version > version+1) {	// if we can't find it, skip the gap
+			next = (*jnl)->version;
+			break;
+		}
+	}
+	if (! *jnl) error_push(ENOMSG, "No more patches");
+	return next;
+}
+
+// version is an in/out parameter
+struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdir_action *action)
+{
+	struct jnl *jnl;
+	*version = get_next_version(mdir, &jnl, *version);
+	on_error {
+		if (error_code() == ENOMSG) error_clear();
+		return NULL;
+	}
+	return jnl_read(jnl, *version, action);
+}
 
 /*
  * patch a mdir
  */
 
-void mdir_patch(struct mdir *, enum mdir_action, struct header *);
+void mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
+{
+	// First acquire writer-grade lock
+	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
+	// Either use the last journal, or create a new one
+	struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
+	if (! jnl) {
+		jnl = jnl_new_empty(mdir, 1);
+	} else if (jnl_too_big(jnl)) {
+		jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
+	}
+	unless_error jnl_patch(jnl, action, header);
+	(void)pth_rwlock_release(&mdir->rwlock);
+}
 
 /*
  * accessors
  */
 
-mdir_version mdir_last_version(struct mdir *);
-char const *mdir_id(struct mdir *);
-char const *mdir_name(struct mdir *);
-char const *mdir_key(struct mdir *);
+mdir_version mdir_last_version(struct mdir *mdir)
+{
+	struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
+	if (! jnl) return 0;
+	return jnl->version + jnl->nb_patches - 1;
+}
+
+char const *mdir_id(struct mdir *mdir)
+{
+	return mdir->path + mdir_root_len + 1;
+}
 

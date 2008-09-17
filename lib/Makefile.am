@@ -5,6 +5,7 @@ lib_LTLIBRARIES = libmdir.la
 
 libmdir_la_SOURCES = \
 	mdir.c \
+	jnl.c \
 	header.c \
 	error.c
 

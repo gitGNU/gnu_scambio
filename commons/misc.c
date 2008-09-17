@@ -34,6 +34,7 @@ void Write(int fd, void const *buf, size_t len)
 	while (done < len) {
 		ssize_t ret = pth_write(fd, buf + done, len - done);
 		if (ret < 0) {
+			// FIXME: truncate on short writes
 			if (errno != EINTR) with_error(errno, "Cannot write %zu bytes", len-done) return;
 			continue;
 		}

@@ -86,8 +86,6 @@ void exec_unsub(struct cnx_env *env, long long seq, char const *dir)
 	if (! sub) {
 		answer(env, seq, "UNSUB", 501, "Not subscribed");
 	} else {
-		(void)pth_cancel(sub->thread_id);	// better set the cancellation type to PTH_CANCEL_ASYNCHRONOUS
-		LIST_REMOVE(sub, env_entry);
 		subscription_del(sub);
 		answer(env, seq, "UNSUB", 200, "OK");
 	}
@@ -116,7 +114,7 @@ static void add_header(char const *dir, struct header *h, enum mdir_action actio
 		if (action == '+') {
 			if (! dirname) dirname = "Unnamed";
 			if (dirid_str) with_error(0, "DirId already set") return;
-			subdir = mdir_new();
+			subdir = mdir_create();
 			on_error return;	
 			header_add_field(h, SCAMBIO_DIRID_FIELD, mdir_id(mdir));
 			on_error return;

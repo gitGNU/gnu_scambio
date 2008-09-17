@@ -44,6 +44,22 @@ struct mdir *mdir_create(void);
 // add/remove a header into a directory
 void mdir_patch(struct mdir *, enum mdir_action, struct header *);
 
+// listeners
+struct mdir_listener {
+	struct mdir_listener_ops {
+		void (*del)(struct mdir_listener *, struct mdir *);	// must unregister if its registered
+		void (*notify)(struct mdir_listener *, struct mdir *, struct header *h);
+	} const *ops;
+	LIST_ENTRY(mdir_listener) entry;
+};
+static inline void mdir_listener_ctor(struct mdir_listener *l, struct mdir_listener_ops const *ops)
+{
+	l->ops = ops;
+}
+static inline void mdir_listener_dtor(struct mdir_listener *l) { (void)l; }
+void mdir_register_listener(struct mdir *mdir, struct mdir_listener *l);
+void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l);
+
 // returns the mdir for this name (which may countains "/"s, but must exists)
 struct mdir *mdir_lookup(char const *name);
 
@@ -52,12 +68,11 @@ void mdir_link(struct mdir *parent, char const *name, struct mdir *child);
 void mdir_unlink(struct mdir *parent, char const *name);
 
 // returns the header, action and version following the given version
+// or NULL if no other patches are found
 struct header *mdir_read_next(struct mdir *, mdir_version *, enum mdir_action *);
 
 // returns the last version of this mdir
 mdir_version mdir_last_version(struct mdir *);
 char const *mdir_id(struct mdir *);
-char const *mdir_name(struct mdir *);
-char const *mdir_key(struct mdir *);
 
 #endif
