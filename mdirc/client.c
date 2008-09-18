@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-/* The client lib first connect to a mdird, then spawns two threads : one that writes and
+/* The client first connect to a mdird, then spawns two threads : one that writes and
  * one that reads the socket. Since connection can takes some time, this whole process is
  * done on the connector thread, thus execution flow is returned at once to the user.
  */
@@ -51,7 +51,6 @@ struct command_types command_types[NB_COMMAND_TYPES] = {
 	{ .keyword = "unsub", .finalize = finalize_unsub },
 	{ .keyword = "put",   .finalize = finalize_put },
 	{ .keyword = "rem",   .finalize = finalize_rem },
-	{ .keyword = "class", .finalize = finalize_class },
 	{ .keyword = "quit",  .finalize = finalize_quit},
 };
 struct commands subscribed;
@@ -71,30 +70,28 @@ void command_touch_renew_seqnum(struct command *cmd)
 	cmd->creation = time(NULL);
 }
 
-static int command_ctor(struct command *cmd, enum command_type type, char const *folder, char const *path)
+static void command_ctor(struct command *cmd, enum command_type type, char const *folder, char const *path)
 {
-	int err = 0;
+	if (folder[0] == '\0') folder = "/";
 	char buf[SEQ_BUF_LEN];
 	snprintf(cmd->folder, sizeof(cmd->folder), "%s", folder);
 	snprintf(cmd->path,   sizeof(cmd->path),   "%s", path);
 	command_touch_renew_seqnum(cmd);
 	debug("folder = '%s', mdir_root = '%s' (len=%zu)", folder, mdir_root, mdir_root_len);
-	assert(strlen(folder) >= mdir_root_len);
-	if (0 == (err = Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder+mdir_root_len, "/\n", NULL))) {
-		LIST_INSERT_HEAD(&command_types[type].list, cmd, entry);
-	}
-	return err;
+	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, "\n", NULL);
+	unless_error LIST_INSERT_HEAD(&command_types[type].list, cmd, entry);
 }
 
-int command_new(struct command **cmd, enum command_type type, char const *folder, char const *path)
+struct command *command_new(enum command_type type, char const *folder, char const *path)
 {
-	int err = 0;
-	*cmd = malloc(sizeof(**cmd));
-	if (! *cmd) return -ENOMEM;
-	if (0 != (err = command_ctor(*cmd, type, folder, path))) {
-		free(*cmd);
+	struct command *cmd = malloc(sizeof(*cmd));
+	if (! *cmd) with_error(ENOMEM, "malloc cmd") return NULL;
+	command_ctor(cmd, type, folder, path);
+	on_error {
+		free(cmd);
+		cmd = NULL;
 	}
-	return err;
+	return cmd;
 }
 
 void command_del(struct command *cmd)
@@ -110,26 +107,27 @@ void command_change_list(struct command *cmd, struct commands *list)
 }
 
 #include <string.h>
-int command_get_by_path(struct command **cmd, struct commands *list, char const *path, bool do_timeout)
+struct command *command_get_by_path(struct commands *list, char const *path, bool do_timeout)
 {
 	struct command *tmp;
-	LIST_FOREACH_SAFE(*cmd, list, entry, tmp) {
-		if (0 == strcmp(path, (*cmd)->path)) {
-			if (! do_timeout) return 0;
-			if (! command_timeouted(*cmd)) return -EINPROGRESS;
-			command_del(*cmd);
+	LIST_FOREACH_SAFE(cmd, list, entry, tmp) {
+		if (0 == strcmp(path, cmd->path)) {
+			if (! do_timeout) return cmp;
+			if (! command_timeouted(cmd)) with_error(EINPROGRESS, "Not timeouted") return cmd;
+			command_del(cmd);
 		}
 	}
-	return -ENOENT;
+	warning("No command was sent with path %s", path);
+	return NULL;
 }
 
-int command_get_by_seqnum(struct command **cmd, struct commands *list, long long seqnum)
+struct command *command_get_by_seqnum(struct commands *list, long long seqnum)
 {
-	LIST_FOREACH(*cmd, list, entry) {
-		if ((*cmd)->seqnum == seqnum) return 0;
+	LIST_FOREACH(cmd, list, entry) {
+		if (cmd->seqnum == seqnum) return cmd;
 	}
-	error("No command was sent with seqnum %lld", seqnum);
-	return -ENOENT;
+	warning("No command was sent with seqnum %lld", seqnum);
+	return NULL;
 }
 
 /* Then PUT/REM commands.
@@ -150,28 +148,31 @@ void client_end(void)
 	cmd_end();
 }
 
-int client_begin(void)
+void client_begin(void)
 {
-	int err;
 	debug("init client lib");
 	cmd_begin();
-	if (0 != (err = mdir_begin())) goto q0;
-	if (0 != (err = conf_set_default_str("MDIRD_SERVER", "127.0.0.1"))) goto q1;
-	if (0 != (err = conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT)))) goto q1;
+	on_error return;
+	mdir_begin();
+	on_error goto q0;
+	conf_set_default_str("MDIRD_HOST", "127.0.0.1");
+	conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
+	on_error goto q1;
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
 		LIST_INIT(&command_types[t].list);
 	}
 	(void)pth_rwlock_init(&command_types_lock);
 	LIST_INIT(&subscribed);
-	if (0 != (err = writer_begin())) goto q1;
-	if (0 != (err = reader_begin())) goto q2;
-	return 0;
+	writer_begin();
+	on_error goto q1;
+	reader_begin();
+	on_error goto q2;
+	return;
 q2:
 	writer_end();
 q1:
 	mdir_end();
 q0:
 	cmd_end();
-	return err;
 }
 

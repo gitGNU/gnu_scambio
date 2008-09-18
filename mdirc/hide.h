@@ -20,10 +20,10 @@
 
 struct hide_cfg;
 
-int hide_begin(void);
+void hide_begin(void);
 void hide_end(void);
 
-int hide_cfg_get(struct hide_cfg **cfg, char const *path);
+struct hide_cfg *hide_cfg_get(char const *path);
 void hide_cfg_release(struct hide_cfg *cfg);
 
 #include <stdbool.h>

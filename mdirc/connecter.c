@@ -29,7 +29,8 @@ void *connecter_thread(void *arg)
 {
 	debug("Starting connecter");
 	(void)arg;
-	if (0 != cnx_client_ctor(&cnx, conf_get_str("MDIRD_SERVER"), conf_get_str("MDIRD_PORT"))) return NULL;
+	cnx_client_ctor(&cnx, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"));
+	on_error return NULL;
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
 	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);

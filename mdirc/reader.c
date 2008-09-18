@@ -28,82 +28,59 @@
 #include "persist.h"
 #include "digest.h"
 
-/* The reader listens for commands.
+/* The reader listens for command answers.
  * On a put response, it removes the temporary filename stored in the action
  * (the actual meta file will be synchronized independantly from the server).
  * On a rem response, it removes the temporary filename (same remark as above).
  * On a sub response, it moves the subscription from subscribing to subscribed.
  * On an unsub response, it deletes the unsubcribing subscription.
- * On a patch for addition, it creates the meta file (under the digest name)
- * and updates the version number. The meta may already been there if the update of
- * the version number previously failed.
- * On a patch for deletion, it removes the meta file and updates the version number.
- * Again, the meta may already have been removed if the update of the version number
- * previously failed.
+ * On a patch, it adds the patch to the patch ring, and try to reduce it
+ * (ie push as much as possible on the mdir journal, while the versions sequence is OK).
  */
 
 static bool terminate_reader;
 
-int finalize_sub(struct command *cmd, int status)
+void finalize_sub(struct command *cmd, int status)
 {
-	if (! cmd) return -ENOENT;
-	if (status != 200) {
+	if (status == 200) {
+		command_change_list(cmd, &subscribed);
+	} else {
 		error("Cannot subscribe to directory '%s' : error %d", cmd->path, status);
 		command_del(cmd);
-		return -EINVAL;
 	}
-	command_change_list(cmd, &subscribed);
-	return 0;
 }
 
-int finalize_unsub(struct command *cmd, int status)
+void finalize_unsub(struct command *cmd, int status)
 {
-	if (! cmd) return -ENOENT;
-	if (status != 200) {
+	if (status == 200) {
+		command_del(cmd);
+	} else {
 		error("Cannot unsubscribe from directory '%s' : error %d", cmd->path, status);
 		command_del(cmd);
-		return -EINVAL;
 	}
-	command_del(cmd);
-	return 0;
 }
 
-int finalize_put(struct command *cmd, int status)
+void finalize_put(struct command *cmd, int status)
 {
-	if (! cmd) return -ENOENT;
-	if (status != 200) {
+	if (status == 200) {
+		if (0 != unlink(cmd->path)) error_push(errno, "Cannot unlink file '%s'", cmd->path);
+		command_del(cmd);
+	} else {
 		error("Cannot put/rem file '%s' : status %d", cmd->path, status);
 		command_del(cmd);
-		return -EINVAL;
 	}
-	int err = 0;
-	if (0 != unlink(cmd->path)) {
-		err = -errno;
-		error("Cannot unlink file '%s' : %s", cmd->path, strerror(-err));
-	}
-	command_del(cmd);
-	return err;
 }
 
-int finalize_rem(struct command *cmd, int status)
+void finalize_rem(struct command *cmd, int status)
 {
-	return finalize_put(cmd, status);
+	finalize_put(cmd, status);
 }
 
-int finalize_class(struct command *cmd, int status)
-{
-	(void)cmd;
-	(void)status;
-	// TODO
-	return -ENOSYS;
-}
-
-int finalize_quit(struct command *cmd, int status)
+void finalize_quit(struct command *cmd, int status)
 {
 	(void)cmd;
 	(void)status;
 	terminate_reader = true;
-	return 0;
 }
 
 struct patch {

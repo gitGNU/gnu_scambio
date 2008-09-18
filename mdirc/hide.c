@@ -18,26 +18,23 @@
 #include "scambio.h"
 #include "hide.h"
 
-int hide_begin(void)
+void hide_begin(void)
 {
-	return 0;
 }
 void hide_end(void)
 {
 }
 
-int hide_cfg_get(struct hide_cfg **cfg, char const *path)
+struct hide_cfg *hide_cfg_get(char const *path)
 {
 	(void)path;
-	*cfg = NULL;
-	return 0;
+	return NULL;
 }
 
 void hide_cfg_release(struct hide_cfg *cfg)
 {
 	(void)cfg;
 }
-
 
 bool show_this_dir(struct hide_cfg *cfg, char const *name)
 {

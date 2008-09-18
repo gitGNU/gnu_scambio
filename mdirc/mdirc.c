@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-/*
- * Fsync is a simple stdin/out client to synchronize a local directory with
- * a remote mdir folder. It runs plugins as required.
- * CLI parameters : boolean to uploads only.
- * HMI will be added later on, on top of this program.
+/* Based on the new libmdir facilities, mdirc can use the listing functions
+ * instead of spiding the directory tree itself (more robust if this tree structure change
+ * in the future). For instance, it can loop around mdir_link_list(ALL) { mdir_patch_list(NEW) }
+ * to send patch submissions and subscriptions. It uses the received mdir's id to find its
+ * command list (could be as well attached right into the mdir structure (like listeners are)).
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -28,34 +28,33 @@
 #include "daemon.h"
 #include "client.h"
 
-static int init_conf(void)
+static void init_conf(void)
 {
-	int err;
-	if (0 != (err = conf_set_default_str("MDSYNC_LOG_DIR", "/var/log"))) return err;
-	if (0 != (err = conf_set_default_int("MDSYNC_LOG_LEVEL", 3))) return err;
-	return 0;
+	conf_set_default_str("MDIRC_LOG_DIR", "/tmp");
+	conf_set_default_int("MDIRC_LOG_LEVEL", 3);
 }
 
-static int init_log(void)
+static void init_log(void)
 {
-	int err;
-	if (0 != (err = log_begin(conf_get_str("MDSYNC_LOG_DIR"), "mdsync.log"))) return err;
+	log_begin(conf_get_str("MDIRC_LOG_DIR"), "mdirc.log");
+	on_error return;
 	debug("init log");
-	if (0 != atexit(log_end)) return -1;
+	if (0 != atexit(log_end)) with_error(0, "atexit") return;
 	log_level = conf_get_int("MDSYNC_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
-	return 0;
 }
 
-static int init(void)
+static void init(void)
 {
-	int err;
-	if (0 != (err = init_conf())) return err;
-	if (0 != (err = init_log())) return err;
-	if (0 != (err = daemonize())) return err;
-	if (0 != (err = client_begin())) return err;
-	if (0 != atexit(client_end)) return -1;
-	return 0;
+	init_conf();
+	on_error return;
+	init_log();
+	on_error return;
+	daemonize();
+	on_error return;
+	client_begin();
+	on_error return;
+	if (0 != atexit(client_end)) with_error(0, "atexit") return;
 }
 
 int main(int nb_args, char **args)
@@ -64,7 +63,8 @@ int main(int nb_args, char **args)
 	(void)args;
 	int ret = EXIT_FAILURE;
 	if (! pth_init()) return EXIT_FAILURE;
-	if (0 != init()) goto q0;
+	init();
+	on_error goto q0;
 	while (1) {
 		connecter_thread(NULL);
 	}
