@@ -49,9 +49,8 @@ void exec_end(void)
 
 static void answer(struct cnx_env *env, long long seq, char const *cmd_name, int status, char const *cmpl)
 {
-	char reply[100];
+	char reply[512];
 	size_t len = snprintf(reply, sizeof(reply), "%lld %s %d %s\n", seq, cmd_name, status, cmpl);
-	assert(len < sizeof(reply));
 	Write(env->fd, reply, len);
 }
 
@@ -95,39 +94,14 @@ void exec_unsub(struct cnx_env *env, long long seq, char const *dir)
  * PUT/REM
  */
 
-static bool is_directory(struct header *h) {
-	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
-	return type && 0 == strncmp("dir", type, 3);
-}
-
 // dir is the directory user name instead of dirId, because we wan't the client
 // to be able to add things to this directory before knowing it's dirId.
-static void add_header(char const *dir, struct header *h, enum mdir_action action)
+static mdir_version add_header(char const *dir, struct header *h, enum mdir_action action)
 {
+	debug("adding a header in dir %s", dir);
 	struct mdir *mdir = mdir_lookup(dir);
-	on_error return;
-	if (is_directory(h)) {
-		struct mdir *subdir;
-		char const *dirid_str = header_search(h, SCAMBIO_DIRID_FIELD);
-		char const *dirname   = header_search(h, SCAMBIO_NAME_FIELD);
-		debug("header is for directory id=%s, name=%s", dirid_str, dirname);
-		if (action == '+') {
-			if (! dirname) dirname = "Unnamed";
-			if (dirid_str) with_error(0, "DirId already set") return;
-			subdir = mdir_create();
-			on_error return;	
-			header_add_field(h, SCAMBIO_DIRID_FIELD, mdir_id(mdir));
-			on_error return;
-			mdir_link(mdir, dirname, subdir);
-			on_error return;
-		} else {
-			if (! dirname) with_error(0, "folder name ommited") return;
-			mdir_unlink(mdir, dir);
-			on_error return;
-		}
-	}
-	// then write the patch
-	mdir_patch(mdir, action, h);
+	on_error return 0;
+	return mdir_patch(mdir, action, h);
 }
 
 static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_env *env, long long seq, char const *dir)
@@ -138,15 +112,16 @@ static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_
 	on_error return;
 	int status = 200;
 	header_read(h, env->fd);
+	mdir_version version;
 	on_error {
 		status = 502;
 	} else {
 		header_debug(h);
-		add_header(dir, h, action);
+		version = add_header(dir, h, action);
 		on_error status = 502;
 	}
 	header_del(h);
-	answer(env, seq, cmdtag, status, is_error() ? error_str():"OK");
+	answer(env, seq, cmdtag, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
 	error_clear();
 }
 

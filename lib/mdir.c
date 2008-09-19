@@ -43,6 +43,7 @@
 
 static size_t mdir_root_len;
 static char const *mdir_root;
+static char mdir_namespace;
 static LIST_HEAD(mdirs, mdir) mdirs;
 static struct persist dirid_seq;
 
@@ -67,7 +68,7 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 	struct dirent *dirent;
 	// We may yield the CPU here, but then we must acquire write lock
 	while (NULL != (dirent = readdir(d))) {
-		if (dirent->d_name[0] != '.') {
+		if (is_jnl_file(dirent->d_name)) {
 			jnl_new(mdir, dirent->d_name);
 			on_error break;
 		}
@@ -90,9 +91,10 @@ static struct mdir *mdir_new(char const *id, bool create)
 
 struct mdir *mdir_create(void)
 {
+	debug("create a new mdir");
 	uint64_t id = (*(uint64_t *)dirid_seq.data)++;
-	char id_str[20+1];
-	snprintf(id_str, sizeof(id_str), "%"PRIu64, id);
+	char id_str[1+20+1];
+	snprintf(id_str, sizeof(id_str), "%c%"PRIu64, mdir_namespace, id);
 	return mdir_new(id_str, true);
 }
 
@@ -126,12 +128,13 @@ extern inline void mdir_listener_dtor(struct mdir_listener *l);
 
 void mdir_register_listener(struct mdir *mdir, struct mdir_listener *l)
 {
+	debug("register a listener to mdir %s", mdir_id(mdir));
 	LIST_INSERT_HEAD(&mdir->listeners, l, entry);
 }
 
 void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l)
 {
-	(void)mdir;
+	debug("unregister a listener to mdir %s", mdir_id(mdir));
 	LIST_REMOVE(l, entry);
 }
 
@@ -139,28 +142,46 @@ void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l)
  * lookup
  */
 
+struct mdir *mdir_lookup_by_id(char const *id, bool create)
+{
+	debug("lookup id '%s', %screate", id, create ? "":"no ");
+	// First try to find an existing struct mdir
+	struct mdir *mdir;
+	LIST_FOREACH(mdir, &mdirs, entry) {
+		if (0 == strcmp(id, mdir_id(mdir))) return mdir;
+	}
+	// Load it
+	return mdir_new(id, create);
+}
+
 struct mdir *mdir_lookup(char const *name)
 {
+	debug("lookup %s", name);
 	// OK, so we have a name. We let the kernel do the lookup for us (symlinks),
 	// then fetch the id from the result.
+	if (0 == strcmp("/", name)) { // this one is not a symlink
+		return mdir_lookup_by_id("root", false);
+	}
 	char path[PATH_MAX];
 	char slink[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", mdir_root, name);
+	snprintf(path, sizeof(path), "%s/root/%s", mdir_root, name);
 	ssize_t len = readlink(path, slink, sizeof(slink));
 	if (len == -1) with_error(errno, "readlink %s", path) return NULL;
 	if (len == 0 || len == sizeof(slink)) with_error(0, "bad symlink for %s", path) return NULL;
 	char *id = slink + len - 1;
 	while (id >= slink && *id != '/') id--;
 	if (id >= slink) *id = '\0';
-	return mdir_new(id+1, false);
+	return mdir_lookup_by_id(id+1, false);
 }
 
 /*
  * Init
  */
 
-void mdir_begin(void)
+void mdir_begin(bool server)
 {
+	if (server) mdir_namespace = 'S';
+	else mdir_namespace = 'C';
 	// Default configuration values
 	conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir");
 	conf_set_default_str("MDIR_DIRSEQ", "/tmp/.dirid.seq");
@@ -185,25 +206,7 @@ void mdir_end(void)
 }
 
 /*
- * (un)link
- */
-
-void mdir_link(struct mdir *parent, char const *name, struct mdir *child)
-{
-	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
-	if (0 != symlink(child->path, path)) error_push(errno, "symlink %s -> %s", path, child->path);
-}
-
-void mdir_unlink(struct mdir *parent, char const *name)
-{
-	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
-	if (0 != unlink(path)) error_push(errno, "unlink %s", path);
-}
-
-/*
- * read
+ * Read
  */
 
 static mdir_version get_next_version(struct mdir *mdir, struct jnl **jnl, mdir_version version)
@@ -222,6 +225,7 @@ static mdir_version get_next_version(struct mdir *mdir, struct jnl **jnl, mdir_v
 		}
 	}
 	if (! *jnl) error_push(ENOMSG, "No more patches");
+	debug("in %s, version after %"PRIversion" is %"PRIversion, mdir_id(mdir), version, next);
 	return next;
 }
 
@@ -234,30 +238,192 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
 		if (error_code() == ENOMSG) error_clear();
 		return NULL;
 	}
-	return jnl_read(jnl, *version, action);
+	return jnl_read(jnl, *version - jnl->version, action);
 }
 
 /*
- * patch a mdir
+ * (Un)Link
  */
 
-void mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
+static void mdir_link(struct mdir *parent, struct header *h)
 {
-	// First acquire writer-grade lock
-	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
-	// Either use the last journal, or create a new one
-	struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
-	if (! jnl) {
-		jnl = jnl_new_empty(mdir, 1);
-	} else if (jnl_too_big(jnl)) {
-		jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
+	debug("add link to mdir %s", mdir_id(parent));
+	assert(h);
+	// check that the given header does _not_ already have a dirId,
+	// and add fields name and type if necessary
+	char const *name = header_search(h, SCAMBIO_NAME_FIELD);
+	if (! name) {
+		name = "Unnamed";
+		header_add_field(h, SCAMBIO_NAME_FIELD, name);
+		on_error return;
 	}
-	unless_error jnl_patch(jnl, action, header);
-	(void)pth_rwlock_release(&mdir->rwlock);
+	struct mdir *child;
+	char const *dirid = header_search(h, SCAMBIO_DIRID_FIELD);
+	if (dirid) {
+		// create it if it does not exist
+		child = mdir_lookup_by_id(dirid, true);
+		on_error return;
+	} else {
+		child = mdir_create();
+		on_error return;
+		header_add_field(h, SCAMBIO_DIRID_FIELD, mdir_id(child));
+		on_error return;
+	}
+	char const *dirtype = header_search(h, SCAMBIO_TYPE_FIELD);
+	if (dirtype) {
+		if (0 != strcmp(dirtype, SCAMBIO_DIR_TYPE)) with_error(0, "Bad header type (%s)", dirtype) return;
+	} else {
+		header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_DIR_TYPE);
+		on_error return;
+	}
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
+	if (0 != symlink(child->path, path)) error_push(errno, "symlink %s -> %s", path, child->path);
+}
+
+static void mdir_unlink(struct mdir *parent, struct header *h)
+{
+	debug("remove a link from mdir %s", mdir_id(parent));
+	assert(h);
+	char const *name = header_search(h, SCAMBIO_NAME_FIELD);
+	if (! name) with_error(0, "folder name ommited") return;
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
+	if (0 != unlink(path)) error_push(errno, "unlink %s", path);
 }
 
 /*
- * accessors
+ * Patch
+ */
+
+static bool is_directory(struct header *h)
+{
+	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
+	return type && 0==strcmp(type, SCAMBIO_DIR_TYPE);
+}
+
+mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
+{
+	debug("patch mdir %s", mdir_id(mdir));
+	mdir_version version;
+	on_error return 0;
+	// First acquire writer-grade lock
+	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
+	do {
+		// if its for a subfolder, performs the (un)linking
+		if (is_directory(header))  {
+			if (action == MDIR_ADD) {
+				mdir_link(mdir, header);
+			} else {
+				mdir_unlink(mdir, header);
+			}
+			on_error break;
+		}
+		// Either use the last journal, or create a new one
+		struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
+		if (! jnl) {
+			jnl = jnl_new_empty(mdir, 1);
+		} else if (jnl_too_big(jnl)) {
+			jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
+		}
+		on_error break;
+		version = jnl_patch(jnl, action, header);
+	} while (0);
+	(void)pth_rwlock_release(&mdir->rwlock);
+	return version;
+}
+
+void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *h)
+{
+	bool is_dir = is_directory(h);
+	char const *dirId = is_dir ? header_search(h, SCAMBIO_DIRID_FIELD):NULL;
+	if (dirId && dirId[0] == mdir_namespace) with_error(0, "Cannot refer to a temporary dirId") return;
+	char temp[PATH_MAX];
+	int len = snprintf(temp, sizeof(temp), "%s/.temp/%c", mdir->path, action == MDIR_ADD ? '+':'-');
+	Mkdir(temp);
+	on_error return;	// this is not an error if the dir already exists
+	header_digest(h, sizeof(temp)-len, temp+len);
+	header_to_file(h, temp);
+	on_error return;
+	if (is_dir) {
+		if (action == MDIR_ADD) {
+			mdir_link(mdir, h);
+		} else {
+			mdir_unlink(mdir, h);
+		}
+	}
+}
+
+/*
+ * List
+ */
+
+// sync means in on the server - but not necessarily on our log yet
+void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, mdir_version version))
+{
+	struct jnl *jnl;
+	if (want_sync) {
+		// List content of journals
+		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
+			for (unsigned index=0; index < jnl->nb_patches; index++) {
+				enum mdir_action action;
+				struct header *h = jnl_read(jnl, index, &action);
+				on_error return;
+				cb(mdir, h, action, true, jnl->version + index);
+				header_del(h);
+			}
+		}
+	}
+	if (want_unsync) {
+		// List content of ".tmp" subdirectory
+		char temp[PATH_MAX];
+		int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
+		debug("listing %s", temp);
+		DIR *dir = opendir(temp);
+		if (! dir) {
+			if (errno != ENOENT) goto end_unsync;
+			with_error(errno, "opendir(%s)", temp) return;
+		}
+		mdir_version last_version = mdir_last_version(mdir);
+		struct dirent *dirent;
+		while (NULL != (dirent = readdir(dir))) {
+			char const *const filename = dirent->d_name;
+			// patch files start with the action code '+' or '-'.
+			enum mdir_action action;
+			if (filename[0] == '+') action = MDIR_ADD;
+			else if (filename[0] == '-') action = MDIR_REM;
+			else continue;
+			snprintf(temp+dirlen, sizeof(temp)-dirlen, "/%s", filename);
+			// then filename may be either a numeric key (patch was not sent yet)
+			// or "=version" (patch was sent and acked with this version number)
+			bool synced = filename[1] == '=';
+			mdir_version version = 0;
+			if (synced) {	// maybe we already synchronized it down into the journal ?
+				version = mdir_str2version(filename+2);
+				on_error {
+					error("please fix %s", temp);
+					error_clear();
+					continue;
+				}
+				if (version <= last_version) {	// already on our journal so remove it
+					debug("unlinking %s", temp);
+					if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) return;
+					continue;
+				}
+				if (! want_sync) continue;
+			}
+			struct header *h = header_from_file(temp);
+			on_error return;
+			cb(mdir, h, action, synced, version);
+			header_del(h);
+		}
+		if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
+	}
+end_unsync:;
+}
+
+/*
+ * Accessors
  */
 
 mdir_version mdir_last_version(struct mdir *mdir)
@@ -270,5 +436,24 @@ mdir_version mdir_last_version(struct mdir *mdir)
 char const *mdir_id(struct mdir *mdir)
 {
 	return mdir->path + mdir_root_len + 1;
+}
+
+/*
+ * Utilities
+ */
+
+char const *mdir_version2str(mdir_version version)
+{
+	static char str[20+1];
+	int len = snprintf(str, sizeof(str), "%"PRIversion, version);
+	assert(len < (int)sizeof(str));
+	return str;
+}
+
+mdir_version mdir_str2version(char const *str)
+{
+	mdir_version version;
+	if (1 != sscanf(str, "%"PRIversion, &version)) with_error(0, "sscanf(%s)", str) return 0;
+	return version;
 }
 

@@ -36,7 +36,7 @@ struct jnl {
 };
 
 struct mdir {
-	LIST_ENTRY(mdir) entry;	// entry in the list of cached dirs (FIXME: hash this!)
+	LIST_ENTRY(mdir) entry;	// entry in the list of cached dirs
 	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
 	LIST_HEAD(mdir_listeners, mdir_listener) listeners;	// call them when a patch is appended
 	pth_rwlock_t rwlock;
@@ -49,7 +49,8 @@ struct jnl *jnl_new(struct mdir *mdir, char const *filename);
 void jnl_del(struct jnl *);
 struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version starting_version);
 bool jnl_too_big(struct jnl *);
-void jnl_patch(struct jnl *, enum mdir_action, struct header *);
-struct header *jnl_read(struct jnl *, mdir_version, enum mdir_action *action);
+mdir_version jnl_patch(struct jnl *, enum mdir_action, struct header *);
+struct header *jnl_read(struct jnl *, unsigned index, enum mdir_action *action);
+bool is_jnl_file(char const *filename);
 
 #endif

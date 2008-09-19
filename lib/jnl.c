@@ -91,9 +91,9 @@ static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 	on_error return;
 	// Open both index and log files
 	char path[PATH_MAX];
-	int len = snprintf(path, sizeof(path), ".%s/%s", mdir->path, filename);
-	jnl->idx_fd = open(path+1, O_RDWR|O_APPEND|O_CREAT, 0660);
-	if (jnl->idx_fd == -1) with_error(errno, "open '%s'", path+1) return;
+	int len = snprintf(path, sizeof(path), "%s/%s", mdir->path, filename);
+	jnl->idx_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
+	if (jnl->idx_fd == -1) with_error(errno, "open '%s'", path) return;
 	memcpy(path + len - 3, "log", 4);	// change extention
 	jnl->patch_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
 	if (jnl->patch_fd == -1) {
@@ -165,17 +165,17 @@ struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version start_version)
  * Patch
  */
 
-void jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
+mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
 {
 	struct index_entry ie;
 	ie.offset = filesize(jnl->patch_fd);
-	on_error return;
+	on_error return 0;
 	// Write the index
 	Write(jnl->idx_fd, &ie, sizeof(ie));
-	on_error return;	// FIXME: on short writes, truncate
+	on_error return 0;	// FIXME: on short writes, truncate
 	// Then the patch command
 	Write(jnl->patch_fd, action == MDIR_ADD ? "+\n":"-\n", 2);
-	on_error return;
+	on_error return 0;
 	struct header *alt_header = NULL;
 	char const *key;
 	if (action == MDIR_REM && NULL != (key = header_search(header, SCAMBIO_KEY_FIELD))) {
@@ -196,6 +196,7 @@ void jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
 	if (alt_header) header_del(alt_header);
 	unless_error jnl->nb_patches ++;
 	// FIXME: triggers all listeners that something was appended
+	return jnl->version + jnl->nb_patches -1;
 }
 
 /*
@@ -220,11 +221,11 @@ static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 	return ie[0].offset;
 }
 
-struct header *jnl_read(struct jnl *jnl, mdir_version version, enum mdir_action *action)
+struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *action)
 {
 	struct header *header = NULL;
 	size_t size;
-	off_t offset = jnl_offset_size(jnl, version - jnl->version, &size);
+	off_t offset = jnl_offset_size(jnl, index, &size);
 	on_error return NULL;
 	// Read the whole patch
 	char *buf = malloc(size);
@@ -256,4 +257,11 @@ struct header *jnl_read(struct jnl *jnl, mdir_version version, enum mdir_action 
 bool jnl_too_big(struct jnl *jnl)
 {
 	return jnl->nb_patches >= max_jnl_size;
+}
+
+bool is_jnl_file(char const *filename)
+{
+	int len = strlen(filename);
+	if (len < 4) return false;
+	return 0 == strcmp(".idx", filename+len-4);
 }

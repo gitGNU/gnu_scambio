@@ -21,6 +21,9 @@
 #include <assert.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "scambio.h"
 #include "config.h"
 #include "scambio/header.h"
@@ -75,10 +78,10 @@ static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char cons
 		varbuf_stringifies(&vb);
 	}
 	on_error {
-		error_ack();
+		error_save();
 		varbuf_dtor(&vb);
 		*ptr = NULL;
-		error_clear();
+		error_restore();
 	} else {
 		*ptr = varbuf_unbox(&vb);
 	}
@@ -218,7 +221,7 @@ void header_read(struct header *h, int fd)
 	bool eoh_reached = false;
 	varbuf_ctor(&vb, 10240, true);
 	on_error return;
-	error_ack();
+	error_save();
 	while (1) {
 		varbuf_read_line(&vb, fd, MAX_HEADLINE_LENGTH, &line);
 		on_error break;
@@ -236,11 +239,11 @@ void header_read(struct header *h, int fd)
 			break;
 		}
 	}
-	if (error_code() == ENOENT) {
+	if (is_error() && error_code() == ENOENT) {
 		debug("BTW, its EOF");
 		eoh_reached = true;
 	}
-	error_clear();
+	error_restore();
 	if (nb_lines == 0) error_push(EINVAL, "No lines in header");
 	if (! eoh_reached) error_push(EINVAL, "End of file before end of header");
 	if (! is_error()) header_parse(h, vb.buf);
@@ -335,4 +338,34 @@ void header_digest(struct header *header, size_t size, char *buffer)
 		buffer[dig_len] = '\0';
 	} while (0);
 	varbuf_dtor(&vb);
+}
+
+struct header *header_from_file(char const *filename)
+{
+	int fd = open(filename, O_RDONLY);
+	if (fd < 0) with_error(errno, "open(%s)", filename) return NULL;
+	struct header *h;
+	do {
+		h = header_new();
+		on_error {
+			h = NULL;
+			break;
+		}
+		header_read(h, fd);
+		on_error {
+			header_del(h);
+			h = NULL;
+			break;
+		}
+	} while (0);
+	close(fd);
+	return h;
+}
+
+void header_to_file(struct header *h, char const *filename)
+{
+	int fd = open(filename, O_WRONLY);
+	if (fd < 0) with_error(errno, "open(%s)", filename) return;
+	header_write(h, fd);
+	close(fd);
 }

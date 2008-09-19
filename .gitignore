@@ -19,3 +19,4 @@ build/
 cscope.out
 config.h.in~
 ylwrap
+core

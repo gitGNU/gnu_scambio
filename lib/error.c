@@ -48,21 +48,26 @@ void error_push(int code, char *fmt, ...)
 		if (len >= (int)sizeof(err->str)) len = sizeof(err->str)-1;
 		va_end(ap);
 	}
-	snprintf(err->str+len, sizeof(err->str)-len, "%s%s", len > 0 ? " : ":"", strerror(code));
+	if (code) snprintf(err->str+len, sizeof(err->str)-len, "%s%s", len > 0 ? " : ":"", strerror(code));
 	error1(err->str);
 }
 
-void error_ack(void)
+void error_save(void)
 {
 	assert(nb_acks < sizeof_array(ack_stack));
 	ack_stack[nb_acks++] = nb_errors;
 }
 
+void error_restore(void)
+{
+	error_clear();
+	assert(nb_acks > 0);
+	nb_acks--;
+}
 void error_clear(void)
 {
 	assert(nb_errors >= nb_expected_errors());
 	nb_errors = nb_expected_errors();
-	assert(nb_acks > 0);
-	nb_acks--;
 }
+
 

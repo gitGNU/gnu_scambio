@@ -1,15 +1,19 @@
 export MALLOC_CHECK_=2
-export MDIRD_ROOT_DIR=$PWD/server/mdird/checks/mdird/msgs
-export MDIRD_DIRSEQ=$MDIRD_ROOT_DIR/.dirid.seq
 export MDIRD_LOG_DIR=/tmp
 export MDIRD_LOG_LEVEL=5
-export MDIRD_MAX_JNL_SIZE=10
+export MDIRD_PORT=21435
+export MDIR_ROOT_DIR=$PWD/mdird/checks/mdird
+export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+export MDIR_MAX_JNL_SIZE=10
 export SMTPD_LOG_DIR=/tmp
 export SMTPD_LOG_LEVEL=5
 export SMTPD_PORT=1025
 export MDIRD_SERVER=localhost
-export MDIR_ROOT_DIR=$PWD/client/checks/msgs
 export MDSYNC_LOG_DIR=/tmp
 export MDSYNC_LOG_LEVEL=5
 
-mkdir -p $MDIRD_ROOT_DIR/root $MDIR_ROOT_DIR
+rm -f /tmp/mdird.log
+rm -rf $MDIR_ROOT_DIR
+mkdir -p $MDIR_ROOT_DIR/root
+
+

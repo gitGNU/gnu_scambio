@@ -35,7 +35,7 @@ typedef uint64_t mdir_version;
 #define PRIversion PRIu64
 
 struct header;
-void mdir_begin(void);
+void mdir_begin(bool server);
 void mdir_end(void);
 
 // create a new mdir (you will want to mdir_link() it somewhere)
@@ -44,18 +44,32 @@ struct mdir *mdir_create(void);
 // add/remove a header into a mdir
 // do not use this in plugins : only the server decides how and when to apply a patch
 // plugins use mdir_patch_request instead
-void mdir_patch(struct mdir *, enum mdir_action, struct header *);
+// returns the new version number
+mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
 
 // ask for the addition of this patch to the mdir
 // actually the patch will be saved in a tempfile where it will be found by the client
-// synchronizer mdirc, sent to the server whenever possible, then removed (!), then
-// synchronized down hopefully. So this does not require a connection to mdird.
-// Problems :
-// - between the file is removed and received from the server, the message appears to
-// vanish from the client. Not very problematic in practice.
-// - how does mdirc manage to delete the tempfile ? It uses the returned version,
-// which is in another 'space' the journal version, but serve a similar purpose.
-mdir_version mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
+// synchronizer mdirc, sent to the server whenever possible, then when acked removed to a
+// doted name with the version (received with the ack). Then, when the patch is
+// eventually synchronized down the dotted version file is removed.
+// So this does not require a connection to mdird.
+// The only problem arises when the patch is received before the ack. Even if the server
+// sends the ack before the patch, the packets may be received the other way round.
+// So it's better to remove those dotted version files when a client ask for a listing (then
+// we know if the dotted version file is also in the journal and delete it.
+// If the patch creates/remove a subfolder for an existing dirId, the patch is added as above,
+// but also the symlink is performed so that the lookup works. Later when the patch is
+// received it is thus not an error if the symlink is already there.
+// If the patch adds a new subfolder (no dirId specified), a temporary dirId is created
+// and symlinked as above. When the patch is eventually received, the directory is renamed
+// to the actual dirId provided with the patch, and the symlink is rebuild. No other
+// symlinks refer to this temporary dirId because it is forbidden to use a temporary dirId
+// (this dirId being unknown for the server). So, it is forbidden to link a temporary dirId
+// into another folder, and patch_request will cprevent this to happen. This should
+// not be too problematic for the client, since it still can add patches to this directory,
+// enven patches that creates other directories, for patches are added to names and not to
+// dirId.
+void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
 
 // abort a patch request if its not already aborted.
 // If the patch found is of type: dir, unlink also the dir from its parent.
@@ -80,28 +94,7 @@ void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l);
 
 // returns the mdir for this name (relative to mdir_root, must exists)
 struct mdir *mdir_lookup(char const *name);
-
-// FIXME FIRST: won't it be simpler if these (un)link functions takes a header, add a "type: dir"
-// to it, and patch(_request) it in addition to symlinking the dirs ?
-// link a mdir into another one, so that the two apears in a parent/child relationship.
-// the corresponding patch to the parent is _not_ performed. Call this when you receive
-// the relevant patch only (ie, plugins uses mdir_(un)link_request instead).
-// name is not allowed to start with a '.' nor to countain '/'.
-void mdir_link(struct mdir *parent, char const *name, struct mdir *child);
-void mdir_unlink(struct mdir *parent, char const *name);
-
-// ask for a new link between two mdirs.
-// (actually this will create a link under the dotted name, that will be moved when
-// the proper patch will be eventually received).
-// this does not prevent you from calling mdir_patch_request with the proper patch for it.
-// If these were also creating the relevant patch, the versions returned would be those of these
-// patches, into which the name of the directory could be found.
-mdir_version mdir_link_request(struct mdir *parent, char const *name, struct mdir *child);
-mdir_version mdir_unlink_request(struct mdir *parent, char const *name);
-
-// list all subdirectories of a mdir
-// confirmed, ie in journal, or unconfirmed.
-void mdir_link_list(struct mdir *, bool confirmed, bool unconfirmed, void (*cb)(struct mdir *parent, struct mdir *child, bool confirmed, mdir_version version));
+struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir
 // (will also list unconfirmed patches)
@@ -114,5 +107,8 @@ struct header *mdir_read_next(struct mdir *, mdir_version *, enum mdir_action *)
 // returns the last version of this mdir
 mdir_version mdir_last_version(struct mdir *);
 char const *mdir_id(struct mdir *);
+// use a static buffer
+char const *mdir_version2str(mdir_version);
+mdir_version mdir_str2version(char const *str);
 
 #endif
