@@ -34,6 +34,28 @@ enum mdir_action { MDIR_ADD, MDIR_REM };
 typedef uint64_t mdir_version;
 #define PRIversion PRIu64
 
+// Do not use these but inherit from them
+struct jnl {
+	STAILQ_ENTRY(jnl) entry;
+	int idx_fd;	// to the index file
+	int patch_fd;	// to the patch file
+	mdir_version version;	// version of the first patch in this journal
+	unsigned nb_patches;	// number of patches in this file
+	struct mdir *mdir;
+};
+struct mdir {
+	LIST_ENTRY(mdir) entry;	// entry in the list of cached dirs
+	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
+	pth_rwlock_t rwlock;
+	char path[PATH_MAX];	// absolute path to the dir (actual one, not one of the symlinks)
+};
+
+// provides these allocators for previous structures (default ones being malloc/free)
+extern struct jnl *(*jnl_alloc)(void);
+extern void (*jnl_free)(struct jnl *);
+extern struct mdir *(*mdir_alloc)(void);
+extern void (*mdir_free)(struct mdir *);
+
 struct header;
 void mdir_begin(bool server);
 void mdir_end(void);
@@ -65,32 +87,15 @@ mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
 // to the actual dirId provided with the patch, and the symlink is rebuild. No other
 // symlinks refer to this temporary dirId because it is forbidden to use a temporary dirId
 // (this dirId being unknown for the server). So, it is forbidden to link a temporary dirId
-// into another folder, and patch_request will cprevent this to happen. This should
+// into another folder, and patch_request will prevent this to happen. This should
 // not be too problematic for the client, since it still can add patches to this directory,
-// enven patches that creates other directories, for patches are added to names and not to
+// even patches that creates other directories, for patches are added to names and not to
 // dirId.
 void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
 
 // abort a patch request if its not already aborted.
 // If the patch found is of type: dir, unlink also the dir from its parent.
 void mdir_patch_request_abort(struct mdir *, enum mdir_action, mdir_version version);
-
-// listeners
-// will be called whenever a patch is applied to the mdir
-struct mdir_listener {
-	struct mdir_listener_ops {
-		void (*del)(struct mdir_listener *, struct mdir *);	// must unregister if its registered
-		void (*notify)(struct mdir_listener *, struct mdir *, struct header *h);
-	} const *ops;
-	LIST_ENTRY(mdir_listener) entry;
-};
-static inline void mdir_listener_ctor(struct mdir_listener *l, struct mdir_listener_ops const *ops)
-{
-	l->ops = ops;
-}
-static inline void mdir_listener_dtor(struct mdir_listener *l) { (void)l; }
-void mdir_register_listener(struct mdir *mdir, struct mdir_listener *l);
-void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l);
 
 // returns the mdir for this name (relative to mdir_root, must exists)
 struct mdir *mdir_lookup(char const *name);

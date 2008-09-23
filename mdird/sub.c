@@ -27,29 +27,6 @@
 #include "scambio/header.h"
 
 /*
- * Listener ops
- */
-
-static void listener_del(struct mdir_listener *l, struct mdir *mdir)
-{
-	(void)mdir;
-	struct subscription *sub = (struct subscription *)((char *)l - offsetof(struct subscription, listener));
-	subscription_del(sub);
-}
-
-static void listener_notify(struct mdir_listener *l, struct mdir *mdir, struct header *h)
-{
-	(void)mdir;
-	(void)h;
-	struct subscription *sub = (struct subscription *)((char *)l - offsetof(struct subscription, listener));
-	pth_message_t *m = malloc(sizeof(*m));
-	if (! m) with_error(ENOMEM, "malloc pth_message") return;
-	m->m_size = 0;	// in case someone want to have a look
-	m->m_data = NULL;
-	pth_msgport_put(sub->msg_port, m);
-}
-
-/*
  * Creation / Deletion / Reset
  */
 
@@ -59,18 +36,13 @@ static void subscription_ctor(struct subscription *sub, struct cnx_env *env, cha
 {
 	sub->version = version;
 	sub->env = env;
-	sub->mdir = mdir_lookup(name);
+	struct mdir *mdir = mdir_lookup(name);
 	on_error return;
+	sub->mdird = mdir2mdird(mdir);
 	LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
 	subscription_reset_version(sub, version);
-	sub->msg_port = pth_msgport_create(NULL);
 	sub->thread_id = pth_spawn(PTH_ATTR_DEFAULT, subscription_thread, sub);
-	static struct mdir_listener_ops const my_ops = {
-		.del = listener_del,
-		.notify = listener_notify,
-	};
-	mdir_listener_ctor(&sub->listener, &my_ops);
-	sub->registered = false;
+	LIST_INSERT_HEAD(&sub->mdird->subscriptions, sub, mdird_entry);
 }
 
 struct subscription *subscription_new(struct cnx_env *env, char const *name, mdir_version version)
@@ -85,22 +57,10 @@ struct subscription *subscription_new(struct cnx_env *env, char const *name, mdi
 	return sub;
 }
 
-static void clear_msgport(struct subscription *sub)
-{
-	pth_message_t *m;
-	while (NULL != (m = pth_msgport_get(sub->msg_port))) {
-		free(m);
-	}
-}
-
 static void subscription_dtor(struct subscription *sub)
 {
-	if (sub->registered) mdir_unregister_listener(sub->mdir, &sub->listener);
-	mdir_listener_dtor(&sub->listener);
+	LIST_REMOVE(sub, mdird_entry);
 	LIST_REMOVE(sub, env_entry);
-	// waiting messages must be fetched and freed
-	clear_msgport(sub);
-	pth_msgport_destroy(sub->msg_port);
 	(void)pth_cancel(sub->thread_id);	// better set the cancellation type to PTH_CANCEL_ASYNCHRONOUS
 }
 
@@ -126,7 +86,7 @@ struct subscription *subscription_find(struct cnx_env *env, char const *dir)
 	struct mdir *mdir = mdir_lookup(dir);
 	on_error return NULL;
 	LIST_FOREACH(sub, &env->subscriptions, env_entry) {
-		if (mdir == sub->mdir) return sub;
+		if (mdir == &sub->mdird->mdir) return sub;
 	}
 	return NULL;
 }
@@ -137,7 +97,7 @@ struct subscription *subscription_find(struct cnx_env *env, char const *dir)
 
 static bool client_needs_patch(struct subscription *sub)
 {
-	return sub->version < mdir_last_version(sub->mdir);
+	return sub->version < mdir_last_version(&sub->mdird->mdir);
 }
 
 static void send_patch(int fd, struct header *h, struct mdir *mdir, enum mdir_action action, mdir_version prev, mdir_version new)
@@ -155,18 +115,17 @@ static void send_next_patch(struct subscription *sub)
 {
 	enum mdir_action action;
 	mdir_version next_version = sub->version;
-	struct header *h = mdir_read_next(sub->mdir, &next_version, &action);
+	struct header *h = mdir_read_next(&sub->mdird->mdir, &next_version, &action);
 	on_error return;
-	send_patch(sub->env->fd, h, sub->mdir, action, sub->version, next_version);
+	send_patch(sub->env->fd, h, &sub->mdird->mdir, action, sub->version, next_version);
 	unless_error sub->version = next_version;	// last version known is the last we sent
 }
 
 static void wait_notif(struct subscription *sub)
 {
-	pth_event_t ev = pth_event(PTH_EVENT_MSG, sub->msg_port);
-	(void)pth_wait(ev);
-	pth_event_free(ev, PTH_FREE_ALL);
-	clear_msgport(sub);
+	(void)sub;
+	pth_yield(NULL);
+	sleep(1);	// FIXME
 }
 
 static void *subscription_thread(void *sub_)
@@ -174,17 +133,13 @@ static void *subscription_thread(void *sub_)
 	struct subscription *sub = sub_;
 	debug("new thread for subscription @%p", sub);
 	while (1) {
-		if (! client_needs_patch(sub)) {
-			if (! sub->registered) {
-				mdir_register_listener(sub->mdir, &sub->listener);
-				sub->registered = true;
-			}
-			wait_notif(sub);
+		if (client_needs_patch(sub)) {
+			pth_mutex_acquire(&sub->env->wfd, FALSE, NULL);
+			send_next_patch(sub);
+			pth_mutex_release(&sub->env->wfd);
+			on_error break;
 		}
-		pth_mutex_acquire(&sub->env->wfd, FALSE, NULL);
-		send_next_patch(sub);
-		pth_mutex_release(&sub->env->wfd);
-		on_error break;
+		wait_notif(sub);
 	}
 	debug("terminate thread for subscription @%p", sub);
 	subscription_del(sub);

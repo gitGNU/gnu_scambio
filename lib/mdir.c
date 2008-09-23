@@ -46,6 +46,24 @@ static char const *mdir_root;
 static char mdir_namespace;
 static LIST_HEAD(mdirs, mdir) mdirs;
 static struct persist dirid_seq;
+struct mdir *(*mdir_alloc)(void);
+void (*mdir_free)(struct mdir *);
+
+/*
+ * Default allocator
+ */
+
+static struct mdir *mdir_alloc_default(void)
+{
+	struct mdir *mdir = malloc(sizeof(*mdir));
+	if (! mdir) error_push(ENOMEM, "malloc mdir");
+	return mdir;
+}
+
+static void mdir_free_default(struct mdir *mdir)
+{
+	free(mdir);
+}
 
 /*
  * mdir creation
@@ -54,7 +72,6 @@ static struct persist dirid_seq;
 // path must be mdir_root + "/" + id
 static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 {
-	LIST_INIT(&mdir->listeners);
 	snprintf(mdir->path, sizeof(mdir->path), "%s/%s", mdir_root, id);
 	if (create) {
 		Mkdir(mdir->path);
@@ -79,11 +96,11 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 
 static struct mdir *mdir_new(char const *id, bool create)
 {
-	struct mdir *mdir = malloc(sizeof(*mdir));
-	if (! mdir) with_error(ENOMEM, "malloc mdir") return NULL;
+	struct mdir *mdir = mdir_alloc();
+	on_error return NULL;
 	mdir_ctor(mdir, id, create);
 	on_error {
-		free(mdir);
+		mdir_free(mdir);
 		return NULL;
 	}
 	return mdir;
@@ -100,10 +117,6 @@ struct mdir *mdir_create(void)
 
 static void mdir_dtor(struct mdir *mdir)
 {
-	struct mdir_listener *l;
-	while (NULL != (l = LIST_FIRST(&mdir->listeners))) {
-		l->ops->del(l, mdir);	// which will unregister
-	}
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);
 	LIST_REMOVE(mdir, entry);
 	struct jnl *jnl;
@@ -116,26 +129,7 @@ static void mdir_dtor(struct mdir *mdir)
 static void mdir_del(struct mdir *mdir)
 {
 	mdir_dtor(mdir);
-	free(mdir);
-}
-
-/*
- * Listeners
- */
-
-extern inline void mdir_listener_ctor(struct mdir_listener *l, struct mdir_listener_ops const *ops);
-extern inline void mdir_listener_dtor(struct mdir_listener *l);
-
-void mdir_register_listener(struct mdir *mdir, struct mdir_listener *l)
-{
-	debug("register a listener to mdir %s", mdir_id(mdir));
-	LIST_INSERT_HEAD(&mdir->listeners, l, entry);
-}
-
-void mdir_unregister_listener(struct mdir *mdir, struct mdir_listener *l)
-{
-	debug("unregister a listener to mdir %s", mdir_id(mdir));
-	LIST_REMOVE(l, entry);
+	mdir_free(mdir);
 }
 
 /*
@@ -182,6 +176,8 @@ void mdir_begin(bool server)
 {
 	if (server) mdir_namespace = 'S';
 	else mdir_namespace = 'C';
+	mdir_alloc = mdir_alloc_default;
+	mdir_free = mdir_free_default;
 	// Default configuration values
 	conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir");
 	conf_set_default_str("MDIR_DIRSEQ", "/tmp/.dirid.seq");
@@ -211,7 +207,7 @@ void mdir_end(void)
 
 static mdir_version get_next_version(struct mdir *mdir, struct jnl **jnl, mdir_version version)
 {
-	mdir_version next;
+	mdir_version next = 0;
 	// Look for the version number that comes after the given version, and jnl
 	STAILQ_FOREACH(*jnl, &mdir->jnls, entry) {
 		// look first for version+1
@@ -305,7 +301,7 @@ static bool is_directory(struct header *h)
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
 {
 	debug("patch mdir %s", mdir_id(mdir));
-	mdir_version version;
+	mdir_version version = 0;
 	on_error return 0;
 	// First acquire writer-grade lock
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)

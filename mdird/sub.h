@@ -41,11 +41,9 @@ struct subscription {
 	struct cnx_env *env;
 	pth_t thread_id;
 	// Managed by JNL module from here
-	struct mdir *mdir;
+	struct mdird *mdird;
 	mdir_version version;	// last known version (updated when we send a patch)
-	struct mdir_listener listener;
-	bool registered;	// is the listener registered to the mdir ?
-	pth_msgport_t msg_port;
+	LIST_ENTRY(subscription) mdird_entry;
 };
 
 struct subscription *subscription_new(struct cnx_env *env, char const *name, mdir_version version);

@@ -38,10 +38,28 @@
 #define JNL_FNAME_LEN 24
 
 static unsigned max_jnl_size;
+struct jnl *(*jnl_alloc)(void);
+void (*jnl_free)(struct jnl *);
 
 struct index_entry {
 	off_t offset;
 };
+
+/*
+ * Default allocator
+ */
+
+static struct jnl *jnl_alloc_default(void)
+{
+	struct jnl *jnl = malloc(sizeof(*jnl));
+	if (! jnl) error_push(ENOMEM, "malloc jnl");
+	return jnl;
+}
+
+static void jnl_free_default(struct jnl *jnl)
+{
+	free(jnl);
+}
 
 /*
  * Init
@@ -49,6 +67,8 @@ struct index_entry {
 
 void jnl_begin(void)
 {
+	jnl_alloc = jnl_alloc_default;
+	jnl_free = jnl_free_default;
 	conf_set_default_int("MDIR_MAX_JNL_SIZE", 2000);
 	on_error return;
 	max_jnl_size = conf_get_int("MDIR_MAX_JNL_SIZE");
@@ -129,11 +149,11 @@ q0:
 
 struct jnl *jnl_new(struct mdir *mdir, char const *filename)
 {
-	struct jnl *jnl = malloc(sizeof(*jnl));
-	if (! jnl) with_error(ENOMEM, "malloc jnl %s", filename) return NULL;
+	struct jnl *jnl = jnl_alloc();
+	on_error return NULL;
 	jnl_ctor(jnl, mdir, filename);
 	on_error {
-		free(jnl);
+		jnl_free(jnl);
 		return NULL;
 	}
 	return jnl;
@@ -151,7 +171,7 @@ static void jnl_dtor(struct jnl *jnl)
 void jnl_del(struct jnl *jnl)
 {
 	jnl_dtor(jnl);
-	free(jnl);
+	jnl_free(jnl);
 }
 
 struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version start_version)
@@ -207,6 +227,7 @@ mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *
 static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 {
 	struct index_entry ie[2];
+	*size = 0;
 	if (index < jnl->nb_patches - 1) {	// can read 2 entires
 		Read(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
 		on_error return 0;

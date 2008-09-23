@@ -17,7 +17,7 @@
  */
 /* Based on the new libmdir facilities, mdirc can use the listing functions
  * instead of spiding the directory tree itself (more robust if this tree structure change
- * in the future). For instance, it can loop around mdir_link_list(ALL) { mdir_patch_list(NEW) }
+ * in the future). For instance, it can loop around mdir_patch_list(NEW)
  * to send patch submissions and subscriptions. It uses the received mdir's id to find its
  * command list (could be as well attached right into the mdir structure (like listeners are)).
  */

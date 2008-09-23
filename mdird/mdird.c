@@ -42,6 +42,30 @@ static char const *const kw_rem   = "rem";
 static char const *const kw_quit  = "quit";
 
 /*
+ * We overload mdir into mdird
+ */
+
+static struct mdir *mdird_alloc(void)
+{
+	struct mdird *mdird = malloc(sizeof(*mdird));
+	if (! mdird) with_error(ENOMEM, "malloc mdird") return NULL;
+	LIST_INIT(&mdird->subscriptions);
+	return &mdird->mdir;
+}
+
+static void mdird_free(struct mdir *mdir)
+{
+	struct mdird *mdird = mdir2mdird(mdir);
+	struct subscription *sub;
+	while (NULL != (sub = LIST_FIRST(&mdird->subscriptions))) {
+		subscription_del(sub);	// will remove from list
+	}
+	free(mdird);
+}
+
+extern inline struct mdird *mdir2mdird(struct mdir *mdir);
+
+/*
  * Init functions
  */
 
@@ -90,6 +114,8 @@ static void init_server(void)
 	on_error return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
 	mdir_begin(true);
+	mdir_alloc = mdird_alloc;
+	mdir_free = mdird_free;
 	on_error return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 	exec_begin();

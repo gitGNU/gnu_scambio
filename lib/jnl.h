@@ -24,25 +24,6 @@
 
 struct header;
 
-// jnl and mdir are both used by jnl.c and mdir.c
-
-struct jnl {
-	STAILQ_ENTRY(jnl) entry;
-	int idx_fd;	// to the index file
-	int patch_fd;	// to the patch file
-	mdir_version version;	// version of the first patch in this journal
-	unsigned nb_patches;	// number of patches in this file
-	struct mdir *mdir;
-};
-
-struct mdir {
-	LIST_ENTRY(mdir) entry;	// entry in the list of cached dirs
-	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
-	LIST_HEAD(mdir_listeners, mdir_listener) listeners;	// call them when a patch is appended
-	pth_rwlock_t rwlock;
-	char path[PATH_MAX];	// absolute path to the dir (actual one, not one of the symlinks)
-};
-
 void jnl_begin(void);
 void jnl_end(void);
 struct jnl *jnl_new(struct mdir *mdir, char const *filename);

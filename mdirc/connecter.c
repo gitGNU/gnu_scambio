@@ -22,8 +22,8 @@
 #include "client.h"
 
 /* Connecter try to establish the connection, and keep trying once in a while
- * untill success, then spawn reader and writer until one of them return, when
- * it kills the remaining one, close the connection, and is ready to be restarted.
+ * untill success, then spawn reader and writer until one of them returns, when
+ * it kills the remaining one, closes the connection, and is ready to be restarted.
  */
 void *connecter_thread(void *arg)
 {

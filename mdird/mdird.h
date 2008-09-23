@@ -18,6 +18,7 @@
 #ifndef MDIRD_H_080623
 #define MDIRD_H_080623
 
+#include <stddef.h>
 #include <pth.h>
 #include "scambio/mdir.h"
 
@@ -27,6 +28,16 @@ struct cnx_env {
 	LIST_HEAD(subscriptions, subscription) subscriptions;
 	pth_mutex_t wfd;	// protects fd on write
 };
+
+struct mdird {
+	struct mdir mdir;
+	struct subscriptions subscriptions;
+};
+
+static inline struct mdird *mdir2mdird(struct mdir *mdir)
+{
+	return (struct mdird *)((char *)mdir - offsetof(struct mdird, mdir));
+}
 
 void exec_begin(void);
 void exec_end(void);
