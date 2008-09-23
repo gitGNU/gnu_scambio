@@ -31,6 +31,7 @@
 #include "hide.h"
 #include "scambio.h"
 #include "mdirc.h"
+#include "scambio/header.h"
 
 static bool terminate_writer;
 
@@ -48,12 +49,36 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
+static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool synched, mdir_version version);
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, mdir_version version)
+{
+	if (header_is_directory(header)) {
+		if (action == MDIR_ADD) {
+			parse_dir_rec(mdir2mdirc(mdir), action, synched, version);
+		}
+	}
+}
+
+static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool synched, mdir_version version)
+{
+	(void)action;
+	(void)synched;
+	(void)version;
+	debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
+	(void)command_new(SUB_CMD_TYPE, mdirc, mdir_id(&mdirc->mdir), "");
+	on_error return;
+	mdir_patch_list(&mdirc->mdir, true, true, ls_patch);
+}
+
 void *writer_thread(void *args)
 {
 	(void)args;
 	debug("starting writer thread");
 	terminate_writer = false;
 	do {
+		struct mdir *root = mdir_lookup("/");
+		on_error break;
+		parse_dir_rec(mdir2mdirc(root), MDIR_ADD, true, 0);
 		wait_signal();
 	} while (! terminate_writer);
 	return NULL;

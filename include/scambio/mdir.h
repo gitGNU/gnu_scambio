@@ -103,7 +103,7 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir
 // (will also list unconfirmed patches)
-void mdir_patch_list(struct mdir *, bool confirmed, bool unconfirmed, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, mdir_version version));
+void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, mdir_version version));
 
 // returns the header, action and version following the given version
 // or NULL if no other patches are found

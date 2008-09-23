@@ -292,12 +292,6 @@ static void mdir_unlink(struct mdir *parent, struct header *h)
  * Patch
  */
 
-static bool is_directory(struct header *h)
-{
-	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
-	return type && 0==strcmp(type, SCAMBIO_DIR_TYPE);
-}
-
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
 {
 	debug("patch mdir %s", mdir_id(mdir));
@@ -307,7 +301,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
 	do {
 		// if its for a subfolder, performs the (un)linking
-		if (is_directory(header))  {
+		if (header_is_directory(header))  {
 			if (action == MDIR_ADD) {
 				mdir_link(mdir, header);
 			} else {
@@ -331,7 +325,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 
 void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *h)
 {
-	bool is_dir = is_directory(h);
+	bool is_dir = header_is_directory(h);
 	char const *dirId = is_dir ? header_search(h, SCAMBIO_DIRID_FIELD):NULL;
 	if (dirId && dirId[0] == mdir_namespace) with_error(0, "Cannot refer to a temporary dirId") return;
 	char temp[PATH_MAX];

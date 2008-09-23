@@ -71,6 +71,7 @@ void header_copy_parameter(char const *name, char const *field_value, size_t max
 void header_digest(struct header *h, size_t, char *buffer);
 struct header *header_from_file(char const *filename);
 void header_to_file(struct header *h, char const *filename);
+bool header_is_directory(struct header *h);
 
 #define SCAMBIO_TYPE_FIELD  "scambio-type"
 #define SCAMBIO_KEY_FIELD   "scambio-key"

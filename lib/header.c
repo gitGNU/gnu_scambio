@@ -369,3 +369,9 @@ void header_to_file(struct header *h, char const *filename)
 	header_write(h, fd);
 	close(fd);
 }
+
+bool header_is_directory(struct header *h)
+{
+	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
+	return type && 0==strcmp(type, SCAMBIO_DIR_TYPE);
+}

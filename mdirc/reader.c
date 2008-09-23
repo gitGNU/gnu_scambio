@@ -42,26 +42,22 @@ static bool terminate_reader;
 
 void finalize_sub(struct command *cmd, int status)
 {
-	(void)cmd;
-	(void)status;
+	debug("subscribing to %s : %d", mdir_id(&cmd->mdirc->mdir), status);
 }
 
 void finalize_unsub(struct command *cmd, int status)
 {
-	(void)cmd;
-	(void)status;
+	debug("unsubscribing to %s : %d", mdir_id(&cmd->mdirc->mdir), status);
 }
 
 void finalize_put(struct command *cmd, int status)
 {
-	(void)cmd;
-	(void)status;
+	debug("put %s : %d", cmd->filename, status);
 }
 
 void finalize_rem(struct command *cmd, int status)
 {
-	(void)cmd;
-	(void)status;
+	debug("rem %s : %d", cmd->filename, status);
 }
 
 struct patch {
