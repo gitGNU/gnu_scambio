@@ -248,6 +248,7 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 	size_t size;
 	off_t offset = jnl_offset_size(jnl, index, &size);
 	on_error return NULL;
+	if (size < 3) with_error(0, "Invalid header at %lu", (unsigned long)offset) return NULL;
 	// Read the whole patch
 	char *buf = malloc(size);
 	if (! buf) with_error(ENOMEM, "malloc %zu bytes", size) return NULL;
@@ -265,7 +266,7 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 		// read header
 		header = header_new();
 		on_error break;
-		header_parse(header, buf);
+		header_parse(header, buf+2);
 	} while (0);
 	free(buf);
 	return header;

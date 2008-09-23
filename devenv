@@ -16,4 +16,4 @@ rm -f /tmp/mdird.log
 rm -rf $MDIR_ROOT_DIR
 mkdir -p $MDIR_ROOT_DIR/root
 
-
+ulimit -c unlimited
