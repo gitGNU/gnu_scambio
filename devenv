@@ -1,19 +1,55 @@
 export MALLOC_CHECK_=2
 export MDIRD_LOG_DIR=/tmp
 export MDIRD_LOG_LEVEL=5
+export MDIRC_LOG_DIR=/tmp
+export MDIRC_LOG_LEVEL=5
 export MDIRD_PORT=21435
-export MDIR_ROOT_DIR=$PWD/mdird/checks/mdird
-export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-export MDIR_MAX_JNL_SIZE=10
+export MDIRD_HOST=localhost
 export SMTPD_LOG_DIR=/tmp
 export SMTPD_LOG_LEVEL=5
 export SMTPD_PORT=1025
-export MDIRD_SERVER=localhost
-export MDSYNC_LOG_DIR=/tmp
-export MDSYNC_LOG_LEVEL=5
 
-rm -f /tmp/mdird.log
-rm -rf $MDIR_ROOT_DIR
-mkdir -p $MDIR_ROOT_DIR/root
+function run_server {
+	export MDIR_ROOT_DIR=/tmp/mdird
+	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+	export MDIR_MAX_JNL_SIZE=30
+	rm -f /tmp/mdird.log
+	rm -rf $MDIR_ROOT_DIR
+	mkdir -p $MDIR_ROOT_DIR/root
+	build/mdird/mdird
+}
+
+function send_content {
+	nc $MDIRD_HOST $MDIRD_PORT <<EOF
+1 put /
+scambio-type: dir
+scambio-name: testdir
+
+2 put /
+scambio-type: file
+scambio-name: toto
+glop: pas glop
+
+3 put /
+blabla: slurp
+ping: pong
+
+4 put testdir
+a: b
+c: d
+
+5 quit
+EOF
+}
+
+function run_client {
+	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+	export MDIR_MAX_JNL_SIZE=10
+	rm -f /tmp/mdirc.log
+	rm -rf $MDIR_ROOT_DIR
+	mkdir -p $MDIR_ROOT_DIR/root
+	build/mdirc/mdirc
+}
 
 ulimit -c unlimited

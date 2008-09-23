@@ -37,13 +37,6 @@
 #include "command.h"
 
 /*
- * Threads share some structures related to the shared socket :
- * First the socket itself
- */
-
-struct cnx_client cnx;
-
-/*
  * mdirc allocator
  */
 

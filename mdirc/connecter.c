@@ -21,6 +21,13 @@
 #include "cnx.h"
 #include "mdirc.h"
 
+/*
+ * Threads share some structures related to the shared socket :
+ * First the socket itself
+ */
+
+struct cnx_client cnx;
+
 /* Connecter try to establish the connection, and keep trying once in a while
  * untill success, then spawn reader and writer until one of them returns, when
  * it kills the remaining one, closes the connection, and is ready to be restarted.
