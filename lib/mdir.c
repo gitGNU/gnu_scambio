@@ -453,3 +453,23 @@ mdir_version mdir_str2version(char const *str)
 	return version;
 }
 
+char const *mdir_action2str(enum mdir_action action)
+{
+	switch (action) {
+		case MDIR_ADD: return "+";
+		case MDIR_REM: return "-";
+	}
+	assert(0);
+	return "INVALID";
+}
+
+enum mdir_action mdir_str2action(char const *str)
+{
+	if (str[1] != '\0') with_error(0, "Invalid action : '%s'", str) return MDIR_ADD;
+	switch (str[0]) {
+		case '+': return MDIR_ADD;
+		case '-': return MDIR_REM;
+	}
+	with_error(0, "Invalid action : '%s'", str) return MDIR_ADD;
+}
+

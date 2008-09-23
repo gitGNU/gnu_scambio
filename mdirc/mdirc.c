@@ -23,11 +23,98 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <assert.h>
+#include <limits.h>
+#include <time.h>
 #include <pth.h>
+#include "scambio/queue.h"
 #include "scambio.h"
 #include "daemon.h"
-#include "client.h"
+#include "cmd.h"
+#include "misc.h"
+#include "mdirc.h"
+#include "command.h"
 
+/*
+ * Threads share some structures related to the shared socket :
+ * First the socket itself
+ */
+
+struct cnx_client cnx;
+
+/*
+ * mdirc allocator
+ */
+
+extern inline struct mdirc *mdir2mdirc(struct mdir *mdir);
+
+static struct mdir *mdirc_alloc(void)
+{
+	struct mdirc *mdirc = malloc(sizeof(*mdirc));
+	if (! mdirc) with_error(ENOMEM, "malloc mdirc") return NULL;
+	for (unsigned l=0; l<sizeof_array(mdirc->commands); l++) {
+		LIST_INIT(mdirc->commands+l);
+	}
+	mdirc->subscribed = false;
+	LIST_INIT(&mdirc->patches);
+	(void)pth_rwlock_init(&mdirc->command_lock);
+	return &mdirc->mdir;
+}
+
+static void mdirc_free(struct mdir *mdir)
+{
+	struct mdirc *mdirc = mdir2mdirc(mdir);
+	struct command *cmd;
+	for (unsigned l=0; l<sizeof_array(mdirc->commands); l++) {
+		while (NULL != (cmd = LIST_FIRST(mdirc->commands+l))) {
+			command_del(cmd);
+		}
+	}
+	free(mdirc);
+}
+
+/*
+ * Init
+ */
+
+/* Initialisation function init all these shared datas, then call other modules
+ * init function, then spawn the connecter threads, which will spawn the reader
+ * and the writer once the connection is ready.
+ */
+
+static void client_end(void)
+{
+	writer_end();
+	reader_end();
+	mdir_end();
+	cmd_end();
+}
+
+static void client_begin(void)
+{
+	debug("init client lib");
+	cmd_begin();
+	on_error return;
+	mdir_begin(false);
+	on_error goto q0;
+	mdir_alloc = mdirc_alloc;
+	mdir_free = mdirc_free;
+	conf_set_default_str("MDIRD_HOST", "127.0.0.1");
+	conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
+	on_error goto q1;
+	writer_begin();
+	on_error goto q1;
+	reader_begin();
+	on_error goto q2;
+	return;
+q2:
+	writer_end();
+q1:
+	mdir_end();
+q0:
+	cmd_end();
+}
 static void init_conf(void)
 {
 	conf_set_default_str("MDIRC_LOG_DIR", "/tmp");

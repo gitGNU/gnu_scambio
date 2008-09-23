@@ -115,5 +115,7 @@ char const *mdir_id(struct mdir *);
 // use a static buffer
 char const *mdir_version2str(mdir_version);
 mdir_version mdir_str2version(char const *str);
+char const *mdir_action2str(enum mdir_action action);
+enum mdir_action mdir_str2action(char const *str);
 
 #endif

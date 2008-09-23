@@ -19,7 +19,7 @@
 #include <pth.h>
 #include "scambio.h"
 #include "cnx.h"
-#include "client.h"
+#include "mdirc.h"
 
 /* Connecter try to establish the connection, and keep trying once in a while
  * untill success, then spawn reader and writer until one of them returns, when

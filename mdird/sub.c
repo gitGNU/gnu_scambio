@@ -103,7 +103,7 @@ static bool client_needs_patch(struct subscription *sub)
 static void send_patch(int fd, struct header *h, struct mdir *mdir, enum mdir_action action, mdir_version prev, mdir_version new)
 {
 	char cmdstr[5+1+PATH_MAX+1+20+1+20+1+1+1];
-	size_t cmdlen = snprintf(cmdstr, sizeof(cmdstr), "PATCH %s %"PRIversion" %"PRIversion" %c\n", mdir_id(mdir), prev, new, action == MDIR_ADD ? '+':'-');
+	size_t cmdlen = snprintf(cmdstr, sizeof(cmdstr), "PATCH %s %"PRIversion" %"PRIversion" %s\n", mdir_id(mdir), prev, new, mdir_action2str(action));
 	assert(cmdlen < sizeof(cmdstr));
 	Write(fd, cmdstr, cmdlen);
 	on_error return;

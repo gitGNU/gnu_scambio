@@ -194,7 +194,7 @@ mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *
 	Write(jnl->idx_fd, &ie, sizeof(ie));
 	on_error return 0;	// FIXME: on short writes, truncate
 	// Then the patch command
-	Write(jnl->patch_fd, action == MDIR_ADD ? "+\n":"-\n", 2);
+	Write_strs(jnl->patch_fd, mdir_action2str(action), "\n");
 	on_error return 0;
 	struct header *alt_header = NULL;
 	char const *key;

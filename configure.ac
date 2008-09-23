@@ -36,6 +36,7 @@ AC_CONFIG_FILES([
 	include/Makefile
 	lib/Makefile
 	mdird/Makefile
+	mdirc/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT
