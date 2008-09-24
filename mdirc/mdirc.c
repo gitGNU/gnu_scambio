@@ -126,6 +126,8 @@ static void init_log(void)
 
 static void init(void)
 {
+	error_begin();
+	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	init_conf();
 	on_error return;
 	init_log();

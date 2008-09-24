@@ -19,43 +19,89 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <pth.h>
 #include "scambio.h"
 #include "scambio/error.h"
 
-static struct error {
-	int code;
-	char str[1024];
-} err_stack[64];
-static unsigned nb_errors = 0;
-static unsigned nb_acks = 1;
-static unsigned ack_stack[16] = { 0 };
+struct errbuf {
+	unsigned nb_errors;
+	unsigned nb_acks;
+	unsigned ack_stack[16];
+	struct error {
+		int code;
+		char str[1024];
+	} err_stack[64];
+};
+
+static pth_key_t err_key;
+
+void delete_errbuf(void *eb)
+{
+	debug("freeing errbuf @%p", eb);
+	free(eb);
+}
+
+void error_begin(void)
+{
+	pth_key_create(&err_key, delete_errbuf);
+}
+void error_end(void)
+{
+	pth_key_delete(err_key);
+}
+
+static struct errbuf *errbuf_new(void)
+{
+	struct errbuf *eb = malloc(sizeof(*eb));
+	debug("new errbuf @%p", eb);
+	assert(eb);	// we cannot deal with this error
+	eb->nb_errors = 0;
+	eb->nb_acks = 1;
+	eb->ack_stack[0] = 0;
+	return eb;
+}
+
+static struct errbuf *get_errbuf(void)
+{
+	struct errbuf *eb = pth_key_getdata(err_key);
+	if (! eb) {	// not already set
+		eb = errbuf_new();
+		pth_key_setdata(err_key, eb);
+	}
+	return eb;
+}
 
 static unsigned nb_expected_errors(void)
 {
-	return ack_stack[nb_acks-1];
+	struct errbuf *eb = get_errbuf();
+	return eb->ack_stack[eb->nb_acks-1];
 }
 
 bool is_error(void)
 {
-	return nb_errors > nb_expected_errors();
+	struct errbuf *eb = get_errbuf();
+	return eb->nb_errors > nb_expected_errors();
 }
 
 int error_code(void)
 {
-	assert(nb_errors);
-	return err_stack[nb_errors-1].code;
+	struct errbuf *eb = get_errbuf();
+	assert(eb->nb_errors);
+	return eb->err_stack[eb->nb_errors-1].code;
 }
 
 char const *error_str(void)
 {
-	assert(nb_errors);
-	return err_stack[nb_errors-1].str;
+	struct errbuf *eb = get_errbuf();
+	assert(eb->nb_errors);
+	return eb->err_stack[eb->nb_errors-1].str;
 }
 
 void error_push(int code, char *fmt, ...)
 {
-	assert(nb_errors < sizeof_array(err_stack));
-	struct error *const err = err_stack + nb_errors++;
+	struct errbuf *eb = get_errbuf();
+	assert(eb->nb_errors < sizeof_array(eb->err_stack));
+	struct error *const err = eb->err_stack + eb->nb_errors++;
 	err->code = code;
 	int len = 0;
 	if (fmt) {
@@ -71,20 +117,22 @@ void error_push(int code, char *fmt, ...)
 
 void error_save(void)
 {
-	assert(nb_acks < sizeof_array(ack_stack));
-	ack_stack[nb_acks++] = nb_errors;
+	struct errbuf *eb = get_errbuf();
+	assert(eb->nb_acks < sizeof_array(eb->ack_stack));
+	eb->ack_stack[eb->nb_acks++] = eb->nb_errors;
 }
 
 void error_restore(void)
 {
+	struct errbuf *eb = get_errbuf();
 	error_clear();
-	assert(nb_acks > 0);
-	nb_acks--;
+	assert(eb->nb_acks > 0);
+	eb->nb_acks--;
 }
 void error_clear(void)
 {
-	assert(nb_errors >= nb_expected_errors());
-	nb_errors = nb_expected_errors();
+	struct errbuf *eb = get_errbuf();
+	assert(eb->nb_errors >= nb_expected_errors());
+	eb->nb_errors = nb_expected_errors();
 }
-
 

@@ -95,22 +95,25 @@ static int gaierr2errno(int err)
 void cnx_client_ctor(struct cnx_client *cnx, char const *host, char const *service)
 {
 	// Resolve hostname into sockaddr
-	struct addrinfo *info_head, *info;
+	struct addrinfo *info_head, *ainfo;
 	int err;
 	if (0 != (err = getaddrinfo(host, service, NULL, &info_head))) {
 		// TODO: check that freeaddrinfo is not required in this case
 		with_error(gaierr2errno(err), "Cannot getaddrinfo") return;
 	}
 	err = ENOENT;
-	for (info = info_head; info; info = info->ai_next) {
-		cnx->sock_fd = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
+	for (ainfo = info_head; ainfo; ainfo = ainfo->ai_next) {
+		cnx->sock_fd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
 		if (cnx->sock_fd == -1) continue;
-		if (0 == connect(cnx->sock_fd, info->ai_addr, info->ai_addrlen)) break;
+		if (0 == connect(cnx->sock_fd, ainfo->ai_addr, ainfo->ai_addrlen)) {
+			info("Connected to '%s'", host);
+			break;
+		}
 		err = errno;
 		(void)close(cnx->sock_fd);
 		cnx->sock_fd = -1;
 	}
-	if (! info) with_error(err, "No suitable address found for host '%s'", host) return;
+	if (! ainfo) error_push(err, "No suitable address found for host '%s'", host);
 	freeaddrinfo(info_head);
 }
 

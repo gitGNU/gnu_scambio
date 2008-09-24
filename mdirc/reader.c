@@ -138,8 +138,10 @@ void *reader_thread(void *args)
 	do {
 		// read and parse one command
 		struct cmd cmd;
+		debug("Reading cmd on socket");
 		cmd_read(&cmd, cnx.sock_fd);
 		on_error break;
+		debug("Received keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_patch) {
 			struct mdir *const mdir = mdir_lookup(cmd.args[0].val.string);
 			on_error break;
@@ -152,23 +154,23 @@ void *reader_thread(void *args)
 			terminate_reader = true;
 		} else for (unsigned t=0; t<sizeof_array(command_types); t++) {
 			if (cmd.keyword == command_types[t].keyword) {
-				struct mdir *const mdir = mdir_lookup(cmd.args[0].val.string);
-				on_error break;
-				struct mdirc *const mdirc = mdir2mdirc(mdir);
-				struct command *command = command_get_by_seqnum(mdirc->commands+t, cmd.seq);
-				unless_error command_types[t].finalize(command, cmd.args[0].val.integer);
+				struct command *command = command_get_by_seqnum(t, cmd.seq);
+				if (command) command_types[t].finalize(command, cmd.args[0].val.integer);
 				break;
 			}
 		}
 		cmd_dtor(&cmd);
 	} while (! terminate_reader);
+	debug("Quitting reader thread");
 	return NULL;
 }
 
 void reader_begin(void)
 {
+	// FIXME: LIST_INIT should go in a command_begin()
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
 		cmd_register_keyword(command_types[t].keyword,  2, UINT_MAX, CMD_INTEGER, CMD_STRING, CMD_EOA);
+		LIST_INIT(&command_types[t].commands);
 	}
 	cmd_register_keyword(kw_quit, 1, 1, CMD_INTEGER, CMD_EOA);
 	cmd_register_keyword(kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);

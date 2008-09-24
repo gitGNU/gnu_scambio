@@ -250,10 +250,11 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 	on_error return NULL;
 	if (size < 3) with_error(0, "Invalid header at %lu", (unsigned long)offset) return NULL;
 	// Read the whole patch
-	char *buf = malloc(size);
+	char *buf = malloc(size+1);
 	if (! buf) with_error(ENOMEM, "malloc %zu bytes", size) return NULL;
 	do {
 		Read(buf, jnl->patch_fd, offset, size);
+		buf[size] = '\0';
 		on_error break;
 		if (buf[1] != '\n' || buf[size-2] != '\n' || buf [size-1] != '\n') with_error(0, "Invalid patch @%lu", (unsigned long)offset) break;
 		if (buf[0] == '+') {

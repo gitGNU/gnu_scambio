@@ -21,6 +21,9 @@
 #include <stdbool.h>
 #include <errno.h>
 
+void error_begin(void);
+void error_end(void);
+
 /* When an error is encountered, a function may want to clean its environment
  * before returning to the caller. While doing so other errors may be
  * encountered. All these must be cleaned so that they do not interfere

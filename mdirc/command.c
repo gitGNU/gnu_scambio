@@ -59,10 +59,10 @@ static void command_ctor(struct command *cmd, enum command_type type, struct mdi
 	assert(type < NB_CMD_TYPES);
 	if (folder[0] == '\0') folder = "/";
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
-	static long long seqnum = 0;
+	static long long seqnum = 1;
 	cmd->seqnum = seqnum++;
 	cmd->creation = time(NULL);
-	debug("folder = '%s', mdir id = '%s'", folder, mdir_id(&mdirc->mdir));
+	debug("folder = '%s', mdir id = '%s', seqnum = %lld", folder, mdir_id(&mdirc->mdir), cmd->seqnum);
 	char buf[SEQ_BUF_LEN];
 	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, NULL);
 	if (type == SUB_CMD_TYPE) {
@@ -70,7 +70,8 @@ static void command_ctor(struct command *cmd, enum command_type type, struct mdi
 	}
 	Write(cnx.sock_fd, "\n", 1);
 	on_error return;
-	LIST_INSERT_HEAD(mdirc->commands+type, cmd, entry);
+	LIST_INSERT_HEAD(mdirc->commands+type, cmd, mdirc_entry);
+	LIST_INSERT_HEAD(&command_types[type].commands, cmd, type_entry);
 }
 
 struct command *command_new(enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
@@ -87,14 +88,16 @@ struct command *command_new(enum command_type type, struct mdirc *mdirc, char co
 
 void command_del(struct command *cmd)
 {
-	LIST_REMOVE(cmd, entry);
+	LIST_REMOVE(cmd, mdirc_entry);
+	LIST_REMOVE(cmd, type_entry);
 	free(cmd);
 }
 
-struct command *command_get_by_seqnum(struct commands *list, long long seqnum)
+struct command *command_get_by_seqnum(unsigned type, long long seqnum)
 {
+	assert(type < sizeof_array(command_types));
 	struct command *cmd;
-	LIST_FOREACH(cmd, list, entry) {
+	LIST_FOREACH(cmd, &command_types[type].commands, type_entry) {
 		if (cmd->seqnum == seqnum) return cmd;
 	}
 	warning("No command was sent with seqnum %lld", seqnum);

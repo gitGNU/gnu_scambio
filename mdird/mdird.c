@@ -125,11 +125,13 @@ static void init_server(void)
 
 static void init(void)
 {
+	if (! pth_init()) with_error(0, "pth_init") return;
+	error_begin();
+	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	init_conf(); on_error return;
 	init_log();  on_error return;
 	init_cmd();  on_error return;
 	daemonize(); on_error return;
-	if (! pth_init()) with_error(0, "pth_init") return;
 	init_server();
 }
 

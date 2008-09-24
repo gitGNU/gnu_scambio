@@ -39,6 +39,7 @@ static void subscription_ctor(struct subscription *sub, struct cnx_env *env, cha
 	struct mdir *mdir = mdir_lookup_by_id(dirId, false);
 	on_error return;
 	sub->mdird = mdir2mdird(mdir);
+	assert(sub->mdird > 1);
 	LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
 	subscription_reset_version(sub, version);
 	sub->thread_id = pth_spawn(PTH_ATTR_DEFAULT, subscription_thread, sub);
@@ -47,6 +48,7 @@ static void subscription_ctor(struct subscription *sub, struct cnx_env *env, cha
 
 struct subscription *subscription_new(struct cnx_env *env, char const *dirId, mdir_version version)
 {
+	debug("for dirId = '%s'", dirId);
 	struct subscription *sub = malloc(sizeof(*sub));
 	if (! sub) with_error(ENOMEM, "malloc subscription") return NULL;
 	subscription_ctor(sub, env, dirId, version);
@@ -97,6 +99,7 @@ struct subscription *subscription_find(struct cnx_env *env, char const *dirId)
 
 static bool client_needs_patch(struct subscription *sub)
 {
+	assert(sub->mdird > 1);
 	return sub->version < mdir_last_version(&sub->mdird->mdir);
 }
 
@@ -125,7 +128,7 @@ static void wait_notif(struct subscription *sub)
 {
 	(void)sub;
 	pth_yield(NULL);
-	sleep(1);	// FIXME
+	pth_sleep(1);	// FIXME
 }
 
 static void *subscription_thread(void *sub_)

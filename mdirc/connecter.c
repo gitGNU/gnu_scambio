@@ -41,22 +41,29 @@ void *connecter_thread(void *arg)
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
 	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
-	pth_event_t ev_r = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, reader_pthid);
-	pth_event_t ev_w = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, writer_pthid);
-	pth_event_t ev_ring = pth_event_concat(ev_r, ev_w, NULL);
 	while (reader_pthid && writer_pthid) {
-		(void)pth_wait(ev_ring);
-		pth_event_t ev_occurred;
-		// TODO: check that pth_event_walk returns NULL at end of ring
-		while (NULL != (ev_occurred = pth_event_walk(ev_ring, PTH_WALK_NEXT|PTH_UNTIL_OCCURRED))) {
-			assert(pth_event_typeof(ev_occurred) == (PTH_EVENT_TID|PTH_UNTIL_TID_DEAD));	// FIXME:  FAILS
-			pth_t dead_one;
-			pth_event_extract(ev_occurred, &dead_one);
-			if (dead_one == reader_pthid) reader_pthid = NULL;
-			if (dead_one == writer_pthid) writer_pthid = NULL;
-		}
+		pth_event_t ev_r = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, reader_pthid);
+		pth_event_t ev_w = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, writer_pthid);
+		pth_event_t ev_ring = pth_event_concat(ev_r, ev_w, NULL);
+		int nonpending = pth_wait(ev_ring);	// FIXME: does not wait, and returns SELECT ?
+		debug("%d event(s) occured", nonpending);
+		pth_event_t ev = ev_ring;
+		do {
+			if (
+				pth_event_typeof(ev) == (PTH_EVENT_TID|PTH_UNTIL_TID_DEAD) &&
+				pth_event_status(ev) == PTH_STATUS_OCCURRED
+			) {
+				debug("occuring pth event %u", (unsigned)pth_event_typeof(ev));
+				//assert(pth_event_typeof(ev) == (PTH_EVENT_TID|PTH_UNTIL_TID_DEAD));	// FIXME:  FAILS
+				pth_t dead_one;
+				pth_event_extract(ev, &dead_one);
+				if (dead_one == reader_pthid) reader_pthid = NULL;
+				if (dead_one == writer_pthid) writer_pthid = NULL;
+			}
+			ev = pth_event_walk(ev, PTH_WALK_NEXT);
+		} while (ev != ev_ring);
+		pth_event_free(ev_ring, PTH_FREE_ALL);
 	}
-	pth_event_free(ev_ring, PTH_FREE_ALL);
 	if (reader_pthid) (void)pth_cancel(reader_pthid);
 	if (writer_pthid) (void)pth_cancel(writer_pthid);
 	cnx_client_dtor(&cnx);

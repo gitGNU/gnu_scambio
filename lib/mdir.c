@@ -354,6 +354,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 	struct jnl *jnl;
 	if (want_sync) {
 		// List content of journals
+		debug("listing journal");
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
 			for (unsigned index=0; index < jnl->nb_patches; index++) {
 				enum mdir_action action;
