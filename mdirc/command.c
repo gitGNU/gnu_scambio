@@ -56,6 +56,7 @@ bool command_timeouted(struct command *cmd)
 
 static void command_ctor(struct command *cmd, enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
 {
+	assert(type < NB_CMD_TYPES);
 	if (folder[0] == '\0') folder = "/";
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	static long long seqnum = 0;
@@ -63,9 +64,12 @@ static void command_ctor(struct command *cmd, enum command_type type, struct mdi
 	cmd->creation = time(NULL);
 	debug("folder = '%s', mdir id = '%s'", folder, mdir_id(&mdirc->mdir));
 	char buf[SEQ_BUF_LEN];
-	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, "\n", NULL);
+	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, NULL);
+	if (type == SUB_CMD_TYPE) {
+		Write_strs(cnx.sock_fd, " ", mdir_version2str(mdir_last_version(&mdirc->mdir)), NULL);
+	}
+	Write(cnx.sock_fd, "\n", 1);
 	on_error return;
-	assert(type < NB_CMD_TYPES);
 	LIST_INSERT_HEAD(mdirc->commands+type, cmd, entry);
 }
 
