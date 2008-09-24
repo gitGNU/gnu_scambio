@@ -120,7 +120,7 @@ static void init_log(void)
 	on_error return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
-	log_level = conf_get_int("MDSYNC_LOG_LEVEL");
+	log_level = conf_get_int("MDIRC_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
 }
 

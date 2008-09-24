@@ -21,7 +21,11 @@
 #include <stddef.h>	// size_t (? FIXME)
 #include <stdbool.h>
 void Write(int fd, void const *buf, size_t len);
-void Write_strs(int fd, ...);
+void Write_strs(int fd, ...)
+#ifdef __GNUC__
+	__attribute__ ((sentinel))
+#endif
+;
 void Read(void *buf, int fd, off_t offset, size_t len);
 void Copy(int dest, int src);	// will add a trailing newline if src lacks one
 void Mkdir(char const *path);

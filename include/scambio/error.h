@@ -36,7 +36,11 @@
 bool is_error(void);
 int error_code(void);
 char const *error_str(void);
-void error_push(int code, char *fmt, ...);
+void error_push(int code, char *fmt, ...)
+#ifdef __GNUC__
+	__attribute__((__format__ (__printf__, 2, 3)))
+#endif
+;
 
 void error_save();	// set the expected depth of the error stack to be as it is now
 void error_restore();	// restore to previously saved error level
