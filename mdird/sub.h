@@ -46,9 +46,9 @@ struct subscription {
 	LIST_ENTRY(subscription) mdird_entry;
 };
 
-struct subscription *subscription_new(struct cnx_env *env, char const *name, mdir_version version);
+struct subscription *subscription_new(struct cnx_env *env, char const *dirId, mdir_version version);
 void subscription_del(struct subscription *sub);
-struct subscription *subscription_find(struct cnx_env *env, char const *path);
+struct subscription *subscription_find(struct cnx_env *env, char const *dirId);
 void subscription_reset_version(struct subscription *sub, mdir_version version);
 
 #endif

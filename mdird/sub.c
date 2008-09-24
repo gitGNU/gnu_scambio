@@ -32,11 +32,11 @@
 
 static void *subscription_thread(void *sub);
 
-static void subscription_ctor(struct subscription *sub, struct cnx_env *env, char const *name, mdir_version version)
+static void subscription_ctor(struct subscription *sub, struct cnx_env *env, char const *dirId, mdir_version version)
 {
 	sub->version = version;
 	sub->env = env;
-	struct mdir *mdir = mdir_lookup(name);
+	struct mdir *mdir = mdir_lookup_by_id(dirId, false);
 	on_error return;
 	sub->mdird = mdir2mdird(mdir);
 	LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
@@ -45,11 +45,11 @@ static void subscription_ctor(struct subscription *sub, struct cnx_env *env, cha
 	LIST_INSERT_HEAD(&sub->mdird->subscriptions, sub, mdird_entry);
 }
 
-struct subscription *subscription_new(struct cnx_env *env, char const *name, mdir_version version)
+struct subscription *subscription_new(struct cnx_env *env, char const *dirId, mdir_version version)
 {
 	struct subscription *sub = malloc(sizeof(*sub));
 	if (! sub) with_error(ENOMEM, "malloc subscription") return NULL;
-	subscription_ctor(sub, env, name, version);
+	subscription_ctor(sub, env, dirId, version);
 	on_error {
 		free(sub);
 		return NULL;
@@ -80,10 +80,10 @@ void subscription_reset_version(struct subscription *sub, mdir_version version)
  * Find
  */
 
-struct subscription *subscription_find(struct cnx_env *env, char const *dir)
+struct subscription *subscription_find(struct cnx_env *env, char const *dirId)
 {
 	struct subscription *sub;
-	struct mdir *mdir = mdir_lookup(dir);
+	struct mdir *mdir = mdir_lookup_by_id(dirId, false);
 	on_error return NULL;
 	LIST_FOREACH(sub, &env->subscriptions, env_entry) {
 		if (mdir == &sub->mdird->mdir) return sub;
