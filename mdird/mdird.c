@@ -113,7 +113,7 @@ static void init_server(void)
 	cnx_server_ctor(&server, conf_get_int("MDIRD_PORT"));
 	on_error return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
-	mdir_begin(true);
+	mdir_begin();
 	mdir_alloc = mdird_alloc;
 	mdir_free = mdird_free;
 	on_error return;

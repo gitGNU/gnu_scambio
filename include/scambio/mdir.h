@@ -57,11 +57,8 @@ extern struct mdir *(*mdir_alloc)(void);
 extern void (*mdir_free)(struct mdir *);
 
 struct header;
-void mdir_begin(bool server);
+void mdir_begin(void);
 void mdir_end(void);
-
-// create a new mdir (you will want to mdir_link() it somewhere)
-struct mdir *mdir_create(void);
 
 // add/remove a header into a mdir
 // do not use this in plugins : only the server decides how and when to apply a patch
@@ -69,28 +66,36 @@ struct mdir *mdir_create(void);
 // returns the new version number
 mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
 
-// ask for the addition of this patch to the mdir
-// actually the patch will be saved in a tempfile where it will be found by the client
-// synchronizer mdirc, sent to the server whenever possible, then when acked removed to a
-// doted name with the version (received with the ack). Then, when the patch is
-// eventually synchronized down the dotted version file is removed.
-// So this does not require a connection to mdird.
-// The only problem arises when the patch is received before the ack. Even if the server
-// sends the ack before the patch, the packets may be received the other way round.
-// So it's better to remove those dotted version files when a client ask for a listing (then
-// we know if the dotted version file is also in the journal and delete it.
-// If the patch creates/remove a subfolder for an existing dirId, the patch is added as above,
-// but also the symlink is performed so that the lookup works. Later when the patch is
-// received it is thus not an error if the symlink is already there.
-// If the patch adds a new subfolder (no dirId specified), a temporary dirId is created
-// and symlinked as above. When the patch is eventually received, the directory is renamed
-// to the actual dirId provided with the patch, and the symlink is rebuild. No other
-// symlinks refer to this temporary dirId because it is forbidden to use a temporary dirId
-// (this dirId being unknown for the server). So, it is forbidden to link a temporary dirId
-// into another folder, and patch_request will prevent this to happen. This should
-// not be too problematic for the client, since it still can add patches to this directory,
-// even patches that creates other directories, for patches are added to names and not to
-// dirId.
+// Ask for the addition of this patch to the mdir. Actually the patch will be
+// saved in a tempfile in subfolder ".tmp" with a tempname starting with '+'
+// for addition and '-' for removal of the herein header. There it will be
+// found by the client synchronizer mdirc (because mdir_list will report them
+// as unsynched patches), sent to the server whenever possible, then when acked
+// removed to another class of tempfile, which name is "+/-=version" (the
+// version is received with the ack).  mdir_list will also report these acked
+// files if they are not already in the journal (if they are it will silently
+// remove them).  This also works if the patch is received before the ack
+// (which may happen on some transport even if the server sends the ack before
+// the patch).
+//
+// If the patch creates/removes a subfolder for an existing dirId, the patch is
+// added as above, but also the symlink is performed so that following lookup
+// will works even when not connected. Later when the patch will be eventually
+// received it is thus not an error if the symlink already exist.
+//
+// If the patch adds a _new_ subfolder (no dirId specified), a transiant dirId
+// is created and symlinked as above. This transient dirId use a "_" prefix.
+// When acked, it is renamed (and the only symlinks to it is rebuild) to
+// "=version".  When the patch is eventually received, this directory is
+// renamed to the actual dirId provided with the patch, and the symlink is
+// rebuild again. So a function that renames a parent's subdir is badly needed.
+//
+// Only one symlink refers to this transient dirId because it is forbidden to
+// use a temporary dirId (this dirId being unknown for the server). So, it is
+// forbidden to link a temporary dirId into another folder, and patch_request
+// will prevent this to happen.  This should not be too problematic for the
+// client, since it still can add patches to this directory, even patches that
+// creates other directories, for patches are added to names and not to dirId.
 void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
 
 // abort a patch request if its not already aborted.

@@ -43,7 +43,6 @@
 
 static size_t mdir_root_len;
 static char const *mdir_root;
-static char mdir_namespace;
 static LIST_HEAD(mdirs, mdir) mdirs;
 static struct persist dirid_seq;
 struct mdir *(*mdir_alloc)(void);
@@ -106,12 +105,12 @@ static struct mdir *mdir_new(char const *id, bool create)
 	return mdir;
 }
 
-struct mdir *mdir_create(void)
+static struct mdir *mdir_create(bool transient)
 {
 	debug("create a new mdir");
 	uint64_t id = (*(uint64_t *)dirid_seq.data)++;
 	char id_str[1+20+1];
-	snprintf(id_str, sizeof(id_str), "%c%"PRIu64, mdir_namespace, id);
+	snprintf(id_str, sizeof(id_str), "%s%"PRIu64, transient ? "_":"", id);
 	return mdir_new(id_str, true);
 }
 
@@ -172,10 +171,8 @@ struct mdir *mdir_lookup(char const *name)
  * Init
  */
 
-void mdir_begin(bool server)
+void mdir_begin(void)
 {
-	if (server) mdir_namespace = 'S';
-	else mdir_namespace = 'C';
 	mdir_alloc = mdir_alloc_default;
 	mdir_free = mdir_free_default;
 	// Default configuration values
@@ -241,7 +238,7 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
  * (Un)Link
  */
 
-static void mdir_link(struct mdir *parent, struct header *h)
+static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 {
 	debug("add link to mdir %s", mdir_id(parent));
 	assert(h);
@@ -253,24 +250,27 @@ static void mdir_link(struct mdir *parent, struct header *h)
 		header_add_field(h, SCAMBIO_NAME_FIELD, name);
 		on_error return;
 	}
+	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
+	if (type) {
+		if (0 != strcmp(type, SCAMBIO_DIR_TYPE)) with_error(0, "Bad header type (%s)", type) return;
+	} else {
+		header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_DIR_TYPE);
+		on_error return;
+	}
 	struct mdir *child;
 	char const *dirid = header_search(h, SCAMBIO_DIRID_FIELD);
 	if (dirid) {
+		assert(! transient);
 		// create it if it does not exist
 		child = mdir_lookup_by_id(dirid, true);
 		on_error return;
 	} else {
-		child = mdir_create();
+		child = mdir_create(transient);
 		on_error return;
-		header_add_field(h, SCAMBIO_DIRID_FIELD, mdir_id(child));
-		on_error return;
-	}
-	char const *dirtype = header_search(h, SCAMBIO_TYPE_FIELD);
-	if (dirtype) {
-		if (0 != strcmp(dirtype, SCAMBIO_DIR_TYPE)) with_error(0, "Bad header type (%s)", dirtype) return;
-	} else {
-		header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_DIR_TYPE);
-		on_error return;
+		if (! transient) {
+			header_add_field(h, SCAMBIO_DIRID_FIELD, mdir_id(child));
+			on_error return;
+		}
 	}
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
@@ -303,7 +303,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		// if its for a subfolder, performs the (un)linking
 		if (header_is_directory(header))  {
 			if (action == MDIR_ADD) {
-				mdir_link(mdir, header);
+				mdir_link(mdir, header, false);
 			} else {
 				mdir_unlink(mdir, header);
 			}
@@ -327,7 +327,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 {
 	bool is_dir = header_is_directory(h);
 	char const *dirId = is_dir ? header_search(h, SCAMBIO_DIRID_FIELD):NULL;
-	if (dirId && dirId[0] == mdir_namespace) with_error(0, "Cannot refer to a temporary dirId") return;
+	if (dirId && dirId[0] == '_') with_error(0, "Cannot refer to a temporary dirId") return;
 	char temp[PATH_MAX];
 	int len = snprintf(temp, sizeof(temp), "%s/.temp/%c", mdir->path, action == MDIR_ADD ? '+':'-');
 	Mkdir(temp);
@@ -337,7 +337,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 	on_error return;
 	if (is_dir) {
 		if (action == MDIR_ADD) {
-			mdir_link(mdir, h);
+			mdir_link(mdir, h, true);
 		} else {
 			mdir_unlink(mdir, h);
 		}

@@ -89,7 +89,7 @@ static void client_begin(void)
 	debug("init client lib");
 	cmd_begin();
 	on_error return;
-	mdir_begin(false);
+	mdir_begin();
 	on_error goto q0;
 	mdir_alloc = mdirc_alloc;
 	mdir_free = mdirc_free;
