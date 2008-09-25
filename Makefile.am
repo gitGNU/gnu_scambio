@@ -7,6 +7,6 @@ cscope:
 	cd $(top_srcdir) && cscope -Rb $(CPPFLAGS)
 
 distclean-local:
-	rm -f cscope.out
+	rm -f cscope.out core
 
 EXTRA_DIST: COPYING

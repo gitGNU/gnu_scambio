@@ -106,6 +106,7 @@ static void patch_del(struct patch *patch)
 
 static void try_apply(struct mdirc *mdirc)	// try to apply some of the stored patches
 {
+	debug("try to apply received patch(es)");
 	struct patch *patch;
 	while (NULL != (patch = LIST_FIRST(&mdirc->patches)) && mdir_last_version(&mdirc->mdir) == patch->old_version) {
 		(void)mdir_patch(&mdirc->mdir, patch->action, patch->header);
@@ -143,7 +144,7 @@ void *reader_thread(void *args)
 		on_error break;
 		debug("Received keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_patch) {
-			struct mdir *const mdir = mdir_lookup(cmd.args[0].val.string);
+			struct mdir *const mdir = mdir_lookup_by_id(cmd.args[0].val.string, false);
 			on_error break;
 			struct mdirc *const mdirc = mdir2mdirc(mdir);
 			(void)patch_new(mdirc, cmd.args[1].val.integer, cmd.args[2].val.integer, mdir_str2action(cmd.args[3].val.string));

@@ -60,9 +60,10 @@ static void command_ctor(struct command *cmd, enum command_type type, struct mdi
 	if (folder[0] == '\0') folder = "/";
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	static long long seqnum = 1;
+	cmd->mdirc = mdirc;
 	cmd->seqnum = seqnum++;
 	cmd->creation = time(NULL);
-	debug("folder = '%s', mdir id = '%s', seqnum = %lld", folder, mdir_id(&mdirc->mdir), cmd->seqnum);
+	debug("cmd @%p, folder = '%s', mdir id = '%s', seqnum = %lld", cmd, folder, mdir_id(&mdirc->mdir), cmd->seqnum);
 	char buf[SEQ_BUF_LEN];
 	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, NULL);
 	if (type == SUB_CMD_TYPE) {
@@ -98,6 +99,7 @@ struct command *command_get_by_seqnum(unsigned type, long long seqnum)
 	assert(type < sizeof_array(command_types));
 	struct command *cmd;
 	LIST_FOREACH(cmd, &command_types[type].commands, type_entry) {
+		debug("lookup cmd @%p, seqnum = %lld", cmd, cmd->seqnum);
 		if (cmd->seqnum == seqnum) return cmd;
 	}
 	warning("No command was sent with seqnum %lld", seqnum);

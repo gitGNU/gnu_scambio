@@ -194,6 +194,7 @@ static void parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
 	struct cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
 	on_error return;
+	if (nb_tokens == 0) with_error(EINVAL, "No token found on line") return;
 	bool with_seq = isdigit(tokens[0].val.string[0]);
 	if (with_seq && nb_tokens < 2) with_error(EINVAL, "Bad number of tokens (%d)", nb_tokens) return;
 	char const *const keyword = tokens[with_seq ? 1:0].val.string;

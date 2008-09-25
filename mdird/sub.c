@@ -39,7 +39,6 @@ static void subscription_ctor(struct subscription *sub, struct cnx_env *env, cha
 	struct mdir *mdir = mdir_lookup_by_id(dirId, false);
 	on_error return;
 	sub->mdird = mdir2mdird(mdir);
-	assert(sub->mdird > 1);
 	LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
 	subscription_reset_version(sub, version);
 	sub->thread_id = pth_spawn(PTH_ATTR_DEFAULT, subscription_thread, sub);
@@ -99,7 +98,6 @@ struct subscription *subscription_find(struct cnx_env *env, char const *dirId)
 
 static bool client_needs_patch(struct subscription *sub)
 {
-	assert(sub->mdird > 1);
 	return sub->version < mdir_last_version(&sub->mdird->mdir);
 }
 
@@ -108,20 +106,23 @@ static void send_patch(int fd, struct header *h, struct mdir *mdir, enum mdir_ac
 	char cmdstr[5+1+PATH_MAX+1+20+1+20+1+1+1];
 	size_t cmdlen = snprintf(cmdstr, sizeof(cmdstr), "PATCH %s %"PRIversion" %"PRIversion" %s\n", mdir_id(mdir), prev, new, mdir_action2str(action));
 	assert(cmdlen < sizeof(cmdstr));
+	debug("Sending %s", cmdstr);
 	Write(fd, cmdstr, cmdlen);
 	on_error return;
 	header_write(h, fd);
-	Write(fd, "\n", 1);
+	debug("done");
 }
 
 static void send_next_patch(struct subscription *sub)
 {
 	enum mdir_action action;
 	mdir_version next_version = sub->version;
+	debug("Send patch after %"PRIversion, sub->version);
 	struct header *h = mdir_read_next(&sub->mdird->mdir, &next_version, &action);
 	on_error return;
 	send_patch(sub->env->fd, h, &sub->mdird->mdir, action, sub->version, next_version);
 	unless_error sub->version = next_version;	// last version known is the last we sent
+	debug("New version of subscription is %"PRIversion, sub->version);
 }
 
 static void wait_notif(struct subscription *sub)
@@ -137,6 +138,7 @@ static void *subscription_thread(void *sub_)
 	debug("new thread for subscription @%p", sub);
 	while (1) {
 		if (client_needs_patch(sub)) {
+			debug("Sending a patch");
 			pth_mutex_acquire(&sub->env->wfd, FALSE, NULL);
 			send_next_patch(sub);
 			pth_mutex_release(&sub->env->wfd);
