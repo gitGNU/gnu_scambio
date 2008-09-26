@@ -112,7 +112,11 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir
 // (will also list unconfirmed patches)
-void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, mdir_version version));
+union mdir_list_param {
+	mdir_version version;	// for synched patches
+	char const *path;	// for unsynched patches
+};
+void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, union mdir_list_param));
 
 // returns the header, action and version following the given version
 // or NULL if no other patches are found
@@ -126,5 +130,6 @@ char const *mdir_version2str(mdir_version);
 mdir_version mdir_str2version(char const *str);
 char const *mdir_action2str(enum mdir_action action);
 enum mdir_action mdir_str2action(char const *str);
+bool mdir_is_transient(struct mdir *mdir);
 
 #endif

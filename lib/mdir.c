@@ -111,7 +111,9 @@ static struct mdir *mdir_create(bool transient)
 	uint64_t id = (*(uint64_t *)dirid_seq.data)++;
 	char id_str[1+20+1];
 	snprintf(id_str, sizeof(id_str), "%s%"PRIu64, transient ? "_":"", id);
-	return mdir_new(id_str, true);
+	struct mdir *mdir = mdir_new(id_str, true);
+	assert(transient == mdir_is_transient(mdir));
+	return mdir;
 }
 
 static void mdir_dtor(struct mdir *mdir)
@@ -144,6 +146,7 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create)
 		if (0 == strcmp(id, mdir_id(mdir))) return mdir;
 	}
 	// Load it
+	debug("not found on cache");
 	return mdir_new(id, create);
 }
 
@@ -291,6 +294,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		}
 		on_error return;
 	} else {
+		debug("no dirId in header (yet)");
 		child = mdir_create(transient);
 		on_error return;
 		if (! transient) {
@@ -298,6 +302,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 			on_error return;
 		}
 	}
+	debug("symlinking %s to %s", path, child->path);
 	if (0 != symlink(child->path, path)) error_push(errno, "symlink %s -> %s", path, child->path);
 }
 
@@ -373,7 +378,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
  */
 
 // sync means in on the server - but not necessarily on our log yet
-void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, mdir_version version))
+void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, union mdir_list_param))
 {
 	struct jnl *jnl;
 	if (want_sync) {
@@ -384,7 +389,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 				enum mdir_action action;
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
-				cb(mdir, h, action, true, jnl->version + index);
+				cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index });
 				header_del(h);
 			}
 		}
@@ -396,7 +401,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 		debug("listing %s", temp);
 		DIR *dir = opendir(temp);
 		if (! dir) {
-			if (errno != ENOENT) goto end_unsync;
+			if (errno == ENOENT) goto end_unsync;
 			with_error(errno, "opendir(%s)", temp) return;
 		}
 		mdir_version last_version = mdir_last_version(mdir);
@@ -429,7 +434,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 			}
 			struct header *h = header_from_file(temp);
 			on_error return;
-			cb(mdir, h, action, synced, version);
+			cb(mdir, h, action, synced, synced ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp });
 			header_del(h);
 		}
 		if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
@@ -490,5 +495,10 @@ enum mdir_action mdir_str2action(char const *str)
 		case '-': return MDIR_REM;
 	}
 	with_error(0, "Invalid action : '%s'", str) return MDIR_ADD;
+}
+
+bool mdir_is_transient(struct mdir *mdir)
+{
+	return mdir_id(mdir)[0] == '_';
 }
 

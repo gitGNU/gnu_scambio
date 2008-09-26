@@ -42,6 +42,7 @@ void *connecter_thread(void *arg)
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
 	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
 	while (reader_pthid && writer_pthid) {
+/*
 		pth_event_t ev_r = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, reader_pthid);
 		pth_event_t ev_w = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, writer_pthid);
 		pth_event_t ev_ring = pth_event_concat(ev_r, ev_w, NULL);
@@ -63,6 +64,8 @@ void *connecter_thread(void *arg)
 			ev = pth_event_walk(ev, PTH_WALK_NEXT);
 		} while (ev != ev_ring);
 		pth_event_free(ev_ring, PTH_FREE_ALL);
+*/
+		pth_sleep(5);
 	}
 	if (reader_pthid) (void)pth_cancel(reader_pthid);
 	if (writer_pthid) (void)pth_cancel(writer_pthid);

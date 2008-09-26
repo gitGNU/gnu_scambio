@@ -50,23 +50,50 @@ static void wait_signal(void)
 }
 
 static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool synched, mdir_version version);
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, mdir_version version)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, union mdir_list_param param)
 {
-	if (header_is_directory(header)) {
-		if (action == MDIR_ADD) {
-			parse_dir_rec(mdir2mdirc(mdir), action, synched, version);
+	struct mdirc *mdirc = mdir2mdirc(mdir);
+	if (! synched) {	// not in journal and not already acked
+		// but may already have been sent nonetheless.
+		enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
+		struct command *cmd = command_get_by_path(mdirc, type, param.path);
+		if (! cmd) {
+			(void)command_new(type, mdirc, mdir_id(mdir), param.path);
+			on_error return;
 		}
+	}
+	// Anyway, if it is a directory, recurse
+	if (header_is_directory(header)) {
+		// find this dirId, which may be transient... so not in the header !
+		// We definitively needs a distinct folder ls, which would list symlinks instead of journal,
+		// and provide the dirId ! mdir_list still list the patches, so the dirId patch as well.
+		//parse_dir_rec(mdirc, action, synched, param.version);
+		on_error return;
 	}
 }
 
+// Subscribe to the directory, then scan it
 static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool synched, mdir_version version)
 {
-	(void)action;
+	debug("parsing directory '%s'", mdir_id(&mdirc->mdir));
 	(void)synched;
 	(void)version;
-	debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
-	(void)command_new(SUB_CMD_TYPE, mdirc, mdir_id(&mdirc->mdir), "");
-	on_error return;
+	// Subscribe to the directory if its not already done
+	if (!mdirc->subscribed && action == MDIR_ADD && synched && !mdir_is_transient(&mdirc->mdir)) {
+		// This is not enough to be synched : we must ensure that we have received the patch yet
+		// FIXME: we need 3 states not two : not acked, acked and synched (the 4th state, 'sent',
+		// does not survive to program restart, so we must handle it conservatively).
+		debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
+		// this is not fatal to subscribe twice to a dirId, but better avoid it
+		struct command *cmd = command_get_by_path(mdirc, SUB_CMD_TYPE, "");
+		if (cmd) {
+			debug("already subscribing to %s", mdir_id(&mdirc->mdir));
+		} else {
+			(void)command_new(SUB_CMD_TYPE, mdirc, mdir_id(&mdirc->mdir), "");
+		}
+		on_error return;
+	}
+	// List its content
 	mdir_patch_list(&mdirc->mdir, true, true, ls_patch);
 }
 
@@ -79,6 +106,7 @@ void *writer_thread(void *args)
 		struct mdir *root = mdir_lookup("/");
 		on_error break;
 		parse_dir_rec(mdir2mdirc(root), MDIR_ADD, true, 0);
+		on_error break;
 		wait_signal();
 	} while (! terminate_writer);
 	return NULL;

@@ -43,11 +43,13 @@ static bool terminate_reader;
 void finalize_sub(struct command *cmd, int status)
 {
 	debug("subscribing to %s : %d", mdir_id(&cmd->mdirc->mdir), status);
+	cmd->mdirc->subscribed = true;
 }
 
 void finalize_unsub(struct command *cmd, int status)
 {
 	debug("unsubscribing to %s : %d", mdir_id(&cmd->mdirc->mdir), status);
+	cmd->mdirc->subscribed = false;
 }
 
 void finalize_put(struct command *cmd, int status)
@@ -156,7 +158,10 @@ void *reader_thread(void *args)
 		} else for (unsigned t=0; t<sizeof_array(command_types); t++) {
 			if (cmd.keyword == command_types[t].keyword) {
 				struct command *command = command_get_by_seqnum(t, cmd.seq);
-				if (command) command_types[t].finalize(command, cmd.args[0].val.integer);
+				if (command) {
+					command_types[t].finalize(command, cmd.args[0].val.integer);
+					command_del(command);
+				}
 				break;
 			}
 		}

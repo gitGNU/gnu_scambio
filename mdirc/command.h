@@ -36,10 +36,11 @@ extern struct command_types {
 	LIST_HEAD(commands_by_type, command) commands;
 } command_types[NB_CMD_TYPES];
 
-// give relative folder (ie mdir name) and absolute filename
+// give relative folder (ie mdir name for PUT/REM, id for SUB/UNSUB) and absolute filename
 struct command *command_new(enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename);
 void command_del(struct command *cmd);
 struct command *command_get_by_seqnum(unsigned type, long long seqnum);
+struct command *command_get_by_path(struct mdirc *mdirc, unsigned type, char const *path);
 bool command_timeouted(struct command *cmd);
 
 #endif

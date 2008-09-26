@@ -106,3 +106,15 @@ struct command *command_get_by_seqnum(unsigned type, long long seqnum)
 	return NULL;
 }
 
+struct command *command_get_by_path(struct mdirc *mdirc, unsigned type, char const *path)
+{
+	assert(type < sizeof_array(command_types));
+	struct command *cmd;
+	LIST_FOREACH(cmd, &mdirc->commands[type], mdirc_entry) {
+		debug("lookup cmd @%p, path = '%s'", cmd, cmd->filename);
+		if (0 == strcmp(cmd->filename, path)) return cmd;
+	}
+	debug("No command was sent for this path (%s)", path);
+	return NULL;
+}
+

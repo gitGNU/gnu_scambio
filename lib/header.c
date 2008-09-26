@@ -160,8 +160,10 @@ void header_del(struct header *h)
 
 char const *header_search(struct header const *h, char const *name)
 {
+	debug("looking for %s in header @%p", name, h);
 	for (unsigned f=0; f<h->nb_fields; f++) {
 		if (0 == strcmp(h->fields[f].name, name)) {
+			debug("found, value = %s", h->fields[f].value);
 			return h->fields[f].value;
 		}
 	}
@@ -193,7 +195,6 @@ void header_write(struct header const *h, int fd)
 }
 
 void header_parse(struct header *h, char const *msg) {
-	debug("msg = '%s'", msg);
 	ssize_t parsed;
 	while (*msg) {
 		if (h->nb_fields >= NB_MAX_FIELDS) {
@@ -271,6 +272,7 @@ void header_debug(struct header *h)
 
 void header_add_field(struct header *h, char const *name, char const *value)
 {
+	debug("adding '%s: %s' to header @%p", name, value, h);
 	if (h->nb_fields >= NB_MAX_FIELDS) with_error(E2BIG, "Too many fields in header") return;
 	struct head_field *field = h->fields + h->nb_fields;
 	field->name = strdup(name);	// won't be written to from now on
@@ -281,6 +283,7 @@ void header_add_field(struct header *h, char const *name, char const *value)
 		free(field->name);
 		with_error(ENOMEM, "Cannot strdup field value") return;
 	}
+	h->nb_fields ++;
 }
 
 size_t header_find_parameter(char const *name, char const *field_value, char const **value)
