@@ -238,6 +238,7 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
  * (Un)Link
  */
 
+// FIXME : on error, will left the directory in unusable state
 static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 {
 	debug("add link to mdir %s", mdir_id(parent));
@@ -257,12 +258,37 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_DIR_TYPE);
 		on_error return;
 	}
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
 	struct mdir *child;
 	char const *dirid = header_search(h, SCAMBIO_DIRID_FIELD);
 	if (dirid) {
 		assert(! transient);
-		// create it if it does not exist
-		child = mdir_lookup_by_id(dirid, true);
+		// A symlink to a transient dirId may already exist. If so, rename it.
+		// Otherwise, create a new one.
+		char prev_link[PATH_MAX];
+		ssize_t len = readlink(path, prev_link, sizeof(prev_link));
+		if (len == -1) {
+			if (errno != ENOENT) with_error(errno, "Cannot readlink %s", path) return;
+			// does not exist : then create a new one
+			child = mdir_lookup_by_id(dirid, true);
+		} else {	// the symlink exist
+			assert(len < (int)sizeof(prev_link) && len > 0);	// PATH_MAX is supposed to be able to store a path + the nul byte
+			prev_link[len] = '\0';
+			// check it points toward a temporary dirId
+			char *prev_dirid = prev_link + len;
+			while (prev_dirid > prev_link && *(prev_dirid-1) != '/') prev_dirid--;
+			debug("found a previous link to '%s'", prev_dirid);
+			if (*prev_dirid != '_') with_error(0, "Previous link for new dirId %s points toward non transient dirId %s", dirid, prev_dirid) return;
+			// rename dirId and rebuild symlink
+			char new_path[PATH_MAX];
+			snprintf(new_path, sizeof(new_path), "%s/%s", mdir_root, prev_dirid);
+			if (0 != rename(prev_link, new_path)) with_error(errno, "Cannot rename transient dirId %s to %s", prev_link, new_path) return;
+			if (0 != unlink(path)) with_error(errno, "Cannot remove previous symlink %s", path) return;
+			child = mdir_lookup_by_id(dirid, false);	// must exists by now
+			on_error return;
+			// new symlink is created below
+		}
 		on_error return;
 	} else {
 		child = mdir_create(transient);
@@ -272,8 +298,6 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 			on_error return;
 		}
 	}
-	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
 	if (0 != symlink(child->path, path)) error_push(errno, "symlink %s -> %s", path, child->path);
 }
 

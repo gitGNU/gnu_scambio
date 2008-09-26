@@ -70,7 +70,7 @@ mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
 // saved in a tempfile in subfolder ".tmp" with a tempname starting with '+'
 // for addition and '-' for removal of the herein header. There it will be
 // found by the client synchronizer mdirc (because mdir_list will report them
-// as unsynched patches), sent to the server whenever possible, then when acked
+// as unsynched patches) and sent to the server whenever possible, then when acked
 // removed to another class of tempfile, which name is "+/-=version" (the
 // version is received with the ack).  mdir_list will also report these acked
 // files if they are not already in the journal (if they are it will silently
@@ -78,17 +78,21 @@ mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
 // (which may happen on some transport even if the server sends the ack before
 // the patch).
 //
-// If the patch creates/removes a subfolder for an existing dirId, the patch is
-// added as above, but also the symlink is performed so that following lookup
-// will works even when not connected. Later when the patch will be eventually
+// If the patch creates/removes a subfolder to an existing dirId, the patch is
+// added as above, but also the symlink is performed so that following lookups
+// will work even when not connected. Later when the patch will be eventually
 // received it is thus not an error if the symlink already exist.
 //
-// If the patch adds a _new_ subfolder (no dirId specified), a transiant dirId
-// is created and symlinked as above. This transient dirId use a "_" prefix.
-// When acked, it is renamed (and the only symlinks to it is rebuild) to
-// "=version".  When the patch is eventually received, this directory is
-// renamed to the actual dirId provided with the patch, and the symlink is
-// rebuild again. So a function that renames a parent's subdir is badly needed.
+// If the patch adds a _new_ subfolder (no dirId specified), a transient dirId
+// is created and symlinked as above. This transient dirId uses a "_" prefix.
+// When the patch is eventually received, the client will look if a symlink with
+// the same name already exists. If so, it will rename the dirId to the
+// server's one, and rebuilt the symlink.
+//
+// If two clients propose a patch for the addition of the same new directory
+// (same name), then one of them will receive a non fatal error, which does not
+// prevent him from adding patches to it (since it does exist). Both directories
+// will be the same, and content de facto merged.
 //
 // Only one symlink refers to this transient dirId because it is forbidden to
 // use a temporary dirId (this dirId being unknown for the server). So, it is
