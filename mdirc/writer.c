@@ -39,17 +39,17 @@ static bool terminate_writer;
 static void wait_signal(void)
 {
 	debug("wait signal");
-	int err, sig;
+	int sig;
 	sigset_t set;
 	sigemptyset(&set);
 	sigaddset(&set, SIGHUP);
-	if (0 != (err = pth_sigwait(&set, &sig))) {	// this is a cancel point
-		error("Cannot sigwait : %d", err);
-	}
+	pth_event_t ev = pth_event(PTH_EVENT_TIME, pth_timeout(5, 0));
+	(void)pth_sigwait_ev(&set, &sig, ev);	// this is a cancel point
+	pth_event_free(ev, PTH_FREE_THIS);
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, union mdir_list_param param)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, union mdir_list_param param, void *path)
 {
 	assert(! synched);
 	struct mdirc *mdirc = mdir2mdirc(mdir);
@@ -58,14 +58,14 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 	enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
 	struct command *cmd = command_get_by_path(mdirc, type, param.path);
 	if (! cmd) {
-		(void)command_new(type, mdirc, mdir_id(mdir), param.path);
+		(void)command_new(type, mdirc, (char const *)path, param.path);
 		on_error return;
 		header_write(header, cnx.sock_fd);
 	}
 }
 
 // Subscribe to the directory, then scan it
-static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, char const *name)
+static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, char const *name, void *path)
 {
 	(void)parent;
 	struct mdirc *mdirc = mdir2mdirc(mdir);
@@ -87,11 +87,13 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, 
 	}
 	// Synchronize up its content
 	debug("list patches");
-	mdir_patch_list(&mdirc->mdir, false, true, ls_patch);
+	mdir_patch_list(&mdirc->mdir, false, true, ls_patch, path);
 	on_error return;
 	// Recurse
+	char child_path[PATH_MAX];
+	snprintf(child_path, sizeof(child_path), "%s/%s", (char *)path, name);
 	debug("list folders");
-	mdir_folder_list(mdir, true, true, parse_dir_rec);
+	mdir_folder_list(mdir, true, true, parse_dir_rec, child_path);
 }
 
 void *writer_thread(void *args)
@@ -102,7 +104,7 @@ void *writer_thread(void *args)
 	do {
 		struct mdir *root = mdir_lookup("/");
 		on_error break;
-		parse_dir_rec(NULL, root, true, "/");
+		parse_dir_rec(NULL, root, true, "", "/");
 		on_error break;
 		wait_signal();
 	} while (! terminate_writer);

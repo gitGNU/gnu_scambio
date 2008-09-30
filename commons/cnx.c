@@ -59,7 +59,7 @@ void cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 		0 != bind(serv->sock_fd, (struct sockaddr *)&any_addr, sizeof(any_addr)) ||
 		0 != listen(serv->sock_fd, 10)
 	) {
-		error_push(errno, "Cannot use cocket");
+		error_push(errno, "Cannot use socket");
 		(void)close(serv->sock_fd);
 		serv->sock_fd = -1;
 	}

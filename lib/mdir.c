@@ -382,7 +382,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
  */
 
 // sync means in on the server - but not necessarily on our log yet
-void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, union mdir_list_param))
+void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, union mdir_list_param, void *data), void *data)
 {
 	struct jnl *jnl;
 	if (want_sync) {
@@ -393,7 +393,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 				enum mdir_action action;
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
-				cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index });
+				cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index }, data);
 				header_del(h);
 				on_error return;
 			}
@@ -439,7 +439,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 			}
 			struct header *h = header_from_file(temp);
 			on_error return;
-			cb(mdir, h, action, synced, synced ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp });
+			cb(mdir, h, action, synced, synced ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp }, data);
 			header_del(h);
 			on_error return;
 		}
@@ -448,7 +448,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 end_unsync:;
 }
 
-void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name))
+void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data)
 {
 	DIR *d = opendir(mdir->path);
 	if (! d) with_error(errno, "opendir %s", mdir->path) return;
@@ -465,7 +465,7 @@ void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched,
 		if ((synched && want_synched) || (!synched && want_unsynched)) {
 			char *name = strdup(dirent->d_name);
 			if (! name) with_error(errno, "strdup") break;
-			cb(mdir, child, synched, name);
+			cb(mdir, child, synched, name, data);
 			free(name);
 			on_error break;
 		}

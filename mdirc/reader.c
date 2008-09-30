@@ -17,6 +17,7 @@
  */
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -29,37 +30,58 @@
 #include "digest.h"
 
 /* The reader listens for command answers.
- * On a put response, it removes the temporary filename stored in the action
- * (the actual meta file will be synchronized independantly from the server).
- * On a rem response, it removes the temporary filename (same remark as above).
- * On a sub response, it moves the subscription from subscribing to subscribed.
- * On an unsub response, it deletes the unsubcribing subscription.
- * On a patch, it adds the patch to the patch ring, and try to reduce it
- * (ie push as much as possible on the mdir journal, while the versions sequence is OK).
+ * On a put response, it renames the temporary filename stored in the action to
+ * "+/-=version" (the actual meta file will be synchronized independantly from
+ * the server).  On a rem response, it removes the temporary filename (same
+ * remark as above).  On a sub response, it moves the subscription from
+ * subscribing to subscribed.  On an unsub response, it deletes the
+ * unsubcribing subscription.  On a patch, it adds the patch to the patch ring,
+ * and try to reduce it (ie push as much as possible on the mdir journal, while
+ * the versions sequence is OK).
  */
 
 static bool terminate_reader;
 
-void finalize_sub(struct command *cmd, int status)
+void finalize_sub(struct command *cmd, int status, char const *compl)
 {
-	debug("subscribing to %s : %d", mdir_id(&cmd->mdirc->mdir), status);
+	debug("subscribing to %s : %d %s", mdir_id(&cmd->mdirc->mdir), status, compl);
 	cmd->mdirc->subscribed = true;
 }
 
-void finalize_unsub(struct command *cmd, int status)
+void finalize_unsub(struct command *cmd, int status, char const *compl)
 {
-	debug("unsubscribing to %s : %d", mdir_id(&cmd->mdirc->mdir), status);
+	debug("unsubscribing to %s : %d %s", mdir_id(&cmd->mdirc->mdir), status, compl);
 	cmd->mdirc->subscribed = false;
 }
 
-void finalize_put(struct command *cmd, int status)
+static void rename_temp(char const *path, char const *compl)
 {
-	debug("put %s : %d", cmd->filename, status);
+	char new_path[PATH_MAX];
+	int len = snprintf(new_path, sizeof(new_path), "%s", path);
+	assert(len > 0 && len < (int)sizeof(new_path));
+	char *c = new_path + len;
+	while (*(c-1) != '+' && *(c-1) != '-') {
+		if (c == new_path || *c == '/') with_error(0, "Bad filename for command : '%s'", path) return;
+		c--;
+	}
+	snprintf(c, sizeof(new_path)-(c - new_path), "=%s", compl);
+	if (0 != rename(path, new_path)) error_push(errno, "rename %s -> %s", path, new_path);
 }
 
-void finalize_rem(struct command *cmd, int status)
+void finalize_put(struct command *cmd, int status, char const *compl)
+{
+	debug("put %s : %d", cmd->filename, status);
+	if (status == 200) {
+		rename_temp(cmd->filename, compl);
+	}
+}
+
+void finalize_rem(struct command *cmd, int status, char const *compl)
 {
 	debug("rem %s : %d", cmd->filename, status);
+	if (status == 200) {
+		rename_temp(cmd->filename, compl);
+	}
 }
 
 struct patch {
@@ -159,7 +181,7 @@ void *reader_thread(void *args)
 			if (cmd.keyword == command_types[t].keyword) {
 				struct command *command = command_get_by_seqnum(t, cmd.seq);
 				if (command) {
-					command_types[t].finalize(command, cmd.args[0].val.integer);
+					command_types[t].finalize(command, cmd.args[0].val.integer, cmd.args[1].val.string);
 					command_del(command);
 				}
 				break;

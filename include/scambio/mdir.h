@@ -116,10 +116,10 @@ union mdir_list_param {
 	mdir_version version;	// for synched patches
 	char const *path;	// for unsynched patches
 };
-void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, union mdir_list_param));
+void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, union mdir_list_param, void *data), void *data);
 
 // returns only the symlinks. We can tell weither they are synched or not by watching if the dirId they points to is transient.
-void mdir_folder_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name));
+void mdir_folder_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data);
 
 // returns the header, action and version following the given version
 // or NULL if no other patches are found

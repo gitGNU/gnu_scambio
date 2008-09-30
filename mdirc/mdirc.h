@@ -36,11 +36,11 @@ void reader_end(void);
 void writer_begin(void);
 void writer_end(void);
 struct command;
-void finalize_sub(struct command *cmd, int status);
-void finalize_unsub(struct command *cmd, int status);
-void finalize_put(struct command *cmd, int status);
-void finalize_rem(struct command *cmd, int status);
-void finalize_quit(struct command *cmd, int status);
+void finalize_sub(struct command *cmd, int status, char const *compl);
+void finalize_unsub(struct command *cmd, int status, char const *compl);
+void finalize_put(struct command *cmd, int status, char const *compl);
+void finalize_rem(struct command *cmd, int status, char const *compl);
+void finalize_quit(struct command *cmd, int status, char const *compl);
 
 struct mdirc {
 	struct mdir mdir;

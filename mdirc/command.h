@@ -32,7 +32,7 @@ enum command_type {
 };
 extern struct command_types {
 	char const *const keyword;
-	void (*finalize)(struct command *cmd, int status);
+	void (*finalize)(struct command *cmd, int status, char const *compl);
 	LIST_HEAD(commands_by_type, command) commands;
 } command_types[NB_CMD_TYPES];
 

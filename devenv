@@ -52,4 +52,12 @@ function run_client {
 	build/mdirc/mdirc
 }
 
+function add_msg {
+	mkdir /tmp/mdirc/root/.tmp
+	cat > /tmp/mdirc/root/.tmp/+test1 <<EOF
+test: 1
+
+EOF
+}
+
 ulimit -c unlimited
