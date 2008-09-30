@@ -38,7 +38,6 @@
 
 /*
  * Data Definitions
- *
  */
 
 static size_t mdir_root_len;
@@ -82,7 +81,6 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 	DIR *d = opendir(mdir->path);
 	if (! d) with_error(errno, "opendir %s", mdir->path) return;
 	struct dirent *dirent;
-	// We may yield the CPU here, but then we must acquire write lock
 	while (NULL != (dirent = readdir(d))) {
 		if (is_jnl_file(dirent->d_name)) {
 			jnl_new(mdir, dirent->d_name);
@@ -150,6 +148,19 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create)
 	return mdir_new(id, create);
 }
 
+static struct mdir *lookup_abs(char const *path)
+{
+	debug("lookup absolute path '%s'", path);
+	char slink[PATH_MAX];
+	ssize_t len = readlink(path, slink, sizeof(slink));
+	if (len == -1) with_error(errno, "readlink %s", path) return NULL;
+	if (len == 0 || len == sizeof(slink)) with_error(0, "bad symlink for %s", path) return NULL;
+	char *id = slink + len - 1;
+	while (id >= slink && *id != '/') id--;
+	if (id >= slink) *id = '\0';
+	return mdir_lookup_by_id(id+1, false);
+}
+
 struct mdir *mdir_lookup(char const *name)
 {
 	debug("lookup %s", name);
@@ -159,15 +170,8 @@ struct mdir *mdir_lookup(char const *name)
 		return mdir_lookup_by_id("root", false);
 	}
 	char path[PATH_MAX];
-	char slink[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/root/%s", mdir_root, name);
-	ssize_t len = readlink(path, slink, sizeof(slink));
-	if (len == -1) with_error(errno, "readlink %s", path) return NULL;
-	if (len == 0 || len == sizeof(slink)) with_error(0, "bad symlink for %s", path) return NULL;
-	char *id = slink + len - 1;
-	while (id >= slink && *id != '/') id--;
-	if (id >= slink) *id = '\0';
-	return mdir_lookup_by_id(id+1, false);
+	return lookup_abs(path);
 }
 
 /*
@@ -391,6 +395,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 				on_error return;
 				cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index });
 				header_del(h);
+				on_error return;
 			}
 		}
 	}
@@ -436,10 +441,37 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 			on_error return;
 			cb(mdir, h, action, synced, synced ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp });
 			header_del(h);
+			on_error return;
 		}
 		if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
 	}
 end_unsync:;
+}
+
+void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name))
+{
+	DIR *d = opendir(mdir->path);
+	if (! d) with_error(errno, "opendir %s", mdir->path) return;
+	struct dirent *dirent;
+	while (NULL != (dirent = readdir(d))) {
+		struct stat statbuf;
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s/%s", mdir->path, dirent->d_name);
+		if (0 != lstat(path, &statbuf)) with_error(errno, "lstat %s", path) break;
+		if (! S_ISLNK(statbuf.st_mode)) continue;
+		struct mdir *child = lookup_abs(path);
+		on_error break;
+		bool synched = !mdir_is_transient(child);
+		if ((synched && want_synched) || (!synched && want_unsynched)) {
+			char *name = strdup(dirent->d_name);
+			if (! name) with_error(errno, "strdup") break;
+			cb(mdir, child, synched, name);
+			free(name);
+			on_error break;
+		}
+	}
+	if (0 != closedir(d)) error_push(errno, "Cannot closedir %s", mdir->path);
+	return;
 }
 
 /*

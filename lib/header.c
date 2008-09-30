@@ -17,6 +17,7 @@
  */
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <ctype.h>
@@ -162,7 +163,7 @@ char const *header_search(struct header const *h, char const *name)
 {
 	debug("looking for %s in header @%p", name, h);
 	for (unsigned f=0; f<h->nb_fields; f++) {
-		if (0 == strcmp(h->fields[f].name, name)) {
+		if (0 == strcasecmp(h->fields[f].name, name)) {
 			debug("found, value = %s", h->fields[f].value);
 			return h->fields[f].value;
 		}

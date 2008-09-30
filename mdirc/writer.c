@@ -49,37 +49,29 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool synched, mdir_version version);
 static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, union mdir_list_param param)
 {
+	assert(! synched);
 	struct mdirc *mdirc = mdir2mdirc(mdir);
-	if (! synched) {	// not in journal and not already acked
-		// but may already have been sent nonetheless.
-		enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
-		struct command *cmd = command_get_by_path(mdirc, type, param.path);
-		if (! cmd) {
-			(void)command_new(type, mdirc, mdir_id(mdir), param.path);
-			on_error return;
-		}
-	}
-	// Anyway, if it is a directory, recurse
-	if (header_is_directory(header)) {
-		// find this dirId, which may be transient... so not in the header !
-		// We definitively needs a distinct folder ls, which would list symlinks instead of journal,
-		// and provide the dirId ! mdir_list still list the patches, so the dirId patch as well.
-		//parse_dir_rec(mdirc, action, synched, param.version);
+	// not in journal and not already acked
+	// but may already have been sent nonetheless.
+	enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
+	struct command *cmd = command_get_by_path(mdirc, type, param.path);
+	if (! cmd) {
+		(void)command_new(type, mdirc, mdir_id(mdir), param.path);
 		on_error return;
+		header_write(header, cnx.sock_fd);
 	}
 }
 
 // Subscribe to the directory, then scan it
-static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool synched, mdir_version version)
+static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, char const *name)
 {
-	debug("parsing directory '%s'", mdir_id(&mdirc->mdir));
-	(void)synched;
-	(void)version;
+	(void)parent;
+	struct mdirc *mdirc = mdir2mdirc(mdir);
+	debug("parsing directory '%s' (dirId = %s)", name, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
-	if (!mdirc->subscribed && action == MDIR_ADD && synched && !mdir_is_transient(&mdirc->mdir)) {
+	if (!mdirc->subscribed && synched && !mdir_is_transient(&mdirc->mdir)) {
 		// This is not enough to be synched : we must ensure that we have received the patch yet
 		// FIXME: we need 3 states not two : not acked, acked and synched (the 4th state, 'sent',
 		// does not survive to program restart, so we must handle it conservatively).
@@ -93,8 +85,13 @@ static void parse_dir_rec(struct mdirc *mdirc, enum mdir_action action, bool syn
 		}
 		on_error return;
 	}
-	// List its content
-	mdir_patch_list(&mdirc->mdir, true, true, ls_patch);
+	// Synchronize up its content
+	debug("list patches");
+	mdir_patch_list(&mdirc->mdir, false, true, ls_patch);
+	on_error return;
+	// Recurse
+	debug("list folders");
+	mdir_folder_list(mdir, true, true, parse_dir_rec);
 }
 
 void *writer_thread(void *args)
@@ -105,7 +102,7 @@ void *writer_thread(void *args)
 	do {
 		struct mdir *root = mdir_lookup("/");
 		on_error break;
-		parse_dir_rec(mdir2mdirc(root), MDIR_ADD, true, 0);
+		parse_dir_rec(NULL, root, true, "/");
 		on_error break;
 		wait_signal();
 	} while (! terminate_writer);
