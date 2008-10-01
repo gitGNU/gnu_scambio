@@ -25,14 +25,16 @@
 #include "scambio/header.h"
 
 #ifndef HAVE_STRNSTR
-static char *strnstr(const char *big_, const char *little, size_t big_len)
+static char *strnstr(const char *big_, const char *little, size_t max_len)
 {
-	char *big = (char *)big_;	// hare we have non-const strings
-	assert(big_len >= strlen(big));
-	char old_val = big[big_len];
-	big[big_len] = '\0';
+	char *big = (char *)big_;	// here we have non-const strings
+	assert(max_len <= strlen(big));
+	char old_val = big[max_len];
+	big[max_len] = '\0';
+	debug("looking for %s in %s", little, big);
 	char *ret = strstr(big, little);
-	big[big_len] = old_val;
+	debug("found @ %p", ret);
+	big[max_len] = old_val;
 	return ret;
 }
 #endif
@@ -43,23 +45,27 @@ static char *strnstr(const char *big_, const char *little, size_t big_len)
 
 static struct msg_tree *parse_mail_rec(char *msg, size_t size);
 
-// We treat the preamble (what preceeds the first boundary) as a normal part.
-// The epilogue is ignored, though.
+// We ignore preamble and epilogue.
 static void parse_multipart(struct msg_tree *node, char *msg, size_t size, char *boundary)
 {
 	char *msg_end = msg+size;
 	node->type = CT_MULTIPART;
 	SLIST_INIT(&node->content.parts);
 	size_t const boundary_len = strlen(boundary);
-	bool last_boundary = true;
+	bool last_boundary = false;
+	bool first_boundary = true;
+	// Go straight to the first boundary for first component
 	do {
 		char *delim_pos = strnstr(msg, boundary, msg_end-msg);
 		if (! delim_pos) {
 			with_error(0, "multipart boundary not found (%s)", boundary) return;
 		}
 		assert(delim_pos < msg_end);
-		struct msg_tree *part = parse_mail_rec(msg, delim_pos - msg);
-		unless_error SLIST_INSERT_HEAD(&node->content.parts, part, entry);
+		if (! first_boundary) {
+			struct msg_tree *part = parse_mail_rec(msg, delim_pos - msg);
+			unless_error SLIST_INSERT_HEAD(&node->content.parts, part, entry);
+		}
+		first_boundary = false;
 		msg = delim_pos + boundary_len;
 		// boundary may be followed by "--" if it's the last one, then some optional spaces then CRLF.
 		if (msg[0] == '-' && msg[1] == '-') {
@@ -85,7 +91,7 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 	}
 	// Find out weither the body is total with a decoding method, or
 	// is another message up to a given boundary.
-	char const *content_type = header_search(node->header, well_known_headers[WKH_CONTENT_TYPE].name);
+	char const *content_type = header_search(node->header, "content-type");
 	if (content_type && 0 == strncasecmp(content_type, "multipart/", 10)) {
 		debug("message is multipart");
 #		define PREFIX "\n--"
@@ -161,7 +167,7 @@ struct msg_tree *msg_tree_read(int fd)
 	struct varbuf vb;
 	if_fail (varbuf_ctor(&vb, 10240, true)) return NULL;
 	read_whole_mail(&vb, fd);
-	unless_error root = parse_mail_rec(vb.buf, vb.used);
+	unless_error root = parse_mail_rec(vb.buf, vb.used -1 /*trailling 0 is not to be considered*/);
 	varbuf_dtor(&vb);
 	return root;
 }

@@ -54,13 +54,6 @@
 #define MBOX_UNALLOWED  553 // Requested action not taken: mailbox name not allowed (e.g., mailbox syntax incorrect)
 #define TRANSAC_FAILED  554 // Transaction failed  (Or, in the case of a connection-opening response, "No SMTP service here")
 
-struct well_known_header well_known_headers[] = {
-	{ "subject" },
-	{ "message-id" },
-	{ "content-type" },
-	{ "content-transfer-encoding" },
-};
-
 /*
  * (De)Init
  */
@@ -123,6 +116,10 @@ static void set_reverse_path(struct cnx_env *env, char const *reverse_path)
 }
 static void set_forward_path(struct cnx_env *env, char const *forward_path)
 {
+	char folder[PATH_MAX];
+	snprintf(folder, sizeof(folder), "mailboxes/%s", forward_path);
+	env->mailbox = mdir_lookup(folder);
+	on_error return;
 	if (env->forward_path) free(env->forward_path);
 	env->forward_path = strdup(forward_path);
 }
@@ -145,19 +142,6 @@ void exec_helo(struct cnx_env *env, char const *domain)
  * MAIL/RCPT
  */
 
-// a mailbox is valid iff there exist a "mailboxes/name" mdir
-static bool is_valid_mailbox(char const *name)
-{
-	char folder[PATH_MAX];
-	snprintf(folder, sizeof(folder), "mailboxes/%s", name);
-	(void)mdir_lookup(folder);
-	on_error {
-		error_clear();
-		return false;
-	}
-	return true;
-}
-
 void exec_mail(struct cnx_env *env, char const *from)
 {
 #	define FROM_LEN 5
@@ -179,11 +163,16 @@ void exec_rcpt(struct cnx_env *env, char const *to)
 		answer(env, BAD_SEQUENCE, "No MAIL command ?");
 	} else if (0 != strncasecmp("TO:", to, TO_LEN)) {
 		answer(env, SYNTAX_ERR, "It should be 'RCPT TO:...', shouldn't it ?");
-	} else if (! is_valid_mailbox(to + TO_LEN)) {
-		answer(env, MBOX_UNAVAIL_2, "Bad guess");	// TODO: take action against this client ?
 	} else {
-		set_forward_path(env, to + TO_LEN);
-		answer(env, OK, "Ok");
+		char const *name = to + TO_LEN;
+		while (*name != '\0' && *name == ' ') name++;	// some client may insert blank spaces here, although it's forbidden
+		set_forward_path(env, name);
+		on_error {
+			answer(env, MBOX_UNAVAIL_2, "Bad guess");	// TODO: take action against this client ?
+			error_clear();
+		} else {
+			answer(env, OK, "Ok");
+		}
 	}
 }
 
@@ -193,16 +182,17 @@ void exec_rcpt(struct cnx_env *env, char const *to)
 
 static void store_file(struct cnx_env *env, struct header *header, struct varbuf *vb)
 {
+	(void)vb;
 	(void)env;
 	(void)header;
-	(void)vb;
-	TODO;
+	// TODO: send the content to the file store and add returned URL to the global header
 }
 
 static void store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
 {
 	if (tree->type == CT_FILE) {
-		if_fail (store_file(env, tree->header, &tree->content.file)) return;
+		store_file(env, tree->header, &tree->content.file);
+		return;
 	}
 	assert(tree->type == CT_MULTIPART);
 	struct msg_tree *subtree;
@@ -211,16 +201,28 @@ static void store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
 	}
 }
 
+static void submit_patch(struct cnx_env *env)
+{
+	struct header *h = header_new();
+	on_error return;
+	header_add_field(h, SCAMBIO_TYPE_FIELD, "email");
+	header_add_field(h, "from", env->reverse_path);
+	if (env->subject) header_add_field(h, "subject", env->subject);
+	unless_error mdir_patch_request(env->mailbox, MDIR_ADD, h);
+	header_del(h);
+}
+
 static void process_mail(struct cnx_env *env)
 {
 	// First parse the data into a mail tree
 	struct msg_tree *msg_tree = msg_tree_read(env->fd);
 	on_error return;
 	// Extract the values that will be used for all meta-data blocs from top-level header
-	env->subject = header_search(msg_tree->header, well_known_headers[WKH_SUBJECT].name);
-	env->message_id = header_search(msg_tree->header, well_known_headers[WKH_MESSAGE_ID].name);
+	env->subject = header_search(msg_tree->header, "subject");
+	env->message_id = header_search(msg_tree->header, "message-id");
 	// Then store each file in the mdir
 	store_file_rec(env, msg_tree);
+	submit_patch(env);
 	msg_tree_del(msg_tree);
 }
 

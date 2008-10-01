@@ -108,10 +108,12 @@ static void init_server(void)
 
 static void init(void)
 {
-	if_fail (mdir_begin()) return;
-	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	error_begin();
+	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail (init_conf()) return;
 	if_fail (init_log()) return;
+	if_fail (mdir_begin()) return;
+	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 	if_fail (init_cmd()) return;
 	if_fail (daemonize()) return;
 	if_fail (init_server()) return;

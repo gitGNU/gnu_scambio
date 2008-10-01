@@ -32,11 +32,13 @@
 
 extern char my_hostname[256];
 
+struct mdir;
 struct cnx_env {
 	int fd;
 	char *domain;	// stores the last received helo information
 	char *reverse_path;
 	char *forward_path;
+	struct mdir *mailbox;	// associated to the forward path
 	char client_address[100];
 	char reception_date[10+1];
 	char reception_time[8+1];
@@ -45,17 +47,6 @@ struct cnx_env {
 };
 
 // From queries.c
-
-#define WKH_SUBJECT 0
-#define WKH_MESSAGE_ID 1
-#define WKH_CONTENT_TYPE 2
-#define WKH_CONTENT_TRANSFERT_ENCODING 3
-
-struct well_known_header {
-	char *name;
-};
-
-extern struct well_known_header well_known_headers[];
 
 void exec_begin(void);
 void exec_end(void);

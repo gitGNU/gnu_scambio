@@ -106,7 +106,7 @@ static struct mdir *mdir_new(char const *id, bool create)
 static struct mdir *mdir_create(bool transient)
 {
 	debug("create a new mdir");
-	uint64_t id = (*(uint64_t *)dirid_seq.data)++;
+	uint64_t id = (*(uint64_t *)dirid_seq.data)++;	// FIXME: must be atomic
 	char id_str[1+20+1];
 	snprintf(id_str, sizeof(id_str), "%s%"PRIu64, transient ? "_":"", id);
 	struct mdir *mdir = mdir_new(id_str, true);
@@ -154,11 +154,9 @@ static struct mdir *lookup_abs(char const *path)
 	char slink[PATH_MAX];
 	ssize_t len = readlink(path, slink, sizeof(slink));
 	if (len == -1) with_error(errno, "readlink %s", path) return NULL;
-	if (len == 0 || len == sizeof(slink)) with_error(0, "bad symlink for %s", path) return NULL;
-	char *id = slink + len - 1;
-	while (id >= slink && *id != '/') id--;
-	if (id >= slink) *id = '\0';
-	return mdir_lookup_by_id(id+1, false);
+	if (len == 0 || len >= (int)sizeof(slink) || len <= (int)mdir_root_len+1) with_error(0, "bad symlink for %s", path) return NULL;
+	slink[len] = '\0';
+	return mdir_lookup_by_id(slink+mdir_root_len+1, false);	// symlinks points to "mdir_root/id"
 }
 
 struct mdir *mdir_lookup(char const *name)
@@ -362,9 +360,13 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 	char const *dirId = is_dir ? header_search(h, SCAMBIO_DIRID_FIELD):NULL;
 	if (dirId && dirId[0] == '_') with_error(0, "Cannot refer to a temporary dirId") return;
 	char temp[PATH_MAX];
-	int len = snprintf(temp, sizeof(temp), "%s/.temp/%c", mdir->path, action == MDIR_ADD ? '+':'-');
+	int len = snprintf(temp, sizeof(temp), "%s/.tmp/", mdir->path);
 	Mkdir(temp);
-	on_error return;	// this is not an error if the dir already exists
+	on_error {	// this is not an error if the dir already exists
+		if (error_code() == EEXIST) error_clear();
+		else return;
+	}
+	temp[len++] = action == MDIR_ADD ? '+':'-';
 	header_digest(h, sizeof(temp)-len, temp+len);
 	header_to_file(h, temp);
 	on_error return;

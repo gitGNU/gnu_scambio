@@ -23,22 +23,16 @@ function send_content {
 	nc $MDIRD_HOST $MDIRD_PORT <<EOF
 1 put /
 scambio-type: dir
-scambio-name: testdir
+scambio-name: mailboxes
 
 2 put /
-scambio-type: file
-scambio-name: toto
 glop: pas glop
 
-3 put /
-blabla: slurp
-ping: pong
+3 put mailboxes
+scambio-type: dir
+scambio-name: rixed@happyleptic.org
 
-4 put testdir
-a: b
-c: d
-
-5 quit
+4 quit
 EOF
 }
 
@@ -52,12 +46,23 @@ function run_client {
 	build/mdirc/mdirc
 }
 
-function add_msg {
+function run_smtpd {
+	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+	rm -f /tmp/smtpd.log
+	build/smtpd/smtpd
+}
+
+function add_client_msg {
 	mkdir /tmp/mdirc/root/.tmp
 	cat > /tmp/mdirc/root/.tmp/+test1 <<EOF
 test: 1
 
 EOF
+}
+
+function send_email {
+	nc localhost $SMTPD_PORT < smtpd/check/multipart
 }
 
 ulimit -c unlimited

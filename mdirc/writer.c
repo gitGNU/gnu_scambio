@@ -43,7 +43,7 @@ static void wait_signal(void)
 	sigset_t set;
 	sigemptyset(&set);
 	sigaddset(&set, SIGHUP);
-	pth_event_t ev = pth_event(PTH_EVENT_TIME, pth_timeout(5, 0));
+	pth_event_t ev = pth_event(PTH_EVENT_TIME, pth_timeout(2, 0));
 	(void)pth_sigwait_ev(&set, &sig, ev);	// this is a cancel point
 	pth_event_free(ev, PTH_FREE_THIS);
 	debug("got signal");

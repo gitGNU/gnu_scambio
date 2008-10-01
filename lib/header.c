@@ -298,6 +298,7 @@ size_t header_find_parameter(char const *name, char const *field_value, char con
 		for ( ; *v != ';'; v++) {
 			if (*v == '\0') with_error(ENOENT, "No parameters in field value") return 0;
 		}
+		v++;
 		// Then skip the only white space that may lie here
 		while (*v == ' ') v++;	// there should be only one
 		if (0 == strncasecmp(name, v, len)) {	// found
@@ -312,7 +313,10 @@ size_t header_find_parameter(char const *name, char const *field_value, char con
 				delim = '"';
 			}
 			*value = v;
-			while (*v && *v != delim) ret++;
+			while (*v != '\0' && *v != delim) {
+				ret++;
+				v++;
+			}
 			return ret;
 		}
 	} while (*v != '\0');
@@ -368,7 +372,7 @@ struct header *header_from_file(char const *filename)
 
 void header_to_file(struct header *h, char const *filename)
 {
-	int fd = open(filename, O_WRONLY);
+	int fd = open(filename, O_WRONLY|O_CREAT, 0640);
 	if (fd < 0) with_error(errno, "open(%s)", filename) return;
 	header_write(h, fd);
 	close(fd);
