@@ -37,6 +37,7 @@ AC_CONFIG_FILES([
 	lib/Makefile
 	mdird/Makefile
 	mdirc/Makefile
+	smtpd/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

@@ -21,8 +21,8 @@
 #include <ctype.h>
 #include "scambio.h"
 #include "smtpd.h"
-#include "header.h"
 #include "misc.h"
+#include "scambio/header.h"
 
 #ifndef HAVE_STRNSTR
 static char *strnstr(const char *big_, const char *little, size_t big_len)
@@ -41,11 +41,11 @@ static char *strnstr(const char *big_, const char *little, size_t big_len)
  * Parse a mail from a file descriptor into a struct msg_tree
  */
 
-static int parse_mail_rec(struct msg_tree **node, char *msg, size_t size);
+static struct msg_tree *parse_mail_rec(char *msg, size_t size);
 
 // We treat the preamble (what preceeds the first boundary) as a normal part.
 // The epilogue is ignored, though.
-static int parse_multipart(struct msg_tree *node, char *msg, size_t size, char *boundary)
+static void parse_multipart(struct msg_tree *node, char *msg, size_t size, char *boundary)
 {
 	char *msg_end = msg+size;
 	node->type = CT_MULTIPART;
@@ -55,38 +55,33 @@ static int parse_multipart(struct msg_tree *node, char *msg, size_t size, char *
 	do {
 		char *delim_pos = strnstr(msg, boundary, msg_end-msg);
 		if (! delim_pos) {
-			warning("multipart boundary not found (%s)", boundary);
-			return -ENOENT;
+			with_error(0, "multipart boundary not found (%s)", boundary) return;
 		}
 		assert(delim_pos < msg_end);
-		struct msg_tree *part;
-		if (0 == parse_mail_rec(&part, msg, delim_pos - msg)) {
-			SLIST_INSERT_HEAD(&node->content.parts, part, entry);
-		}
+		struct msg_tree *part = parse_mail_rec(msg, delim_pos - msg);
+		unless_error SLIST_INSERT_HEAD(&node->content.parts, part, entry);
 		msg = delim_pos + boundary_len;
-		// boundary may be followed by "--" if its the last one, then some optional spaces then CRLF.
+		// boundary may be followed by "--" if it's the last one, then some optional spaces then CRLF.
 		if (msg[0] == '-' && msg[1] == '-') {
 			msg += 2;
 			last_boundary = true;
 		}
 		while (isblank(*msg)) msg++;
 		if (*msg != '\n') {	// CRLF are converted to '\n' by varbuf_read_line()
-			warning("Badly formated multipart message : boundary not followed by new line (%s)", boundary);
-			return -EINVAL;
+			with_error(0, "Badly formated multipart message : boundary not followed by new line (%s)", boundary) return;
 		}
 		msg ++;	// skip NL
 	} while (msg < msg_end && !last_boundary);
-	return 0;
 }
 
-static int parse_mail_node(struct msg_tree *node, char *msg, size_t size)
+static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 {
 	// First read the header
-	int err = 0;
-	if (0 != (err = header_new(&node->header))) return err;
-	if (0 != (err = header_parse(node->header, msg))) {
+	node->header = header_new();
+	on_error return;
+	if_fail (header_parse(node->header, msg)) {
 		header_del(node->header);
-		return err;
+		return;
 	}
 	// Find out weither the body is total with a decoding method, or
 	// is another message up to a given boundary.
@@ -96,17 +91,16 @@ static int parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 #		define PREFIX "\n--"
 #		define PREFIX_LENGTH 3
 		char boundary[PREFIX_LENGTH+MAX_BOUNDARY_LENGTH] = PREFIX;
-		int err;
-		if (0 > (err = header_copy_parameter("boundary", content_type, sizeof(boundary)-PREFIX_LENGTH, boundary+PREFIX_LENGTH))) {
-			warning("multipart message without boundary ? : %s", strerror(-err));	// proceed as a single file
+		if_succeed (header_copy_parameter("boundary", content_type, sizeof(boundary)-PREFIX_LENGTH, boundary+PREFIX_LENGTH)) {
+			parse_multipart(node, msg, size, boundary);
+			return;
 		} else {
-			return parse_multipart(node, msg, size, boundary);
+			warning("multipart message without boundary ?");	// proceed as a single file
 		}
 	}
 	// Process mail as a single file
-	node->type = CT_FILE;
 	debug("message is a single file");
-	return -ENOSYS;
+	node->type = CT_FILE;
 }
 
 static void msg_tree_dtor(struct msg_tree *node)
@@ -135,44 +129,40 @@ void msg_tree_del(struct msg_tree *node)
 }
 
 // do not look msg after size
-static int parse_mail_rec(struct msg_tree **node, char *msg, size_t size)
+static struct msg_tree *parse_mail_rec(char *msg, size_t size)
 {
-	*node = calloc(1, sizeof(**node));
-	if (! *node) return -ENOMEM;
-	int err;
-	if (0 != (err = parse_mail_node(*node, msg, size))) {
-		msg_tree_del(*node);
-		*node = NULL;
+	struct msg_tree *node = calloc(1, sizeof(*node));
+	if (! node) with_error(ENOMEM, "calloc mail") return NULL;
+	if_fail (parse_mail_node(node, msg, size)) {
+		msg_tree_del(node);
+		node = NULL;
 	}
-	return err;
+	return node;
 }
 
-static int read_whole_mail(struct varbuf *vb, int fd)
+static void read_whole_mail(struct varbuf *vb, int fd)
 {
 	debug("read_whole_mail(vb=%p, fd=%d)", vb, fd);
-	int err = 0;
 	char *line;
-	while (0 == (err = varbuf_read_line(vb, fd, MAX_MAILLINE_LENGTH, &line))) {
-		if (! line_match(line, ".")) continue;
-		// chop this line
-		vb->used = line - vb->buf + 1;
-		vb->buf[vb->used-1] = '\0';
-		break;
-	}
-	if (err == 1) {
-		err = -EINVAL;	// we are not supposed to encounter EOF while transfering a MAIL
-	}
-	return err;
+	do {
+		varbuf_read_line(vb, fd, MAX_MAILLINE_LENGTH, &line);
+		on_error break;
+		if (line_match(line, ".")) {	// chop this line
+			vb->used = line - vb->buf + 1;
+			vb->buf[vb->used-1] = '\0';
+			break;
+		}
+	} while (1);
 }
 
-int msg_tree_read(struct msg_tree **root, int fd)
+struct msg_tree *msg_tree_read(int fd)
 {
-	int err;
+	struct msg_tree *root = NULL;
 	struct varbuf vb;
-	if (0 != (err = varbuf_ctor(&vb, 10240, true))) return err;
-	err = read_whole_mail(&vb, fd);
-	if (! err) err = parse_mail_rec(root, vb.buf, vb.used);
+	if_fail (varbuf_ctor(&vb, 10240, true)) return NULL;
+	read_whole_mail(&vb, fd);
+	unless_error root = parse_mail_rec(vb.buf, vb.used);
 	varbuf_dtor(&vb);
-	return err;
+	return root;
 }
 

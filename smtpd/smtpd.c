@@ -27,7 +27,7 @@
 #include "varbuf.h"
 #include "cmd.h"
 #include "smtpd.h"
-#include "mdir.h"
+#include "scambio/mdir.h"
 
 /*
  * Data Definitions
@@ -53,44 +53,40 @@ char const *const kw_quit = "quit";
  * Init functions
  */
 
-static int init_conf(void)
+static void init_conf(void)
 {
-	int err;
-	if (0 != (err = conf_set_default_str("SMTPD_LOG_DIR", "/var/log"))) return err;
-	if (0 != (err = conf_set_default_int("SMTPD_LOG_LEVEL", 3))) return err;
-	if (0 != (err = conf_set_default_int("SMTPD_PORT", 25))) return err;
-	return 0;
+	conf_set_default_str("SMTPD_LOG_DIR", "/var/log");
+	conf_set_default_int("SMTPD_LOG_LEVEL", 3);
+	conf_set_default_int("SMTPD_PORT", 25);
 }
 
-static int init_log(void)
+static void init_log(void)
 {
-	int err;
-	if (0 != (err = log_begin(conf_get_str("SMTPD_LOG_DIR"), "smtpd.log"))) return err;
+	log_begin(conf_get_str("SMTPD_LOG_DIR"), "smtpd.log");
+	on_error return;
 	debug("init log");
-	if (0 != atexit(log_end)) return -1;
+	if (0 != atexit(log_end)) with_error(0, "atexit") return;
 	log_level = conf_get_int("SMTPD_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
-	return 0;
 }
 
-static int init_cmd(void)
+static void init_cmd(void)
 {
 	debug("init cmd");
 	cmd_begin();
-	if (0 != atexit(cmd_end)) return -1;
+	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
 	// Put most used commands at end, so that they end up at the beginning of the commands list
 	cmd_register_keyword(kw_ehlo, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_helo, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_mail, 1, 99, CMD_STRING, CMD_EOA);	// no support for extended mail parameters, but we accept them (and ignore them)
-	cmd_register_keyword(kw_rcpt, 1, 99, CMD_STRING, CMD_EOA);	// same
+	cmd_register_keyword(kw_mail, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// no support for extended mail parameters, but we accept them (and ignore them)
+	cmd_register_keyword(kw_rcpt, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// same
 	cmd_register_keyword(kw_data, 0, 0, CMD_EOA);
 	cmd_register_keyword(kw_rset, 0, 0, CMD_EOA);
 	cmd_register_keyword(kw_vrfy, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_expn, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_help, 0, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_noop, 0, 99, CMD_EOA);
+	cmd_register_keyword(kw_noop, 0, UINT_MAX, CMD_EOA);
 	cmd_register_keyword(kw_quit, 0, 0, CMD_EOA);
-	return 0;
 }
 
 static void deinit_server(void)
@@ -99,30 +95,26 @@ static void deinit_server(void)
 	cnx_end();
 }
 
-static int init_server(void)
+static void init_server(void)
 {
-	int err;
 	debug("init server");
-	if (0 != gethostname(my_hostname, sizeof(my_hostname))) return -errno;
-	if (0 != (err = cnx_begin())) return err;
-	if (0 != (err = cnx_server_ctor(&server, conf_get_int("SMTPD_PORT")))) return err;
-	if (0 != atexit(deinit_server)) return -1;
-	if (0 != (err = exec_begin())) return err;
-	if (0 != atexit(exec_end)) return -1;
-	return 0;
+	if (0 != gethostname(my_hostname, sizeof(my_hostname))) with_error(errno, "gethostbyname") return;
+	if_fail (cnx_begin()) return;
+	if_fail (cnx_server_ctor(&server, conf_get_int("SMTPD_PORT"))) return;
+	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
+	if_fail (exec_begin()) return;
+	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
 }
 
-static int init(void)
+static void init(void)
 {
-	int err;
-	if (0 != (err = mdir_begin())) return err;
-	if (0 != atexit(mdir_end)) return -1;
-	if (0 != (err = init_conf())) return err;
-	if (0 != (err = init_log())) return err;
-	if (0 != (err = init_cmd())) return err;
-	if (0 != (err = daemonize())) return err;
-	if (0 != (err = init_server())) return err;
-	return 0;
+	if_fail (mdir_begin()) return;
+	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	if_fail (init_conf()) return;
+	if_fail (init_log()) return;
+	if_fail (init_cmd()) return;
+	if_fail (daemonize()) return;
+	if_fail (init_server()) return;
 }
 
 /*
@@ -169,40 +161,39 @@ static void *serve_cnx(void *arg)
 		return NULL;
 	}
 	bool quit = false;
-	int err = answer(env, 220, my_hostname);
-	while (! quit && ! err) {	// read a command and exec it
+	if_fail (answer(env, 220, my_hostname)) return NULL;
+	while (! quit && !is_error()) {	// read a command and exec it
 		struct cmd cmd;
-		if (0 != (err = cmd_read(&cmd, env->fd))) break;
+		if_fail (cmd_read(&cmd, env->fd)) break;
 		debug("Read keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_ehlo) {
-			err = exec_ehlo(env, cmd.args[0].val.string);
+			exec_ehlo(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_helo) {
-			err = exec_helo(env, cmd.args[0].val.string);
+			exec_helo(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_mail) {
-			err = exec_mail(env, cmd.args[0].val.string);
+			exec_mail(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_rcpt) {
-			err = exec_rcpt(env, cmd.args[0].val.string);
+			exec_rcpt(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_data) {
-			err = exec_data(env);
+			exec_data(env);
 		} else if (cmd.keyword == kw_rset) {
-			err = exec_rset(env);
+			exec_rset(env);
 		} else if (cmd.keyword == kw_vrfy) {
-			err = exec_vrfy(env, cmd.args[0].val.string);
+			exec_vrfy(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_expn) {
-			err = exec_expn(env, cmd.args[0].val.string);
+			exec_expn(env, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_help) {
-			err = exec_helo(env, cmd.nb_args > 0 ? cmd.args[0].val.string:NULL);
+			exec_helo(env, cmd.nb_args > 0 ? cmd.args[0].val.string:NULL);
 		} else if (cmd.keyword == kw_noop) {
-			err = exec_noop(env);
+			exec_noop(env);
 		} else if (cmd.keyword == kw_quit) {
-			err = exec_quit(env);
+			exec_quit(env);
 			quit = true;
 		} else {
 			// ignore ?
 		}
 		cmd_dtor(&cmd);
 	}
-	if (err) error("Error: %s", strerror(-err));
 	return NULL;
 }
 
@@ -214,7 +205,7 @@ int main(void)
 {
 	int err;
 	if (! pth_init()) return EXIT_FAILURE;
-	if (0 != (err = init())) {
+	if_fail (init()) {
 		fprintf(stderr, "Init error : %s\n", strerror(-err));
 		pth_kill();
 		return EXIT_FAILURE;

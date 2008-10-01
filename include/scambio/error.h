@@ -52,5 +52,8 @@ void error_clear();	// pop all errors up to the expected level
 #define on_error if (is_error())
 #define unless_error if (!is_error())
 #define with_error(code, ...) if (error_push((code), __VA_ARGS__), 1)
+#define if_fail(code) if (code, is_error())
+#define if_succeed(code) if (code, !is_error())
+#define TODO error_push(0, "You hit a point that's not yes implemented");
 
 #endif

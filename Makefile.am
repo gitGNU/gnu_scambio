@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons lib mdird mdirc doc
+SUBDIRS = commons lib mdird mdirc smtpd doc
 
 .PHONY: cscope
 

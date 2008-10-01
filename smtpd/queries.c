@@ -27,8 +27,8 @@
 #include "smtpd.h"
 #include "misc.h"
 #include "varbuf.h"
-#include "header.h"
-#include "mdir.h"
+#include "scambio/header.h"
+#include "scambio/mdir.h"
 
 // Errors from RFC
 #define SYSTEM_REPLY    211 // System status, or system help reply
@@ -65,9 +65,8 @@ struct well_known_header well_known_headers[] = {
  * (De)Init
  */
 
-int exec_begin(void)
+void exec_begin(void)
 {
-	return 0;
 }
 
 void exec_end(void) {
@@ -77,20 +76,20 @@ void exec_end(void) {
  * Answers
  */
 
-static int answer_gen(struct cnx_env *env, int status, char const *cmpl, char sep)
+static void answer_gen(struct cnx_env *env, int status, char const *cmpl, char sep)
 {
 	char line[100];
 	size_t len = snprintf(line, sizeof(line), "%03d%c%s"CRLF, status, sep, cmpl);
 	assert(len < sizeof(line));
-	return Write(env->fd, line, len);
+	Write(env->fd, line, len);
 }
-static int answer_cont(struct cnx_env *env, int status, char *cmpl)
+static void answer_cont(struct cnx_env *env, int status, char *cmpl)
 {
-	return answer_gen(env, status, cmpl, '-');
+	answer_gen(env, status, cmpl, '-');
 }
-int answer(struct cnx_env *env, int status, char *cmpl)
+void answer(struct cnx_env *env, int status, char *cmpl)
 {
-	return answer_gen(env, status, cmpl, ' ');
+	answer_gen(env, status, cmpl, ' ');
 }
 
 /*
@@ -127,19 +126,19 @@ static void set_forward_path(struct cnx_env *env, char const *forward_path)
 	if (env->forward_path) free(env->forward_path);
 	env->forward_path = strdup(forward_path);
 }
-static int greatings(struct cnx_env *env)
+static void greatings(struct cnx_env *env)
 {
-	return answer(env, OK, my_hostname);
+	answer(env, OK, my_hostname);
 }
-int exec_ehlo(struct cnx_env *env, char const *domain)
+void exec_ehlo(struct cnx_env *env, char const *domain)
 {
 	set_domain(env, domain);
-	return greatings(env);
+	greatings(env);
 }
-int exec_helo(struct cnx_env *env, char const *domain)
+void exec_helo(struct cnx_env *env, char const *domain)
 {
 	set_domain(env, domain);
-	return greatings(env);
+	greatings(env);
 }
 
 /*
@@ -149,120 +148,126 @@ int exec_helo(struct cnx_env *env, char const *domain)
 // a mailbox is valid iff there exist a "mailboxes/name" mdir
 static bool is_valid_mailbox(char const *name)
 {
-	static char mbox_dir[PATH_MAX] = "mailboxes/";	// TODO: make this configurable ?
-#	define MB_LEN 10
-	snprintf(mbox_dir+MB_LEN, sizeof(mbox_dir)-MB_LEN, "%s", name);
-	return mdir_folder_exists(mbox_dir);
+	char folder[PATH_MAX];
+	snprintf(folder, sizeof(folder), "mailboxes/%s", name);
+	(void)mdir_lookup(folder);
+	on_error {
+		error_clear();
+		return false;
+	}
+	return true;
 }
 
-int exec_mail(struct cnx_env *env, char const *from)
+void exec_mail(struct cnx_env *env, char const *from)
 {
-	// RFC: In any event, a client MUST issue HELO or EHLO before starting a mail transaction.
-	if (! env->domain) return answer(env, BAD_SEQUENCE, "What about presenting yourself first ?");
 #	define FROM_LEN 5
-	if (0 != strncasecmp("FROM:", from, FROM_LEN)) {
-		return answer(env, SYNTAX_ERR, "I remember RFC mentioning 'MAIL FROM:...'");
+	// RFC: In any event, a client MUST issue HELO or EHLO before starting a mail transaction.
+	if (! env->domain) {
+		answer(env, BAD_SEQUENCE, "What about presenting yourself first ?");
+	} else if (0 != strncasecmp("FROM:", from, FROM_LEN)) {
+		answer(env, SYNTAX_ERR, "I remember RFC mentioning 'MAIL FROM:...'");
+	} else {
+		set_reverse_path(env, from + FROM_LEN);
+		answer(env, OK, "Ok");
 	}
-	set_reverse_path(env, from + FROM_LEN);
-	return answer(env, OK, "Ok");
 }
-int exec_rcpt(struct cnx_env *env, char const *to)
+
+void exec_rcpt(struct cnx_env *env, char const *to)
 {
-	if (! env->reverse_path) return answer(env, BAD_SEQUENCE, "No MAIL command ?");
 #	define TO_LEN 3
-	if (0 != strncasecmp("TO:", to, TO_LEN)) {
-		return answer(env, SYNTAX_ERR, "It should be 'RCPT TO:...', shouldn't it ?");
+	if (! env->reverse_path) {
+		answer(env, BAD_SEQUENCE, "No MAIL command ?");
+	} else if (0 != strncasecmp("TO:", to, TO_LEN)) {
+		answer(env, SYNTAX_ERR, "It should be 'RCPT TO:...', shouldn't it ?");
+	} else if (! is_valid_mailbox(to + TO_LEN)) {
+		answer(env, MBOX_UNAVAIL_2, "Bad guess");	// TODO: take action against this client ?
+	} else {
+		set_forward_path(env, to + TO_LEN);
+		answer(env, OK, "Ok");
 	}
-	if (! is_valid_mailbox(to + TO_LEN)) {
-		return answer(env, MBOX_UNAVAIL_2, "Bad guess");	// TODO: take action against this client ?
-	}
-	set_forward_path(env, to + TO_LEN);
-	return answer(env, OK, "Ok");
 }
 
 /*
  * DATA
  */
 
-static int store_file(struct cnx_env *env, struct header *header, struct varbuf *vb)
+static void store_file(struct cnx_env *env, struct header *header, struct varbuf *vb)
 {
 	(void)env;
 	(void)header;
 	(void)vb;
-	// content is already decoded (by parse_mail)
-	return -ENOSYS;
+	TODO;
 }
 
-static int store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
+static void store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
 {
 	if (tree->type == CT_FILE) {
-		return store_file(env, tree->header, &tree->content.file);
+		if_fail (store_file(env, tree->header, &tree->content.file)) return;
 	}
 	assert(tree->type == CT_MULTIPART);
 	struct msg_tree *subtree;
 	SLIST_FOREACH(subtree, &tree->content.parts, entry) {
-		int err = store_file_rec(env, subtree);
-		if (err) return err;
+		if_fail (store_file_rec(env, subtree)) return;
 	}
-	return 0;
 }
 
-static int process_mail(struct cnx_env *env)
+static void process_mail(struct cnx_env *env)
 {
 	// First parse the data into a mail tree
-	struct msg_tree *msg_tree;
-	int err = msg_tree_read(&msg_tree, env->fd);
-	if (err) return err;
+	struct msg_tree *msg_tree = msg_tree_read(env->fd);
+	on_error return;
 	// Extract the values that will be used for all meta-data blocs from top-level header
 	env->subject = header_search(msg_tree->header, well_known_headers[WKH_SUBJECT].name);
 	env->message_id = header_search(msg_tree->header, well_known_headers[WKH_MESSAGE_ID].name);
 	// Then store each file in the mdir
-	err = store_file_rec(env, msg_tree);
+	store_file_rec(env, msg_tree);
 	msg_tree_del(msg_tree);
-	return err;
 }
 
-int exec_data(struct cnx_env *env)
+void exec_data(struct cnx_env *env)
 {
-	int err;
-	if (! env->forward_path) return answer(env, BAD_SEQUENCE, "What recipient, again ?");
-	if (0 != (err = answer(env, START_MAIL, "Go ahaid, end with a single dot"))) return err;
-	if (0 != (err = process_mail(env))) {
-		return answer(env, LOCAL_ERROR, "Something bad happened at some point");
+	if (! env->forward_path) {
+		answer(env, BAD_SEQUENCE, "What recipient, again ?");
+	} else {
+		if_fail (answer(env, START_MAIL, "Go ahaid, end with a single dot")) return;
+		if_succeed (process_mail(env)) {
+			answer(env, OK, "Ok");
+		} else {
+			answer(env, LOCAL_ERROR, "Something bad happened at some point");
+		}
 	}
-	return answer(env, OK, "Ok");
 }
 
 /*
  * Other commands
  */
 
-int exec_rset(struct cnx_env *env)
+void exec_rset(struct cnx_env *env)
 {
 	reset_state(env);
-	return answer(env, OK, "Ok");
+	answer(env, OK, "Ok");
 }
-int exec_vrfy(struct cnx_env *env, char const *user)
+void exec_vrfy(struct cnx_env *env, char const *user)
 {
 	(void)user;
-	return answer(env, LOCAL_ERROR, "Not implemented yet");
+	answer(env, LOCAL_ERROR, "Not implemented yet");
 }
-int exec_expn(struct cnx_env *env, char const *list)
+void exec_expn(struct cnx_env *env, char const *list)
 {
 	(void)list;
-	return answer(env, LOCAL_ERROR, "Not implemented yet");
+	answer(env, LOCAL_ERROR, "Not implemented yet");
 }
-int exec_help(struct cnx_env *env, char const *command)
+void exec_help(struct cnx_env *env, char const *command)
 {
 	(void)command;
-	return answer(env, LOCAL_ERROR, "Not implemented yet");
+	answer(env, LOCAL_ERROR, "Not implemented yet");
 }
-int exec_noop(struct cnx_env *env)
+void exec_noop(struct cnx_env *env)
 {
-	return answer(env, OK, "Ok");
+	answer(env, OK, "Ok");
 }
-int exec_quit(struct cnx_env *env)
+void exec_quit(struct cnx_env *env)
 {
-	return answer(env, SERVICE_CLOSING, "Bye");
+	answer(env, SERVICE_CLOSING, "Bye");
 }
 

@@ -64,7 +64,7 @@ void header_add_field(struct header *h, char const *name, char const *value);
 // Return a pointer to the beginning of the value.
 // Return the length of the value if *value!=NULL.
 size_t header_find_parameter(char const *name, char const *field_value, char const **value);
-// Same result. Error may be -EMSGSIZE or -ENOENT
+// Same result. Error may be EMSGSIZE or ENOENT
 void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
 
 #include "digest.h"
