@@ -65,11 +65,13 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 }
 
 // Subscribe to the directory, then scan it
-static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, char const *name, void *path)
+static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, char const *name, void *parent_path)
 {
 	(void)parent;
 	struct mdirc *mdirc = mdir2mdirc(mdir);
-	debug("parsing directory '%s' (dirId = %s)", name, mdir_id(&mdirc->mdir));
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", (char *)parent_path, name);
+	debug("parsing subdirectory '%s' of '%s' (dirId = %s)", name, (char *)parent_path, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
 	if (!mdirc->subscribed && synched && !mdir_is_transient(&mdirc->mdir)) {
 		// This is not enough to be synched : we must ensure that we have received the patch yet
@@ -90,10 +92,8 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, 
 	mdir_patch_list(&mdirc->mdir, false, true, ls_patch, path);
 	on_error return;
 	// Recurse
-	char child_path[PATH_MAX];
-	snprintf(child_path, sizeof(child_path), "%s/%s", (char *)path, name);
 	debug("list folders");
-	mdir_folder_list(mdir, true, true, parse_dir_rec, child_path);
+	mdir_folder_list(mdir, true, true, parse_dir_rec, path);
 }
 
 void *writer_thread(void *args)
@@ -104,7 +104,7 @@ void *writer_thread(void *args)
 	do {
 		struct mdir *root = mdir_lookup("/");
 		on_error break;
-		parse_dir_rec(NULL, root, true, "", "/");
+		parse_dir_rec(NULL, root, true, "", "");
 		on_error break;
 		wait_signal();
 	} while (! terminate_writer);

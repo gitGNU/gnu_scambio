@@ -128,7 +128,6 @@ static void send_next_patch(struct subscription *sub)
 static void wait_notif(struct subscription *sub)
 {
 	(void)sub;
-	pth_yield(NULL);
 	pth_sleep(1);	// FIXME
 }
 

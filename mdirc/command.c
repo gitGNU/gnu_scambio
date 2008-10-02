@@ -57,7 +57,7 @@ bool command_timeouted(struct command *cmd)
 static void command_ctor(struct command *cmd, enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
 {
 	assert(type < NB_CMD_TYPES);
-	if (folder[0] == '\0') folder = "/";
+	if (folder[0] == '\0') folder = "/";	// should not happen
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	static long long seqnum = 1;
 	cmd->mdirc = mdirc;
