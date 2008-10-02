@@ -366,9 +366,11 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 		if (error_code() == EEXIST) error_clear();
 		else return;
 	}
-	temp[len++] = action == MDIR_ADD ? '+':'-';
-	header_digest(h, sizeof(temp)-len, temp+len);
-	header_to_file(h, temp);
+	snprintf(temp+len, sizeof(temp)-len, "%cXXXXXX", action == MDIR_ADD ? '+':'-');
+	int fd = mkstemp(temp);
+	if (fd < 0) with_error(errno, "Cannot mkstemp(%s)", temp) return;
+	header_write(h, fd);
+	close(fd);
 	on_error return;
 	if (is_dir) {
 		if (action == MDIR_ADD) {
