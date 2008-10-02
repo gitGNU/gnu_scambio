@@ -2,6 +2,7 @@
 #include <gtk/gtk.h>
 #include <pth.h>
 #include "scambio.h"
+#include "scambio/mdir.h"
 
 static void on_destroy(GtkWidget *widget, gpointer data)
 {
@@ -32,9 +33,11 @@ static void init(void)
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail(init_conf()) return;
 	if_fail(init_log()) return;
+	if_fail(mdir_begin()) return;
+	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 }
 
-static void make_UI(void)
+static GtkWidget *make_UI(void)
 {
 	GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(window), "MereMail "VERSION);
@@ -74,9 +77,13 @@ static void make_UI(void)
 	gtk_tree_view_append_column(GTK_TREE_VIEW(msg_list), column);
 	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
 	
-	GtkWidget *label = gtk_label_new("I compile and run");
-	gtk_container_add(GTK_CONTAINER(vbox), label);
-	gtk_widget_show_all(window);
+	GtkWidget *toolbar = gtk_toolbar_new();
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_NEW), -1);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DELETE), -1);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_QUIT), -1);
+	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
+
+	return window;
 }
 
 int main(int nb_args, char *args[])
@@ -84,7 +91,8 @@ int main(int nb_args, char *args[])
 	if (! pth_init()) return EXIT_FAILURE;
 	if_fail(init()) return EXIT_FAILURE;
 	gtk_init(&nb_args, &args);
-	make_UI();
+	GtkWidget *window = make_UI();
+	gtk_widget_show_all(window);
 	gtk_main();
 	return EXIT_SUCCESS;
 }
