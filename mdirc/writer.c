@@ -70,7 +70,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, 
 	(void)parent;
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", (char *)parent_path, name);
+	Make_path(path, sizeof(path), (char *)parent_path, name, NULL);
 	debug("parsing subdirectory '%s' of '%s' (dirId = %s)", name, (char *)parent_path, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
 	if (!mdirc->subscribed && synched && !mdir_is_transient(&mdirc->mdir)) {

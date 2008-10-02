@@ -112,6 +112,20 @@ void Mkdir(char const *path_)
 	Mkdir_single(path);
 }
 
+void Make_path(char *buf, size_t buf_size, ...)
+{
+	va_list ap;
+	va_start(ap, buf_size);
+	char const *str;
+	size_t buf_len = 0;
+	while (NULL != (str = va_arg(ap, char const *)) && buf_len < buf_size) {
+		buf_len += snprintf(buf + buf_len, buf_size - buf_len, "%s%s",
+			str[0] != '/' && (buf_len == 0 || buf[buf_len-1] != '/') ? "/":"",
+			str);
+	}
+	va_end(ap);
+}
+
 bool line_match(char *restrict line, char *restrict delim)
 {
 	unsigned c = 0;
