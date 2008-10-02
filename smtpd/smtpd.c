@@ -205,10 +205,8 @@ static void *serve_cnx(void *arg)
 
 int main(void)
 {
-	int err;
 	if (! pth_init()) return EXIT_FAILURE;
 	if_fail (init()) {
-		fprintf(stderr, "Init error : %s\n", strerror(-err));
 		pth_kill();
 		return EXIT_FAILURE;
 	}

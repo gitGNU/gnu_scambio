@@ -38,12 +38,44 @@ static void make_UI(void)
 {
 	GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(window), "MereMail "VERSION);
-	gtk_window_set_default_size(GTK_WINDOW(window), 200, 50);
+	gtk_window_set_default_size(GTK_WINDOW(window), 200, 450);
 	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
 	g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(on_destroy), NULL);
 	
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
+	gtk_container_add(GTK_CONTAINER(window), vbox);
+
+	// The list of messages
+	enum msg_store_col {
+		MSG_STORE_FROM,
+		MSG_STORE_SUBJECT,
+		NB_MSG_STORES
+	};
+	GtkListStore *msg_store = gtk_list_store_new(NB_MSG_STORES, G_TYPE_STRING, G_TYPE_STRING);
+	// test content
+	GtkTreeIter iter;
+	gtk_list_store_insert(msg_store, &iter, 0);
+	gtk_list_store_set(msg_store, &iter,
+		MSG_STORE_FROM, "pouet@pouet.net",
+		MSG_STORE_SUBJECT, "blablabla",
+		-1);
+	gtk_list_store_insert(msg_store, &iter, 1);
+	gtk_list_store_set(msg_store, &iter,
+		MSG_STORE_FROM, "rose@rouge.org",
+		MSG_STORE_SUBJECT, "glop glop pas glop",
+		-1);
+	GtkWidget *msg_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(msg_store));
+	g_object_unref(G_OBJECT(msg_store));
+	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes("From", renderer, "text", MSG_STORE_FROM, NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(msg_list), column);
+	renderer = gtk_cell_renderer_text_new();
+	column = gtk_tree_view_column_new_with_attributes("Subject", renderer, "text", MSG_STORE_SUBJECT, NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(msg_list), column);
+	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
+	
 	GtkWidget *label = gtk_label_new("I compile and run");
-	gtk_container_add(GTK_CONTAINER(window), label);
+	gtk_container_add(GTK_CONTAINER(vbox), label);
 	gtk_widget_show_all(window);
 }
 
