@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.61)
 AC_INIT(scambio, 0, rixed@free.fr)
-AC_CONFIG_SRCDIR([server])
+AC_CONFIG_SRCDIR([mdird])
 AC_CONFIG_HEADER([commons/config.h])
 AM_INIT_AUTOMAKE
 
@@ -16,6 +16,9 @@ AM_PROG_LIBTOOL
 AC_CHECK_PTH(2.0.0)
 AC_CHECK_LIB(ssl, SHA1)
 AC_CHECK_LIB(gnutls, gnutls_fingerprint)
+PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2)
+AC_SUBST(GTKS_CFLAGS)
+AC_SUBST(GTKS_LIBS)
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -38,6 +41,7 @@ AC_CONFIG_FILES([
 	mdird/Makefile
 	mdirc/Makefile
 	smtpd/Makefile
+	meremail/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

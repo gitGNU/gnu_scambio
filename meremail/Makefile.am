@@ -1,0 +1,10 @@
+AM_CFLAGS = -std=c99 -Wall -W
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE $(GTKS_CFLAGS)
+
+bin_PROGRAMS = meremail
+
+meremail_SOURCES = \
+	meremail.c
+
+meremail_LDADD = ../lib/libmdir.la ../commons/libcommons.la $(GTKS_LIBS)
+

@@ -128,14 +128,10 @@ static void init(void)
 {
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
-	init_conf();
-	on_error return;
-	init_log();
-	on_error return;
-	daemonize();
-	on_error return;
-	client_begin();
-	on_error return;
+	if_fail(init_conf()) return;
+	if_fail(init_log()) return;
+	if_fail(daemonize()) return;
+	if_fail(client_begin()) return;
 	if (0 != atexit(client_end)) with_error(0, "atexit") return;
 }
 
@@ -145,8 +141,7 @@ int main(int nb_args, char **args)
 	(void)args;
 	int ret = EXIT_FAILURE;
 	if (! pth_init()) return EXIT_FAILURE;
-	init();
-	on_error goto q0;
+	if_fail(init()) goto q0;
 	while (1) {
 		connecter_thread(NULL);
 	}
