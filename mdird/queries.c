@@ -94,19 +94,8 @@ void exec_unsub(struct cnx_env *env, long long seq, char const *dir)
  * PUT/REM
  */
 
-// dir is the directory user name instead of dirId, because we wan't the client
-// to be able to add things to this directory before knowing it's dirId.
-static mdir_version add_header(char const *dir, struct header *h, enum mdir_action action)
+void exec_put(struct cnx_env *env, long long seq, char const *dir)
 {
-	debug("adding a header in dir %s", dir);
-	struct mdir *mdir = mdir_lookup(dir);
-	on_error return 0;
-	return mdir_patch(mdir, action, h);
-}
-
-static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_env *env, long long seq, char const *dir)
-{
-	debug("doing %s in '%s'", cmdtag, dir);
 	struct header *h;
 	h = header_new();
 	on_error return;
@@ -117,22 +106,40 @@ static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_
 		status = 502;
 	} else {
 		header_debug(h);
-		version = add_header(dir, h, action);
-		on_error status = 502;
+		struct mdir *mdir = mdir_lookup(dir);
+		on_error {
+			status = 502;
+		} else {
+			version = mdir_patch_add(mdir, h);
+			on_error status = 502;
+		}
 	}
 	header_del(h);
-	answer(env, seq, cmdtag, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
+	answer(env, seq, "PUT", status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
 	error_clear();
 }
 
-void exec_put(struct cnx_env *env, long long seq, char const *dir)
+void exec_rem(struct cnx_env *env, long long seq, char const *dir, char const *key)
 {
-	exec_putrem("PUT", MDIR_ADD, env, seq, dir);
-}
-
-void exec_rem(struct cnx_env *env, long long seq, char const *dir)
-{
-	exec_putrem("REM", MDIR_REM, env, seq, dir);
+	struct mdir *mdir = mdir_lookup(dir);
+	on_error {
+		answer(env, seq, "REM", 501, error_str());
+		error_clear();
+		return;
+	}
+	mdir_version to_del = mdir_str2version(key);
+	on_error {
+		answer(env, seq, "REM", 501, error_str());
+		error_clear();
+		return;
+	}
+	mdir_version version = mdir_patch_del(mdir, to_del);
+	on_error {
+		answer(env, seq, "REM", 501, error_str());
+		error_clear();
+		return;
+	}
+	answer(env, seq, "REM", 200, mdir_version2str(version));
 }
 
 /*

@@ -71,6 +71,22 @@ void Read(void *buf, int fd, off_t offset, size_t len)
 	assert(done == len);
 }
 
+void WriteTo(int fd, off_t offset, void *buf, size_t len)
+{
+	debug("WriteTo(%d, %u, %p, %zu)", fd, (unsigned)offset, buf, len);
+	size_t done = 0;
+	while (done < len) {
+		ssize_t ret = pth_pwrite(fd, buf + done, len - done, offset);
+		if (ret < 0) {
+			// FIXME: truncate on short writes
+			if (errno != EINTR) with_error(errno, "Cannot write %zu bytes", len-done) return;
+			continue;
+		}
+		done += ret;
+	}
+	assert(done == len);
+}
+
 void Copy(int dst, int src)
 {
 	debug("Copy from %d to %d", src, dst);

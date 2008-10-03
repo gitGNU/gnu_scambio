@@ -112,14 +112,11 @@ static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 	// Open both index and log files
 	char path[PATH_MAX];
 	int len = snprintf(path, sizeof(path), "%s/%s", mdir->path, filename);
-	jnl->idx_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
-	if (jnl->idx_fd == -1) with_error(errno, "open '%s'", path) return;
-	memcpy(path + len - 3, "log", 4);	// change extention
 	jnl->patch_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
-	if (jnl->patch_fd == -1) {
-		error_push(errno, "open '%s'", path);
-		goto q0;
-	}
+	if (jnl->patch_fd == -1) with_error(errno, "open '%s'", path) return;
+	memcpy(path + len - 3, "idx", 4);	// change extention
+	jnl->idx_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
+	if (jnl->patch_fd == -1) with_error(errno, "open '%s'", path) goto q0;
 	// get sizes
 	jnl->nb_patches = fetch_nb_patches(jnl->idx_fd);
 	on_error goto q1;
@@ -142,9 +139,9 @@ static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 	jnl->mdir = mdir;
 	return;
 q1:
-	(void)close(jnl->patch_fd);
-q0:
 	(void)close(jnl->idx_fd);
+q0:
+	(void)close(jnl->patch_fd);
 }
 
 struct jnl *jnl_new(struct mdir *mdir, char const *filename)
@@ -159,13 +156,18 @@ struct jnl *jnl_new(struct mdir *mdir, char const *filename)
 	return jnl;
 }
 
+static void may_close(int *fd)
+{
+	if (*fd < 0) return;
+	(void)close(*fd);
+	*fd = 0;
+}
+
 static void jnl_dtor(struct jnl *jnl)
 {
 	STAILQ_REMOVE(&jnl->mdir->jnls, jnl, jnl, entry);
-	if (jnl->idx_fd >= 0) (void)close(jnl->idx_fd);
-	jnl->idx_fd = -1;
-	if (jnl->patch_fd >= 0) (void)close(jnl->patch_fd);
-	jnl->patch_fd = -1;
+	may_close(&jnl->patch_fd);
+	may_close(&jnl->idx_fd);
 }
 
 void jnl_del(struct jnl *jnl)
@@ -185,38 +187,49 @@ struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version start_version)
  * Patch
  */
 
-mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
+static void write_index(struct jnl *jnl)
 {
 	struct index_entry ie;
 	ie.offset = filesize(jnl->patch_fd);
-	on_error return 0;
+	on_error return;
 	// Write the index
 	Write(jnl->idx_fd, &ie, sizeof(ie));
-	on_error return 0;	// FIXME: on short writes, truncate
-	// Then the patch command
-	Write_strs(jnl->patch_fd, mdir_action2str(action), "\n", NULL);
+	// FIXME: on short writes, truncate
+}
+
+mdir_version jnl_patch_add(struct jnl *jnl, struct header *header)
+{
+	write_index(jnl);
 	on_error return 0;
-	struct header *alt_header = NULL;
-	char const *key;
-	if (action == MDIR_REM && NULL != (key = header_search(header, SCAMBIO_KEY_FIELD))) {
-		// We are allowed to replace the content by the key only
-		alt_header = header_new();
-		on_error {
-			alt_header = NULL;
-		} else {
-			header_add_field(alt_header, SCAMBIO_KEY_FIELD, key);
-			on_error {
-				alt_header = NULL;
-				header_del(alt_header);
-			}
-		}
-		error_clear();
-	}
-	header_write(alt_header ? alt_header:header, jnl->patch_fd);
-	if (alt_header) header_del(alt_header);
+	// Then the patch command
+	if_fail (Write(jnl->patch_fd, "+\n", 2)) return 0;
+	header_write(header, jnl->patch_fd);
 	unless_error jnl->nb_patches ++;
 	// FIXME: triggers all listeners that something was appended
 	return jnl->version + jnl->nb_patches -1;
+}
+
+mdir_version jnl_patch_del(struct jnl *jnl, mdir_version to_del)
+{
+	write_index(jnl);
+	on_error return 0;
+	// Then the patch command
+	if_fail (Write_strs(jnl->patch_fd, "-", mdir_version2str(to_del), "\n", NULL)) return 0;
+	jnl->nb_patches ++;
+	// FIXME: triggers all listeners that something was appended
+	return jnl->version + jnl->nb_patches -1;
+}
+
+void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
+{
+	assert(to_del >= jnl->version && to_del - jnl->version < jnl->nb_patches);
+	off_t offset = jnl_offset_size(jnl, to_del - jnl->version, NULL);
+	on_error return;
+	char tag;
+	Read(&tag, jnl->patch_fd, offset, 1);
+	on_error return;
+	if (tag != '+') with_error(0, "Cannot delete version %"PRIversion" : tag is '%c'", to_del, tag) return;
+	WriteTo(jnl->patch_fd, offset, "%", 1);
 }
 
 /*
@@ -227,7 +240,7 @@ mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *
 static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 {
 	struct index_entry ie[2];
-	*size = 0;
+	if (size) *size = 0;
 	if (index < jnl->nb_patches - 1) {	// can read 2 entires
 		Read(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
 		on_error return 0;
@@ -238,7 +251,7 @@ static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 		on_error return 0;
 	}
 	assert(ie[1].offset > ie[0].offset);
-	*size = ie[1].offset - ie[0].offset;
+	if (size) *size = ie[1].offset - ie[0].offset;
 	return ie[0].offset;
 }
 
@@ -286,5 +299,5 @@ bool is_jnl_file(char const *filename)
 {
 	int len = strlen(filename);
 	if (len < 4) return false;
-	return 0 == strcmp(".idx", filename+len-4);
+	return 0 == strcmp(".log", filename+len-4);
 }

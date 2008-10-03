@@ -323,21 +323,16 @@ static void mdir_unlink(struct mdir *parent, struct header *h)
  * Patch
  */
 
-mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
+mdir_version mdir_patch_add(struct mdir *mdir, struct header *header)
 {
-	debug("patch mdir %s", mdir_id(mdir));
+	debug("add to mdir %s", mdir_id(mdir));
 	mdir_version version = 0;
-	on_error return 0;
 	// First acquire writer-grade lock
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
 	do {
-		// if its for a subfolder, performs the (un)linking
+		// if its for a subfolder, performs the linking
 		if (header_is_directory(header))  {
-			if (action == MDIR_ADD) {
-				mdir_link(mdir, header, false);
-			} else {
-				mdir_unlink(mdir, header);
-			}
+			mdir_link(mdir, header, false);
 			on_error break;
 		}
 		// Either use the last journal, or create a new one
@@ -348,7 +343,34 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 			jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
 		}
 		on_error break;
-		version = jnl_patch(jnl, action, header);
+		version = jnl_patch_add(jnl, header);
+	} while (0);
+	(void)pth_rwlock_release(&mdir->rwlock);
+	return version;
+}
+
+mdir_version mdir_patch_del(struct mdir *mdir, mdir_version to_del)
+{
+	debug("del from mdir %s", mdir_id(mdir));
+	mdir_version version = 0;
+	// First acquire writer-grade lock
+	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
+	do {
+		// if its for a subfolder, performs the unlinking
+		if (header_is_directory(header))  {
+			mdir_unlink(mdir, header);
+			on_error break;
+		}
+		// Either use the last journal, or create a new one
+		// FIXME: factoriser avec la fonction ci dessus
+		struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
+		if (! jnl) {
+			jnl = jnl_new_empty(mdir, 1);
+		} else if (jnl_too_big(jnl)) {
+			jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
+		}
+		on_error break;
+		version = jnl_patch_del(jnl, to_del);
 	} while (0);
 	(void)pth_rwlock_release(&mdir->rwlock);
 	return version;
