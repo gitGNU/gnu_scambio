@@ -78,8 +78,12 @@ static GtkWidget *make_UI(void)
 	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
 	
 	GtkWidget *toolbar = gtk_toolbar_new();
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_NEW), -1);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DELETE), -1);
+	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DIRECTORY), -1);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_EDIT), -1);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_JUMP_TO), -1);	// poor man's forward
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DELETE), -1);	// the confirmation will ask if this is a spam and report it accordingly
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_QUIT), -1);
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 
