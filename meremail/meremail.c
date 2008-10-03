@@ -1,13 +1,15 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <gtk/gtk.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
 
-static void on_destroy(GtkWidget *widget, gpointer data)
+static void destroy_cb(GtkWidget *widget, gpointer data)
 {
 	(void)widget;
 	(void)data;
+	debug("Quit");
 	pth_kill();
 	gtk_main_quit();
 }
@@ -37,13 +39,18 @@ static void init(void)
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 }
 
+static void quit_cb(GtkToolButton *button, gpointer user_data)
+{
+	destroy_cb(GTK_WIDGET(button), user_data);
+}
+
 static GtkWidget *make_UI(void)
 {
 	GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(window), "MereMail "VERSION);
 	gtk_window_set_default_size(GTK_WINDOW(window), 200, 450);
 	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
-	g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(on_destroy), NULL);
+	g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(destroy_cb), NULL);
 	
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
@@ -85,7 +92,9 @@ static GtkWidget *make_UI(void)
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_JUMP_TO), -1);	// poor man's forward
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DELETE), -1);	// the confirmation will ask if this is a spam and report it accordingly
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_QUIT), -1);
+	GtkToolItem *button_quit = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_quit, -1);
+	g_signal_connect(G_OBJECT(button_quit), "clicked", G_CALLBACK(quit_cb), NULL);
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
 
