@@ -76,6 +76,7 @@ static GtkWidget *make_UI(void)
 	column = gtk_tree_view_column_new_with_attributes("Subject", renderer, "text", MSG_STORE_SUBJECT, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(msg_list), column);
 	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
+	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(msg_list), FALSE);
 	
 	GtkWidget *toolbar = gtk_toolbar_new();
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
@@ -86,6 +87,7 @@ static GtkWidget *make_UI(void)
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_QUIT), -1);
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
+	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
 
 	return window;
 }
