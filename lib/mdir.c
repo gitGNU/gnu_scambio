@@ -337,7 +337,7 @@ static struct jnl *last_jnl(struct mdir *mdir)
 	return jnl;
 }
 
-static struct jnl *last_jnl(struct mdir *mdir, mdir_version version)
+static struct jnl *find_jnl(struct mdir *mdir, mdir_version version)
 {
 	struct jnl *jnl;
 	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
@@ -383,7 +383,7 @@ mdir_version mdir_patch_del(struct mdir *mdir, mdir_version to_del)
 		if (!jnl_read(old_jnl, to_del - old_jnl->version, &header, &action) && !is_error()) {
 			with_error(0, "Patch %"PRIversion" was already removed", to_del) break;
 		}
-		if (! header) with_error("Cannot fetch version %"PRIversion, to_del) break;
+		if (! header) with_error(0, "Cannot fetch version %"PRIversion, to_del) break;
 		if (header_is_directory(header))  {
 			mdir_unlink(mdir, header);
 			on_error break;
@@ -421,53 +421,52 @@ void mdir_patch_add_request(struct mdir *mdir, struct header *h)
 	header_write(h, fd);
 	close(fd);
 	on_error return;
-	if (is_dir) {
-		if (action == MDIR_ADD) {
-			mdir_link(mdir, h, true);
-		} else {
-			mdir_unlink(mdir, h);
-		}
-	}
+	if (is_dir) mdir_link(mdir, h, true);
 }
 
 void mdir_patch_del_request(struct mdir *mdir, mdir_version to_del)
 {
 	struct header *header = NULL;
 	struct jnl *old_jnl = find_jnl(mdir, to_del);
-	on_error break;
-	if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", version) break;
+	on_error return;
+	if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) return;
 	// Check removed header, and if it's for a subfolder performs the unlinking
 	enum mdir_action action;
 	if (!jnl_read(old_jnl, to_del - old_jnl->version, &header, &action) && !is_error()) {
-		with_error(0, "Patch %"PRIversion" was already removed", to_del) break;
+		with_error(0, "Patch %"PRIversion" was already removed", to_del) return;
 	}
-	if (! header) with_error("Cannot fetch version %"PRIversion, to_del) break;
-	if (header_is_directory(header))  {
-		mdir_unlink(mdir, header);
+	if (! header) with_error(0, "Cannot fetch version %"PRIversion, to_del) return;
+	do {
+		if (header_is_directory(header))  {
+			mdir_unlink(mdir, header);
+			on_error break;
+		}
+		// Now write the transient removal patch
+		int fd = temp_fd(mdir, '+');
 		on_error break;
-	}
-	// Now write the transient removal patch
-	int fd = temp_fd(mdir, '+');
-	on_error return;
-	Write_str(fd, mdir_version2str(to_del), NULL);
-	close(fd);
+		Write(fd, &to_del, sizeof(to_del));
+		close(fd);
+	} while (0);
+	error_save();
+	if (header) header_del(header);
+	error_restore();
 }
 
 /*
  * List
  */
 
-// FIXME: il y a quatres cas différents dont les paramètres du CB dépendent :
-// 1) patch + synché, il faut renvoyer le header et la version
-// 2) patch - synché, if faut renvoyer la version et la version supprimée
-// 3) patch + non synché, il faut renvoyer le header et le path du fichier
-// 4) patch - non synché, il faut renvoyer la version supprimée et le path du
-// fichier.
-// Le plus simple est que le callback prenne un header, une version, une
-// version to_del et un path.
-//
+static mdir_version read_version(char const *filename)
+{
+	int fd = open(filename, O_RDONLY);
+	if (fd < 0) with_error(errno, "Cannot open '%s'", filename) return 0;
+	mdir_version version;
+	Read(&version, fd, 0, sizeof(version));
+	return version;
+}
+
 // sync means in on the server - but not necessarily on our log yet
-void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, bool confirmed, union mdir_list_param, enum mdir_action action, void *data), void *data)
+void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, mdir_list_patch_cb *cb, void *data)
 {
 	struct jnl *jnl;
 	if (want_sync) {
@@ -477,8 +476,9 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 			for (unsigned index=0; index < jnl->nb_patches; index++) {
 				enum mdir_action action;
 				struct header *header;
-				if (jnl_read(jnl, index, &header, &action) && action = MDIR_ADD && !is_error()) {	// a patch that was not removed
-					cb(mdir, header, true, action, (union mdir_list_param){ .version = jnl->version + index }, data);
+				if (jnl_read(jnl, index, &header, &action) && action == MDIR_ADD && !is_error()) {	// a patch that was not removed
+					// Notice that we do not dare to report synched removal patches
+					cb(mdir, true, (union mdir_param){ .header = header }, jnl->version + index, NULL, data);
 				}
 				if (header) header_del(header);
 				on_error return;
@@ -523,11 +523,19 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 				}
 				if (! want_sync) continue;
 			}
-			struct header *h = NULL;
-			h = header_from_file(temp);
+			union mdir_param params;
+			if (action == MDIR_ADD) {
+				params.header = header_from_file(temp);
+			} else {
+				params.deleted = read_version(temp);
+			}
 			on_error return;
-			cb(mdir, h, synced, action, synced ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp }, data);
-			header_del(h);
+			cb(mdir, synced, params, version, temp, data);
+			if (action == MDIR_ADD) {
+				error_save();
+				header_del(params.header);
+				error_restore();
+			}
 			on_error return;
 		}
 		if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
@@ -535,7 +543,7 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 end_unsync:;
 }
 
-void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data)
+void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched, mdir_list_folder_cb *cb, void *data)
 {
 	DIR *d = opendir(mdir->path);
 	if (! d) with_error(errno, "opendir %s", mdir->path) return;

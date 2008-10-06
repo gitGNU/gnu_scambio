@@ -30,6 +30,7 @@
 #include "cmd.h"
 #include "mdirc.h"
 #include "command.h"
+#include "scambio/header.h"
 
 /*
  * Data Definitions
@@ -54,7 +55,7 @@ bool command_timeouted(struct command *cmd)
 	return time(NULL) - cmd->creation > CMD_TIMEOUT;
 }
 
-static void command_ctor(struct command *cmd, enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
+static void command_ctor(struct command *cmd, enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename, union mdir_param param)
 {
 	assert(type < NB_CMD_TYPES);
 	if (folder[0] == '\0') folder = "/";	// should not happen
@@ -68,18 +69,24 @@ static void command_ctor(struct command *cmd, enum command_type type, struct mdi
 	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, NULL);
 	if (type == SUB_CMD_TYPE) {
 		Write_strs(cnx.sock_fd, " ", mdir_version2str(mdir_last_version(&mdirc->mdir)), NULL);
+	} else if (type == REM_CMD_TYPE) {
+		Write_strs(cnx.sock_fd, " ", mdir_version2str(param.deleted), NULL);
 	}
 	Write(cnx.sock_fd, "\n", 1);
+	on_error return;
+	if (type == PUT_CMD_TYPE) {
+		header_write(param.header, cnx.sock_fd);
+	}
 	on_error return;
 	LIST_INSERT_HEAD(mdirc->commands+type, cmd, mdirc_entry);
 	LIST_INSERT_HEAD(&command_types[type].commands, cmd, type_entry);
 }
 
-struct command *command_new(enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
+struct command *command_new(enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename, union mdir_param param)
 {
 	struct command *cmd = malloc(sizeof(*cmd));
 	if (! cmd) with_error(ENOMEM, "malloc cmd") return NULL;
-	command_ctor(cmd, type, mdirc, folder, filename);
+	command_ctor(cmd, type, mdirc, folder, filename, param);
 	on_error {
 		free(cmd);
 		cmd = NULL;

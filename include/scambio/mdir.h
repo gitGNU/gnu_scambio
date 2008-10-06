@@ -20,21 +20,6 @@
  * Beware that many threads may access those files concurrently,
  * although they are non preemptibles.
  */
-/* FIXME:
- * On va utiliser la version d'ajout comme clef d'un message.
- * Cette version est renvoyée par l'ack du PUT, et doit être un argument
- * du REM au lieu du header complet.
- * Lors d'un REM, on ajoute une ligne dans le log pour dire "-version\n", et
- * on change le "+\n" du log pour le header supprimé par un "%\n".
- * Ensuite la fonction de liste se contentera de remonter les patchs non effacés.
- * Donc :
- * 0) Ajouter les fonctions jnl_patch_rem(), jnl_mark_del(),  et simplifier jnl_patch() en jnl_patch_add() -- DONE
- * 1) Changer les paramètres du REM -- DONE
- * 2) Il n'y a plus de headers lors d'un REM, changer le do_rem de mdird pour ne plus ajouter
- *    un patch mais effacer un patch (ie ajouter "-..." et tager le "%" -- DONE
- * 3) Changer la fonction de liste de patches pour skipper les messages effacés -- DONE
- * 4) Changer mdirc pour qu'il se conforme au nouveau REM
- */
 #ifndef MDIR_H_080912
 #define MDIR_H_080912
 
@@ -129,14 +114,16 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir
 // (will also list unconfirmed patches)
-union mdir_list_param {
-	mdir_version version;	// for synched patches
-	char const *path;	// for unsynched patches
+union mdir_param {
+	struct header *header;	// for MDIR_ADD
+	mdir_version deleted;	// for MDIR_REM
 };
-void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, bool synched, union mdir_list_param, void *data), void *data);
+typedef void mdir_list_patch_cb(struct mdir *, bool synched, union mdir_param, mdir_version version, char const *path, void *data);
+void mdir_patch_list(struct mdir *, bool synched, bool unsynched, mdir_list_patch_cb *cb, void *data);
 
 // returns only the symlinks. We can tell weither they are synched or not by watching if the dirId they points to is transient.
-void mdir_folder_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data);
+typedef void mdir_list_folder_cb(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data);
+void mdir_folder_list(struct mdir *, bool synched, bool unsynched, mdir_list_folder_cb *cb, void *data);
 
 // returns the header, action and version following the given version
 // or NULL if no other patches are found
