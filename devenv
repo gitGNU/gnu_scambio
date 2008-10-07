@@ -22,15 +22,15 @@ function run_server {
 function send_content {
 	nc $MDIRD_HOST $MDIRD_PORT <<EOF
 1 put /
-scambio-type: dir
-scambio-name: mailboxes
+sc-type: dir
+sc-name: mailboxes
 
 2 put /
 glop: pas glop
 
 3 put mailboxes
-scambio-type: dir
-scambio-name: rixed@happyleptic.org
+sc-type: dir
+sc-name: rixed@happyleptic.org
 
 4 quit
 EOF

@@ -34,7 +34,7 @@
  * Data Definitions
  */
 
-#define JNL_FNAME_FORMAT "%020"PRIversion".idx"
+#define JNL_FNAME_FORMAT "%020"PRIversion".log"
 #define JNL_FNAME_LEN 24
 
 static unsigned max_jnl_size;
@@ -101,7 +101,7 @@ static mdir_version parse_version(char const *filename)
 {
 	char *end;
 	mdir_version version = strtoull(filename, &end, 10);
-	if (0 != strcmp(end, ".idx")) with_error(0, "'%s' is not a journal file", filename) return 0;
+	if (0 != strcmp(end, ".log")) with_error(0, "'%s' is not a journal file", filename) return 0;
 	return version;
 }
 static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
