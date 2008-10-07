@@ -40,10 +40,11 @@ static void init(void)
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 }
 
-void alert(char const *text)
+void alert(GtkMessageType type, char const *text)
 {
-	// TODO: display me in a box
-	puts(text);
+	GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT/*|GTK_DIALOG_NO_SEPARATOR*/, type, GTK_BUTTONS_CLOSE, text);
+	g_signal_connect_swapped(dialog, "response", G_CALLBACK(gtk_widget_destroy), dialog);
+	gtk_widget_show_all(dialog);
 }
 
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))

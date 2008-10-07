@@ -4,7 +4,7 @@
 #include <gtk/gtk.h>
 
 void destroy_cb(GtkWidget *widget, gpointer data);
-void alert(char const *text);
+void alert(GtkMessageType type, char const *text);
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
 
 // List view

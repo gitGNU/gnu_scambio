@@ -66,7 +66,7 @@ static void enter_cb(GtkToolButton *button, gpointer user_data)
 		assert(G_VALUE_HOLDS_UINT(&gsize));
 		unsigned size = g_value_get_uint(&gsize);
 		if (size == 0) {
-			puts("Cannot select an empty folder");
+			alert(GTK_MESSAGE_INFO, "No messages in this folder");
 			break;
 		}
 		GtkTreePath *treePath = gtk_tree_model_get_path(GTK_TREE_MODEL(folder_store), &iter);
@@ -76,7 +76,7 @@ static void enter_cb(GtkToolButton *button, gpointer user_data)
 		debug("Enter list view in '%s'", path);
 		GtkWidget *new_win = make_list_window(path);
 		on_error {
-			alert(error_str());
+			alert(GTK_MESSAGE_ERROR, error_str());
 			error_clear();
 		} else {
 			gtk_widget_show_all(new_win);
@@ -126,8 +126,9 @@ GtkWidget *make_folder_window(char const *parent)
 	GtkWidget *folder_tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(folder_store));
 	g_object_unref(G_OBJECT(folder_store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(folder_tree), FALSE);
-	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+	gtk_tree_view_expand_all(GTK_TREE_VIEW(folder_tree));
 
+	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes("Name", renderer,
 		"text", FOLDER_STORE_NAME,
 		NULL);
