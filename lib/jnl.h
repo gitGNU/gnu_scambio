@@ -33,7 +33,7 @@ bool jnl_too_big(struct jnl *);
 mdir_version jnl_patch_add(struct jnl *, struct header *);
 mdir_version jnl_patch_del(struct jnl *, mdir_version to_del);
 void jnl_mark_del(struct jnl *, mdir_version to_del);
-bool jnl_read(struct jnl *jnl, unsigned index, struct header **header, enum mdir_action *action);
+struct header *jnl_read(struct jnl *, unsigned index, enum mdir_action *action);
 bool is_jnl_file(char const *filename);
 
 #endif

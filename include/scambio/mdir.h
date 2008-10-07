@@ -29,10 +29,10 @@
  * Ensuite la fonction de liste se contentera de remonter les patchs non effacés.
  * Donc :
  * 0) Ajouter les fonctions jnl_patch_rem(), jnl_mark_del(),  et simplifier jnl_patch() en jnl_patch_add() -- DONE
- * 1) Changer les paramètres du REM -- DONE
+ * 1) Changer les paramètres du REM
  * 2) Il n'y a plus de headers lors d'un REM, changer le do_rem de mdird pour ne plus ajouter
- *    un patch mais effacer un patch (ie ajouter "-..." et tager le "%" -- DONE
- * 3) Changer la fonction de liste de patches pour skipper les messages effacés -- DONE
+ *    un patch mais effacer un patch (ie ajouter "-..." et tager le "%"
+ * 3) Changer la fonction de liste de patches pour skipper les messqges effacés
  * 4) Changer mdirc pour qu'il se conforme au nouveau REM
  */
 #ifndef MDIR_H_080912
@@ -79,8 +79,8 @@ void mdir_end(void);
 // do not use this in plugins : only the server decides how and when to apply a patch
 // plugins use mdir_patch_request instead
 // returns the new version number
-mdir_version mdir_patch_add(struct mdir *, struct header *);
-mdir_version mdir_patch_del(struct mdir *, mdir_version to_del);
+mdir_version mdir_add_patch(struct mdir *, struct header *);
+mdir_version mdir_rem_patch(struct mdir *, mdir_version to_del);
 
 // Ask for the addition of this patch to the mdir. Actually the patch will be
 // saved in a tempfile in subfolder ".tmp" with a tempname starting with '+'
@@ -116,8 +116,7 @@ mdir_version mdir_patch_del(struct mdir *, mdir_version to_del);
 // will prevent this to happen.  This should not be too problematic for the
 // client, since it still can add patches to this directory, even patches that
 // creates other directories, for patches are added to names and not to dirId.
-void mdir_patch_add_request(struct mdir *, struct header *);
-void mdir_patch_del_request(struct mdir *, mdir_version to_del);
+void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
 
 // abort a patch request if its not already aborted.
 // If the patch found is of type: dir, unlink also the dir from its parent.
@@ -133,7 +132,7 @@ union mdir_list_param {
 	mdir_version version;	// for synched patches
 	char const *path;	// for unsynched patches
 };
-void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, bool synched, union mdir_list_param, void *data), void *data);
+void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, union mdir_list_param, void *data), void *data);
 
 // returns only the symlinks. We can tell weither they are synched or not by watching if the dirId they points to is transient.
 void mdir_folder_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data);

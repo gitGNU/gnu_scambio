@@ -255,50 +255,35 @@ static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 	return ie[0].offset;
 }
 
-bool jnl_read(struct jnl *jnl, unsigned index, struct header **header, enum mdir_action *action)
+struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *action)
 {
-	bool ret = true;
+	struct header *header = NULL;
 	size_t size;
-	*header = NULL;
 	off_t offset = jnl_offset_size(jnl, index, &size);
 	on_error return NULL;
-	if (size < 3) with_error(0, "Invalid patch at %lu", (unsigned long)offset) return NULL;
+	if (size < 3) with_error(0, "Invalid header at %lu", (unsigned long)offset) return NULL;
 	// Read the whole patch
 	char *buf = malloc(size+1);
 	if (! buf) with_error(ENOMEM, "malloc %zu bytes", size) return NULL;
 	do {
-		bool read_header = true;
 		Read(buf, jnl->patch_fd, offset, size);
 		buf[size] = '\0';
 		on_error break;
-		if (buf[size-1] != '\n') {
-invalid:
-			with_error(0, "Invalid patch @%lu", (unsigned long)offset) break;
+		if (buf[1] != '\n' || buf[size-2] != '\n' || buf [size-1] != '\n') with_error(0, "Invalid patch @%lu", (unsigned long)offset) break;
+		if (buf[0] == '+') {
+			*action = MDIR_ADD;
+		} else if (buf[0] == '-') {
+			*action = MDIR_REM;
+		} else {
+			with_error(0, "Unknown action @%lu", (unsigned long)offset) break;
 		}
-		switch (buf[0]) {
-			case '%':	// a removed addition
-				ret = false;
-				// otherwise same as +
-			case '+':
-				*action = MDIR_ADD;
-				if (buf[1] != '\n' || buf[size-2] != '\n') goto invalid;
-				break;
-			case '-':
-				*action = MDIR_REM;
-				ret = true;
-				read_header = false;
-				break;
-			default:
-				goto invalid;
-		}
-		if (read_header) {
-			*header = header_new();
-			on_error break;
-			header_parse(*header, buf+2);
-		}
+		// read header
+		header = header_new();
+		on_error break;
+		header_parse(header, buf+2);
 	} while (0);
 	free(buf);
-	return ret;
+	return header;
 }
 
 /*
