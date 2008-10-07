@@ -184,6 +184,55 @@ struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version start_version)
 }
 
 /*
+ * Patch
+ */
+
+static void write_index(struct jnl *jnl)
+{
+	struct index_entry ie;
+	ie.offset = filesize(jnl->patch_fd);
+	on_error return;
+	// Write the index
+	Write(jnl->idx_fd, &ie, sizeof(ie));
+	// FIXME: on short writes, truncate
+}
+
+mdir_version jnl_patch_add(struct jnl *jnl, struct header *header)
+{
+	write_index(jnl);
+	on_error return 0;
+	// Then the patch command
+	if_fail (Write(jnl->patch_fd, "+\n", 2)) return 0;
+	header_write(header, jnl->patch_fd);
+	unless_error jnl->nb_patches ++;
+	// FIXME: triggers all listeners that something was appended
+	return jnl->version + jnl->nb_patches -1;
+}
+
+mdir_version jnl_patch_del(struct jnl *jnl, mdir_version to_del)
+{
+	write_index(jnl);
+	on_error return 0;
+	// Then the patch command
+	if_fail (Write_strs(jnl->patch_fd, "-", mdir_version2str(to_del), "\n", NULL)) return 0;
+	jnl->nb_patches ++;
+	// FIXME: triggers all listeners that something was appended
+	return jnl->version + jnl->nb_patches -1;
+}
+
+void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
+{
+	assert(to_del >= jnl->version && to_del - jnl->version < jnl->nb_patches);
+	off_t offset = jnl_offset_size(jnl, to_del - jnl->version, NULL);
+	on_error return;
+	char tag;
+	Read(&tag, jnl->patch_fd, offset, 1);
+	on_error return;
+	if (tag != '+') with_error(0, "Cannot delete version %"PRIversion" : tag is '%c'", to_del, tag) return;
+	WriteTo(jnl->patch_fd, offset, "%", 1);
+}
+
+/*
  * Read
  */
 
@@ -250,55 +299,6 @@ invalid:
 	} while (0);
 	free(buf);
 	return ret;
-}
-
-/*
- * Patch
- */
-
-static void write_index(struct jnl *jnl)
-{
-	struct index_entry ie;
-	ie.offset = filesize(jnl->patch_fd);
-	on_error return;
-	// Write the index
-	Write(jnl->idx_fd, &ie, sizeof(ie));
-	// FIXME: on short writes, truncate
-}
-
-mdir_version jnl_patch_add(struct jnl *jnl, struct header *header)
-{
-	write_index(jnl);
-	on_error return 0;
-	// Then the patch command
-	if_fail (Write(jnl->patch_fd, "+\n", 2)) return 0;
-	header_write(header, jnl->patch_fd);
-	unless_error jnl->nb_patches ++;
-	// FIXME: triggers all listeners that something was appended
-	return jnl->version + jnl->nb_patches -1;
-}
-
-mdir_version jnl_patch_del(struct jnl *jnl, mdir_version to_del)
-{
-	write_index(jnl);
-	on_error return 0;
-	// Then the patch command
-	if_fail (Write_strs(jnl->patch_fd, "-", mdir_version2str(to_del), "\n", NULL)) return 0;
-	jnl->nb_patches ++;
-	// FIXME: triggers all listeners that something was appended
-	return jnl->version + jnl->nb_patches -1;
-}
-
-void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
-{
-	assert(to_del >= jnl->version && to_del - jnl->version < jnl->nb_patches);
-	off_t offset = jnl_offset_size(jnl, to_del - jnl->version, NULL);
-	on_error return;
-	char tag;
-	Read(&tag, jnl->patch_fd, offset, 1);
-	on_error return;
-	if (tag != '+') with_error(0, "Cannot delete version %"PRIversion" : tag is '%c'", to_del, tag) return;
-	WriteTo(jnl->patch_fd, offset, "%", 1);
 }
 
 /*

@@ -49,18 +49,18 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, bool synched, enum mdir_action action, union mdir_param params, mdir_version version, char const *path, void *data)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, union mdir_list_param param, void *path)
 {
-	(void)version;
-	char const *const folder = (char const *)data;
 	assert(! synched);
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked
 	// but may already have been sent nonetheless.
 	enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
-	struct command *cmd = command_get_by_path(mdirc, type, path);
+	struct command *cmd = command_get_by_path(mdirc, type, param.path);
 	if (! cmd) {
-		(void)command_new(type, mdirc, folder, path, params);
+		(void)command_new(type, mdirc, (char const *)path, param.path);
+		on_error return;
+		header_write(header, cnx.sock_fd);
 	}
 }
 
@@ -83,7 +83,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, 
 		if (cmd) {
 			debug("already subscribing to %s", mdir_id(&mdirc->mdir));
 		} else {
-			(void)command_new(SUB_CMD_TYPE, mdirc, mdir_id(&mdirc->mdir), "", (union mdir_param){ .version = 0 });
+			(void)command_new(SUB_CMD_TYPE, mdirc, mdir_id(&mdirc->mdir), "");
 		}
 		on_error return;
 	}

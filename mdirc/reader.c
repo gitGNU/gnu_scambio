@@ -87,8 +87,8 @@ void finalize_rem(struct command *cmd, int status, char const *compl)
 struct patch {
 	LIST_ENTRY(patch) entry;
 	mdir_version old_version, new_version;
+	struct header *header;
 	enum mdir_action action;
-	union mdir_param param;
 };
 
 static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version old_version, mdir_version new_version, enum mdir_action action)
@@ -96,23 +96,12 @@ static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version ol
 	patch->old_version = old_version;
 	patch->new_version = new_version;
 	patch->action = action;
-	if (action == MDIR_ADD) {
-		patch->param.header = header_new();
-		on_error return;
-		header_read(patch->header, cnx.sock_fd);
-		on_error {
-			error_save();
-			header_del(patch->header);
-			error_restore();
-			return;
-		}
-	} else {
-		// FIXME: puisque un patch n'est pas forcément un header, alors il faudrait que la libmdir
-		// fournisse les fonction d'écriture et de lecture d'un patch sur un flux.
-		// On aurait alors patch_write et patch_read (mais le struct patch resterait propre à mdirc - ces
-		// fonctions prendraient tous les parametres (ou pointeurs vers parametres) en argument).
-		// De toute facon il fallait changer l'écriture des patchs aussi...
-		patch->deleted = read_version_from_file(...);
+	patch->header = header_new();
+	on_error return;
+	header_read(patch->header, cnx.sock_fd);
+	on_error {
+		header_del(patch->header);
+		return;
 	}
 	// Insert this patch into this mdir
 	struct patch *p, *prev_p = NULL;
@@ -144,11 +133,7 @@ static void try_apply(struct mdirc *mdirc)	// try to apply some of the stored pa
 	debug("try to apply received patch(es)");
 	struct patch *patch;
 	while (NULL != (patch = LIST_FIRST(&mdirc->patches)) && mdir_last_version(&mdirc->mdir) == patch->old_version) {
-		if (patch->action == MDIR_ADD) {
-			(void)mdir_patch_add(&mdirc->mdir, patch->param.header);
-		} else {
-			(void)mdir_patch_del(&mdirc->mdir, patch->param.deleted);
-		}
+		(void)mdir_patch(&mdirc->mdir, patch->action, patch->header);
 		on_error break;
 		patch_del(patch);
 	}

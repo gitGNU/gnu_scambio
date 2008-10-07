@@ -44,7 +44,7 @@ void exec_end(void);
 void exec_sub  (struct cnx_env *, long long seq, char const *dir, mdir_version version);
 void exec_unsub(struct cnx_env *, long long seq, char const *dir);
 void exec_put  (struct cnx_env *, long long seq, char const *dir);
-void exec_rem  (struct cnx_env *, long long seq, char const *dir, char const *key);
+void exec_rem  (struct cnx_env *, long long seq, char const *dir);
 void exec_quit (struct cnx_env *, long long seq);
 
 #endif
