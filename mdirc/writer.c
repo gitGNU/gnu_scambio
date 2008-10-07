@@ -49,9 +49,9 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool synched, union mdir_list_param param, void *path)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *path)
 {
-	assert(! synched);
+	assert(new);
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked
 	// but may already have been sent nonetheless.
@@ -65,7 +65,7 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 }
 
 // Subscribe to the directory, then scan it
-static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, char const *name, void *parent_path)
+static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char const *name, void *parent_path)
 {
 	(void)parent;
 	struct mdirc *mdirc = mdir2mdirc(mdir);
@@ -73,12 +73,10 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, 
 	Make_path(path, sizeof(path), (char *)parent_path, name, NULL);
 	debug("parsing subdirectory '%s' of '%s' (dirId = %s)", name, (char *)parent_path, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
-	if (!mdirc->subscribed && synched && !mdir_is_transient(&mdirc->mdir)) {
+	if (!mdirc->subscribed && !new) {
 		// This is not enough to be synched : we must ensure that we have received the patch yet
-		// FIXME: we need 3 states not two : not acked, acked and synched (the 4th state, 'sent',
-		// does not survive to program restart, so we must handle it conservatively).
+		// (this is not fatal to subscribe twice to a dirId, but better avoid it)
 		debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
-		// this is not fatal to subscribe twice to a dirId, but better avoid it
 		struct command *cmd = command_get_by_path(mdirc, SUB_CMD_TYPE, "");
 		if (cmd) {
 			debug("already subscribing to %s", mdir_id(&mdirc->mdir));
@@ -89,11 +87,11 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool synched, 
 	}
 	// Synchronize up its content
 	debug("list patches");
-	mdir_patch_list(&mdirc->mdir, false, true, ls_patch, path);
+	mdir_patch_list(&mdirc->mdir, true, ls_patch, path);
 	on_error return;
 	// Recurse
 	debug("list folders");
-	mdir_folder_list(mdir, true, true, parse_dir_rec, path);
+	mdir_folder_list(mdir, false, parse_dir_rec, path);
 }
 
 void *writer_thread(void *args)
@@ -104,7 +102,7 @@ void *writer_thread(void *args)
 	do {
 		struct mdir *root = mdir_lookup("/");
 		on_error break;
-		parse_dir_rec(NULL, root, true, "", "");
+		parse_dir_rec(NULL, root, false, "", "");
 		on_error break;
 		wait_signal();
 	} while (! terminate_writer);

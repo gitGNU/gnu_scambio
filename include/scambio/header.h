@@ -73,10 +73,13 @@ struct header *header_from_file(char const *filename);
 void header_to_file(struct header *h, char const *filename);
 bool header_is_directory(struct header *h);
 
-#define SCAMBIO_TYPE_FIELD   "sc-type"
-#define SCAMBIO_TARGET_FIELD "sc-target"
-#define SCAMBIO_DIRID_FIELD  "sc-dirId"
-#define SCAMBIO_NAME_FIELD   "sc-name"
-#define SCAMBIO_DIR_TYPE     "dir"
+#define SCAMBIO_TYPE_FIELD          "sc-type"
+#define SCAMBIO_TARGET_FIELD        "sc-target"
+#define SCAMBIO_DIRID_FIELD         "sc-dirId"
+#define SCAMBIO_NAME_FIELD          "sc-name"
+#define SCAMBIO_DIR_TYPE            "dir"
+#define SCAMBIO_EMAIL_TYPE          "email"
+#define SCAMBIO_EMAIL_FROM_FIELD    "sc-from"
+#define SCAMBIO_EMAIL_SUBJECT_FIELD "sc-subject"
 
 #endif

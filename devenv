@@ -1,13 +1,8 @@
 export MALLOC_CHECK_=2
 export MDIRD_LOG_DIR=/tmp
 export MDIRD_LOG_LEVEL=5
-export MDIRC_LOG_DIR=/tmp
-export MDIRC_LOG_LEVEL=5
 export MDIRD_PORT=21435
 export MDIRD_HOST=localhost
-export SMTPD_LOG_DIR=/tmp
-export SMTPD_LOG_LEVEL=5
-export SMTPD_PORT=1025
 
 function run_server {
 	export MDIR_ROOT_DIR=/tmp/mdird
@@ -37,6 +32,8 @@ EOF
 }
 
 function run_client {
+	export MDIRC_LOG_DIR=/tmp
+	export MDIRC_LOG_LEVEL=5
 	export MDIR_ROOT_DIR=/tmp/mdirc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_MAX_JNL_SIZE=10
@@ -47,10 +44,22 @@ function run_client {
 }
 
 function run_smtpd {
+	export SMTPD_LOG_DIR=/tmp
+	export SMTPD_LOG_LEVEL=5
+	export SMTPD_PORT=1025
 	export MDIR_ROOT_DIR=/tmp/mdirc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	rm -f /tmp/smtpd.log
 	build/smtpd/smtpd
+}
+
+function run_meremail {
+	export MEREMAIL_LOG_DIR=/tmp
+	export MEREMAIL_LOG_LEVEL=5
+	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+	rm -f /tmp/meremail.log
+	build/meremail/meremail
 }
 
 function add_client_msg {

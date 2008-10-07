@@ -4,7 +4,9 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE $(GT
 bin_PROGRAMS = meremail
 
 meremail_SOURCES = \
-	meremail.c
+	meremail.c \
+	list_view.c \
+	folder_view.c
 
 meremail_LDADD = ../lib/libmdir.la ../commons/libcommons.la $(GTKS_LIBS)
 

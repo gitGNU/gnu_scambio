@@ -33,6 +33,7 @@ enum mdir_action { MDIR_ADD, MDIR_REM };
 
 typedef uint64_t mdir_version;
 #define PRIversion PRIu64
+#define MDIR_VERSION_G_TYPE G_TYPE_UINT64	// must include gtk.h to use this
 
 // Do not use these but inherit from them
 struct jnl {
@@ -116,13 +117,13 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 // list all patches of a mdir
 // (will also list unconfirmed patches)
 union mdir_list_param {
-	mdir_version version;	// for synched patches
-	char const *path;	// for unsynched patches
+	mdir_version version;	// if not new (ie. not on server yet)
+	char const *path;	// if new
 };
-void mdir_patch_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool synched, union mdir_list_param, void *data), void *data);
+void mdir_patch_list(struct mdir *, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, union mdir_list_param, void *data), void *data);
 
-// returns only the symlinks. We can tell weither they are synched or not by watching if the dirId they points to is transient.
-void mdir_folder_list(struct mdir *, bool synched, bool unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data);
+// returns only the symlinks.
+void mdir_folder_list(struct mdir *, bool new_only, void (*cb)(struct mdir *parent, struct mdir *child, bool new, char const *name, void *data), void *data);
 
 // returns the header, action and version following the given version
 // or NULL if no other patches are found
@@ -137,5 +138,6 @@ mdir_version mdir_str2version(char const *str);
 char const *mdir_action2str(enum mdir_action action);
 enum mdir_action mdir_str2action(char const *str);
 bool mdir_is_transient(struct mdir *mdir);
+unsigned mdir_size(struct mdir *);
 
 #endif

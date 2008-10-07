@@ -367,7 +367,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 			if_fail (jnl_mark_del(old_jnl, to_del)) break;
 		}
 		// if its for a subfolder, performs the (un)linking
-		if (header_is_directory(header))  {
+		if (header_is_directory(header)) {
 			if (action == MDIR_ADD) {
 				mdir_link(mdir, header, false);
 			} else {
@@ -424,11 +424,10 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
  * List
  */
 
-// sync means in on the server - but not necessarily on our log yet
-void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool confirmed, union mdir_list_param, void *data), void *data)
+void mdir_patch_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool, union mdir_list_param, void *), void *data)
 {
 	struct jnl *jnl;
-	if (want_sync) {
+	if (! new_only) {
 		// List content of journals
 		debug("listing journal");
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
@@ -444,56 +443,53 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 			}
 		}
 	}
-	if (want_unsync) {
-		// List content of ".tmp" subdirectory
-		char temp[PATH_MAX];
-		int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
-		debug("listing %s", temp);
-		DIR *dir = opendir(temp);
-		if (! dir) {
-			if (errno == ENOENT) goto end_unsync;
-			with_error(errno, "opendir(%s)", temp) return;
-		}
-		mdir_version last_version = mdir_last_version(mdir);
-		struct dirent *dirent;
-		while (NULL != (dirent = readdir(dir))) {
-			char const *const filename = dirent->d_name;
-			// patch files start with the action code '+' or '-'.
-			enum mdir_action action;
-			if (filename[0] == '+') action = MDIR_ADD;
-			else if (filename[0] == '-') action = MDIR_REM;
-			else continue;
-			snprintf(temp+dirlen, sizeof(temp)-dirlen, "/%s", filename);
-			// then filename may be either a numeric key (patch was not sent yet)
-			// or "=version" (patch was sent and acked with this version number)
-			bool synced = filename[1] == '=';
-			mdir_version version = 0;
-			if (synced) {	// maybe we already synchronized it down into the journal ?
-				version = mdir_str2version(filename+2);
-				on_error {
-					error("please fix %s", temp);
-					error_clear();
-					continue;
-				}
-				if (version <= last_version) {	// already on our journal so remove it
-					debug("unlinking %s", temp);
-					if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) return;
-					continue;
-				}
-				if (! want_sync) continue;
-			}
-			struct header *h = header_from_file(temp);
-			on_error return;
-			cb(mdir, h, action, synced, synced ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp }, data);
-			header_del(h);
-			on_error return;
-		}
-		if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
+	// List content of ".tmp" subdirectory
+	char temp[PATH_MAX];
+	int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
+	debug("listing %s", temp);
+	DIR *dir = opendir(temp);
+	if (! dir) {
+		if (errno == ENOENT) return;
+		with_error(errno, "opendir(%s)", temp) return;
 	}
-end_unsync:;
+	mdir_version last_version = mdir_last_version(mdir);
+	struct dirent *dirent;
+	while (NULL != (dirent = readdir(dir))) {
+		char const *const filename = dirent->d_name;
+		// patch files start with the action code '+' or '-'.
+		enum mdir_action action;
+		if (filename[0] == '+') action = MDIR_ADD;
+		else if (filename[0] == '-') action = MDIR_REM;
+		else continue;
+		snprintf(temp+dirlen, sizeof(temp)-dirlen, "/%s", filename);
+		// then filename may be either a numeric key (patch was not sent yet)
+		// or "=version" (patch was sent and acked with this version number)
+		bool new = filename[1] != '=';
+		mdir_version version = 0;
+		if (! new) {	// maybe we already synchronized it down into the journal ?
+			version = mdir_str2version(filename+2);
+			on_error {
+				error("please fix %s", temp);
+				error_clear();
+				continue;
+			}
+			if (version <= last_version) {	// already on our journal so remove it
+				debug("unlinking %s", temp);
+				if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) break;
+				continue;
+			}
+			if (new_only) continue;
+		}
+		struct header *h = header_from_file(temp);
+		on_error break;
+		cb(mdir, h, action, new, !new ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp }, data);
+		header_del(h);
+		on_error break;
+	}
+	if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
 }
 
-void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched, void (*cb)(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data), void *data)
+void mdir_folder_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *, struct mdir *, bool, char const *, void *), void *data)
 {
 	DIR *d = opendir(mdir->path);
 	if (! d) with_error(errno, "opendir %s", mdir->path) return;
@@ -506,14 +502,13 @@ void mdir_folder_list(struct mdir *mdir, bool want_synched, bool want_unsynched,
 		if (! S_ISLNK(statbuf.st_mode)) continue;
 		struct mdir *child = lookup_abs(path);
 		on_error break;
-		bool synched = !mdir_is_transient(child);
-		if ((synched && want_synched) || (!synched && want_unsynched)) {
-			char *name = strdup(dirent->d_name);
-			if (! name) with_error(errno, "strdup") break;
-			cb(mdir, child, synched, name, data);
-			free(name);
-			on_error break;
-		}
+		bool new = mdir_is_transient(child);
+		if (!new && new_only) continue;
+		char *name = strdup(dirent->d_name);
+		if (! name) with_error(errno, "strdup") break;
+		cb(mdir, child, new, name, data);
+		free(name);
+		on_error break;
 	}
 	if (0 != closedir(d)) error_push(errno, "Cannot closedir %s", mdir->path);
 	return;
@@ -579,3 +574,22 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
+// count only the patch that are not removed
+static void count_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
+{
+	(void)mdir;
+	(void)header;
+	(void)param;
+	(void)new;	// we do not count new removals since they may be invalid
+	unsigned *size = (unsigned *)data;
+	if (action != MDIR_ADD) return;
+	if (header_is_directory(header)) return; // exclude directories
+	(*size)++;
+}
+
+unsigned mdir_size(struct mdir *mdir)
+{
+	unsigned size = 0;
+	mdir_patch_list(mdir, false, count_patch, &size);
+	return size;
+}
