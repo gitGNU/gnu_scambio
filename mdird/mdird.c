@@ -93,7 +93,7 @@ static void init_cmd(void)
 	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
 	// Put most used commands at end, so that they end up at the beginning of the commands list
 	cmd_register_keyword(kw_quit,  0, 0, CMD_EOA);
-	cmd_register_keyword(kw_rem,   2, 2, CMD_STRING, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
@@ -180,7 +180,7 @@ static void *serve_cnx(void *arg)
 		} else if (cmd.keyword == kw_put) {
 			exec_put(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_rem) {
-			exec_rem(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.string);
+			exec_rem(env, cmd.seq, cmd.args[0].val.string);
 		} else if (cmd.keyword == kw_quit) {
 			exec_quit(env, cmd.seq);
 			quit = true;

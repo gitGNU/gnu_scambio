@@ -187,35 +187,37 @@ struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version start_version)
  * Patch
  */
 
-static void write_index(struct jnl *jnl)
+// read index file to find patch offset
+static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
+{
+	struct index_entry ie[2];
+	if (size) *size = 0;
+	if (index < jnl->nb_patches - 1) {	// can read 2 entires
+		Read(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
+		on_error return 0;
+	} else {	// at end of index file, will need log file size
+		Read(ie, jnl->idx_fd, index*sizeof(*ie), 1*sizeof(*ie));
+		on_error return 0;
+		ie[1].offset = filesize(jnl->patch_fd);
+		on_error return 0;
+	}
+	assert(ie[1].offset > ie[0].offset);
+	if (size) *size = ie[1].offset - ie[0].offset;
+	return ie[0].offset;
+}
+
+mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
 {
 	struct index_entry ie;
 	ie.offset = filesize(jnl->patch_fd);
-	on_error return;
+	on_error return 0;
 	// Write the index
 	Write(jnl->idx_fd, &ie, sizeof(ie));
-	// FIXME: on short writes, truncate
-}
-
-mdir_version jnl_patch_add(struct jnl *jnl, struct header *header)
-{
-	write_index(jnl);
-	on_error return 0;
+	on_error return 0;	// FIXME: on short writes, truncate
 	// Then the patch command
-	if_fail (Write(jnl->patch_fd, "+\n", 2)) return 0;
+	Write_strs(jnl->patch_fd, mdir_action2str(action), "\n", NULL);
 	header_write(header, jnl->patch_fd);
 	unless_error jnl->nb_patches ++;
-	// FIXME: triggers all listeners that something was appended
-	return jnl->version + jnl->nb_patches -1;
-}
-
-mdir_version jnl_patch_del(struct jnl *jnl, mdir_version to_del)
-{
-	write_index(jnl);
-	on_error return 0;
-	// Then the patch command
-	if_fail (Write_strs(jnl->patch_fd, "-", mdir_version2str(to_del), "\n", NULL)) return 0;
-	jnl->nb_patches ++;
 	// FIXME: triggers all listeners that something was appended
 	return jnl->version + jnl->nb_patches -1;
 }
@@ -236,25 +238,6 @@ void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
  * Read
  */
 
-// read index file to find patch offset
-static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
-{
-	struct index_entry ie[2];
-	if (size) *size = 0;
-	if (index < jnl->nb_patches - 1) {	// can read 2 entires
-		Read(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
-		on_error return 0;
-	} else {	// at end of index file, will need log file size
-		Read(ie, jnl->idx_fd, index*sizeof(*ie), 1*sizeof(*ie));
-		on_error return 0;
-		ie[1].offset = filesize(jnl->patch_fd);
-		on_error return 0;
-	}
-	assert(ie[1].offset > ie[0].offset);
-	if (size) *size = ie[1].offset - ie[0].offset;
-	return ie[0].offset;
-}
-
 struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *action)
 {
 	struct header *header = NULL;
@@ -270,17 +253,18 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 		buf[size] = '\0';
 		on_error break;
 		if (buf[1] != '\n' || buf[size-2] != '\n' || buf [size-1] != '\n') with_error(0, "Invalid patch @%lu", (unsigned long)offset) break;
-		if (buf[0] == '+') {
+		if (buf[0] == '+' || buf[0] == '%') {
 			*action = MDIR_ADD;
 		} else if (buf[0] == '-') {
 			*action = MDIR_REM;
 		} else {
 			with_error(0, "Unknown action @%lu", (unsigned long)offset) break;
 		}
-		// read header
-		header = header_new();
-		on_error break;
-		header_parse(header, buf+2);
+		if (buf[0] != '%') {	// read header
+			header = header_new();
+			on_error break;
+			header_parse(header, buf+2);
+		}
 	} while (0);
 	free(buf);
 	return header;

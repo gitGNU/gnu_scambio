@@ -231,12 +231,16 @@ static mdir_version get_next_version(struct mdir *mdir, struct jnl **jnl, mdir_v
 struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdir_action *action)
 {
 	struct jnl *jnl;
-	*version = get_next_version(mdir, &jnl, *version);
-	on_error {
-		if (error_code() == ENOMSG) error_clear();
-		return NULL;
-	}
-	return jnl_read(jnl, *version - jnl->version, action);
+	struct header *header = NULL;
+	do {
+		*version = get_next_version(mdir, &jnl, *version);
+		on_error {
+			if (error_code() == ENOMSG) error_clear();
+			return NULL;
+		}
+		header = jnl_read(jnl, *version - jnl->version, action);
+	} while (! header);
+	return header;
 }
 
 /*
@@ -323,54 +327,58 @@ static void mdir_unlink(struct mdir *parent, struct header *h)
  * Patch
  */
 
-mdir_version mdir_patch_add(struct mdir *mdir, struct header *header)
+static struct jnl *last_jnl(struct mdir *mdir)
 {
-	debug("add to mdir %s", mdir_id(mdir));
-	mdir_version version = 0;
-	// First acquire writer-grade lock
-	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
-	do {
-		// if its for a subfolder, performs the linking
-		if (header_is_directory(header))  {
-			mdir_link(mdir, header, false);
-			on_error break;
-		}
-		// Either use the last journal, or create a new one
-		struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
-		if (! jnl) {
-			jnl = jnl_new_empty(mdir, 1);
-		} else if (jnl_too_big(jnl)) {
-			jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
-		}
-		on_error break;
-		version = jnl_patch_add(jnl, header);
-	} while (0);
-	(void)pth_rwlock_release(&mdir->rwlock);
-	return version;
+	// Either use the last journal, or create a new one
+	struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
+	if (! jnl) {
+		jnl = jnl_new_empty(mdir, 1);
+	} else if (jnl_too_big(jnl)) {
+		jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
+	}
+	return jnl;
 }
 
-mdir_version mdir_patch_del(struct mdir *mdir, mdir_version to_del)
+static struct jnl *find_jnl(struct mdir *mdir, mdir_version version)
 {
-	debug("del from mdir %s", mdir_id(mdir));
+	struct jnl *jnl;
+	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
+		if (jnl->version <= version && jnl->version + jnl->nb_patches < version) return jnl;
+	}
+	return NULL;
+}
+
+mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
+{
+	debug("patch mdir %s", mdir_id(mdir));
 	mdir_version version = 0;
 	// First acquire writer-grade lock
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
 	do {
-		// if its for a subfolder, performs the unlinking
+		// If it's a removal, check the header and the deleted version
+		if (action == MDIR_REM) {
+			char const *target = header_search(header, SCAMBIO_TARGET_FIELD);
+			if (! target) with_error(0, "Rem patch lacks the target") break;
+			mdir_version to_del = mdir_str2version(target);
+			on_error break;
+			struct jnl *old_jnl = find_jnl(mdir, to_del);
+			on_error break;
+			if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) break;
+			if_fail (jnl_mark_del(old_jnl, to_del)) break;
+		}
+		// if its for a subfolder, performs the (un)linking
 		if (header_is_directory(header))  {
-			mdir_unlink(mdir, header);
+			if (action == MDIR_ADD) {
+				mdir_link(mdir, header, false);
+			} else {
+				mdir_unlink(mdir, header);
+			}
 			on_error break;
 		}
 		// Either use the last journal, or create a new one
-		// FIXME: factoriser avec la fonction ci dessus
-		struct jnl *jnl = STAILQ_LAST(&mdir->jnls, jnl, entry);
-		if (! jnl) {
-			jnl = jnl_new_empty(mdir, 1);
-		} else if (jnl_too_big(jnl)) {
-			jnl = jnl_new_empty(mdir, jnl->version + jnl->nb_patches);
-		}
+		struct jnl *jnl = last_jnl(mdir);
 		on_error break;
-		version = jnl_patch_del(jnl, to_del);
+		version = jnl_patch(jnl, action, header);
 	} while (0);
 	(void)pth_rwlock_release(&mdir->rwlock);
 	return version;
@@ -403,6 +411,15 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 	}
 }
 
+void mdir_del_request(struct mdir *mdir, mdir_version to_del)
+{
+	struct header *h = header_new();
+	on_error return;
+	header_add_field(h, SCAMBIO_TARGET_FIELD, mdir_version2str(to_del));
+	unless_error mdir_patch_request(mdir, MDIR_REM, h);
+	header_del(h);
+}
+
 /*
  * List
  */
@@ -419,8 +436,10 @@ void mdir_patch_list(struct mdir *mdir, bool want_sync, bool want_unsync, void (
 				enum mdir_action action;
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
-				cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index }, data);
-				header_del(h);
+				if (h) {
+					cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index }, data);
+					header_del(h);
+				}
 				on_error return;
 			}
 		}

@@ -20,21 +20,6 @@
  * Beware that many threads may access those files concurrently,
  * although they are non preemptibles.
  */
-/* FIXME:
- * On va utiliser la version d'ajout comme clef d'un message.
- * Cette version est renvoyée par l'ack du PUT, et doit être un argument
- * du REM au lieu du header complet.
- * Lors d'un REM, on ajoute une ligne dans le log pour dire "-version\n", et
- * on change le "+\n" du log pour le header supprimé par un "%\n".
- * Ensuite la fonction de liste se contentera de remonter les patchs non effacés.
- * Donc :
- * 0) Ajouter les fonctions jnl_patch_rem(), jnl_mark_del(),  et simplifier jnl_patch() en jnl_patch_add() -- DONE
- * 1) Changer les paramètres du REM
- * 2) Il n'y a plus de headers lors d'un REM, changer le do_rem de mdird pour ne plus ajouter
- *    un patch mais effacer un patch (ie ajouter "-..." et tager le "%"
- * 3) Changer la fonction de liste de patches pour skipper les messqges effacés
- * 4) Changer mdirc pour qu'il se conforme au nouveau REM
- */
 #ifndef MDIR_H_080912
 #define MDIR_H_080912
 
@@ -79,8 +64,7 @@ void mdir_end(void);
 // do not use this in plugins : only the server decides how and when to apply a patch
 // plugins use mdir_patch_request instead
 // returns the new version number
-mdir_version mdir_add_patch(struct mdir *, struct header *);
-mdir_version mdir_rem_patch(struct mdir *, mdir_version to_del);
+mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
 
 // Ask for the addition of this patch to the mdir. Actually the patch will be
 // saved in a tempfile in subfolder ".tmp" with a tempname starting with '+'
@@ -117,6 +101,9 @@ mdir_version mdir_rem_patch(struct mdir *, mdir_version to_del);
 // client, since it still can add patches to this directory, even patches that
 // creates other directories, for patches are added to names and not to dirId.
 void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
+// This is a helper to request a patch that will remove the patch identified
+// with this version
+void mdir_del_request(struct mdir *mdir, mdir_version to_del);
 
 // abort a patch request if its not already aborted.
 // If the patch found is of type: dir, unlink also the dir from its parent.
