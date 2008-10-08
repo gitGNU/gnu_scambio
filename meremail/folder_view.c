@@ -2,15 +2,12 @@
 #include <assert.h>
 #include <stdio.h>
 #include "meremail.h"
-#include "scambio.h"
-#include "scambio/mdir.h"
-#include "scambio/header.h"
 
 /*
  * Data Definitions
  */
 
-enum folder_store_col {
+enum {
 	FOLDER_STORE_NAME,
 	FOLDER_STORE_SIZE,
 	NB_FOLDER_STORES

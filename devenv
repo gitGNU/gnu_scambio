@@ -3,6 +3,8 @@ export MDIRD_LOG_DIR=/tmp
 export MDIRD_LOG_LEVEL=5
 export MDIRD_PORT=21435
 export MDIRD_HOST=localhost
+export MERELIB_LOG_DIR=/tmp
+export MERELIB_LOG_LEVEL=5
 
 function run_server {
 	export MDIR_ROOT_DIR=/tmp/mdird
@@ -21,13 +23,22 @@ sc-type: dir
 sc-name: mailboxes
 
 2 put /
-glop: pas glop
+sc-type: dir
+sc-name: calendars
 
 3 put mailboxes
 sc-type: dir
 sc-name: rixed@happyleptic.org
 
-4 quit
+4 put calendars
+sc-type: dir
+sc-name: rixed
+
+5 put calendars
+sc-type: dir
+sc-name: project X
+
+999 quit
 EOF
 }
 
@@ -54,12 +65,17 @@ function run_smtpd {
 }
 
 function run_meremail {
-	export MEREMAIL_LOG_DIR=/tmp
-	export MEREMAIL_LOG_LEVEL=5
 	export MDIR_ROOT_DIR=/tmp/mdirc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	rm -f /tmp/meremail.log
 	build/meremail/meremail
+}
+
+function run_merecal {
+	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+	rm -f /tmp/merecal.log
+	build/merecal/merecal
 }
 
 function add_client_msg {

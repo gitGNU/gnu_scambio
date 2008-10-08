@@ -1,15 +1,11 @@
 #include <string.h>
-#include <gtk/gtk.h>
 #include "meremail.h"
-#include "scambio.h"
-#include "scambio/mdir.h"
-#include "scambio/header.h"
 
 /*
  * Data Definitions
  */
 
-enum msg_store_col {
+enum {
 	MSG_STORE_FROM,
 	MSG_STORE_SUBJECT,
 	MSG_STORE_VERSION,
@@ -27,7 +23,6 @@ static void close_cb(GtkToolButton *button, gpointer user_data)
 	debug("close");
 	gtk_widget_destroy(window);
 }
-
 
 /*
  * Build the view

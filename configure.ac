@@ -41,7 +41,9 @@ AC_CONFIG_FILES([
 	mdird/Makefile
 	mdirc/Makefile
 	smtpd/Makefile
+	merelib/Makefile
 	meremail/Makefile
+	merecal/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT
