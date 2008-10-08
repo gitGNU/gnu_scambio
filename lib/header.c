@@ -378,8 +378,13 @@ void header_to_file(struct header *h, char const *filename)
 	close(fd);
 }
 
+bool header_has_type(struct header *h, char const *type)
+{
+	char const *h_type = header_search(h, SCAMBIO_TYPE_FIELD);
+	return h_type && 0==strcmp(h_type, type);
+}
+
 bool header_is_directory(struct header *h)
 {
-	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
-	return type && 0==strcmp(type, SCAMBIO_DIR_TYPE);
+	return header_has_type(h, SCAMBIO_DIR_TYPE);
 }

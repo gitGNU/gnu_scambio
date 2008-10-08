@@ -71,6 +71,7 @@ void header_copy_parameter(char const *name, char const *field_value, size_t max
 void header_digest(struct header *h, size_t, char *buffer);
 struct header *header_from_file(char const *filename);
 void header_to_file(struct header *h, char const *filename);
+bool header_has_type(struct header *h, char const *type);
 bool header_is_directory(struct header *h);
 
 #define SCAMBIO_TYPE_FIELD          "sc-type"
@@ -79,7 +80,11 @@ bool header_is_directory(struct header *h);
 #define SCAMBIO_NAME_FIELD          "sc-name"
 #define SCAMBIO_EMAIL_FROM_FIELD    "sc-from"
 #define SCAMBIO_EMAIL_SUBJECT_FIELD "sc-subject"
+#define SCAMBIO_CAL_START           "sc-start"
+#define SCAMBIO_CAL_STOP            "sc-stop"
+#define SCAMBIO_CAL_PERIOD          "sc-period"
 
+// Common values for type field
 #define SCAMBIO_DIR_TYPE            "dir"
 #define SCAMBIO_EMAIL_TYPE          "mail"
 #define SCAMBIO_CAL_TYPE            "cal"
