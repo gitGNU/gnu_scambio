@@ -36,7 +36,7 @@ sc-name: rixed
 
 5 put calendars
 sc-type: dir
-sc-name: project X
+sc-name: project-X
 
 6 put calendars/rixed
 sc-start: 2008 10 21 12 00
@@ -52,6 +52,11 @@ sc-descr: meeting prod
 sc-start: 2008 10 21 15 30
 sc-stop:  2008 10 21 16 00
 sc-descr: meeting support
+
+9 put calendars/rixed
+sc-start: 2008 10 25 12 00
+sc-stop:  2008 10 26 12 00
+sc-descr: PACS Ramine et Sandron
 
 999 quit
 EOF

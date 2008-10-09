@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <assert.h>
 #include <pth.h>
 #include "scambio.h"
@@ -65,7 +66,6 @@ static void cal_date_ctor_from_str(struct cal_date *cd, char const *str)
 {
 	unsigned year, month, day, hour, min;
 	int ret = sscanf(str, "%u %u %u %u %u", &year, &month, &day, &hour, &min);
-	year -= 1900;
 	month -= 1;
 	if (ret == 3) {	// OK, make it a date only (no timezone adjustement)
 		hour = 99;
@@ -73,7 +73,7 @@ static void cal_date_ctor_from_str(struct cal_date *cd, char const *str)
 	} else if (ret == 5) {	// Adjust timezone (we were given UTC timestamp
 		struct tm tm;
 		memset(&tm, 0, sizeof(tm));
-		tm.tm_year = year;
+		tm.tm_year = year - 1900;
 		tm.tm_mon  = month;
 		tm.tm_mday = day;
 		tm.tm_hour = hour;
@@ -90,6 +90,79 @@ static void cal_date_ctor_from_str(struct cal_date *cd, char const *str)
 	cal_date_ctor(cd, year, month, day, hour, min);
 }
 
+void cal_date_to_str(struct cal_date *cd, char *str, size_t size)
+{
+	assert(cal_date_is_set(cd));
+	int len;
+	if (! cal_date_has_time(cd)) {
+		len = snprintf(str, size, "%04u %02u %02u",
+			(unsigned)cd->year, (unsigned)cd->month+1, (unsigned)cd->day);
+	} else {
+		struct tm tm;
+		memset(&tm, 0, sizeof(tm));
+		tm.tm_year = cd->year - 1900;
+		tm.tm_mon  = cd->month;
+		tm.tm_mday = cd->day;
+		tm.tm_hour = cd->hour;
+		tm.tm_min  = cd->min;
+		tm.tm_isdst = -1;
+		time_t t = mktime(&tm);	// now we have the timestamp
+		tm = *gmtime(&t);	// now we have the GM timestruct
+		len = snprintf(str, size, "%04u %02u %02u %02u %02u",
+			(unsigned)tm.tm_year+1900, (unsigned)tm.tm_mon+1, (unsigned)tm.tm_mday, (unsigned)tm.tm_hour, (unsigned)tm.tm_min);
+	}
+	if (len >= (int)size) error_push(0, "Buffer too small");
+}
+
+
+static bool is_leap_year(unsigned y)
+{
+	return (y%4 == 0) && (y%100 != 0 || y%400 == 0);
+}
+
+static int month_days(unsigned year, unsigned month)	// month is from 0 to 11
+{
+	static unsigned const days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	return days[month] + (month == 1 && is_leap_year(year));
+}
+
+static bool issep(int c)
+{
+	return isblank(c) || c == '-' || c == '/' || c == ':' || c == 'h';
+}
+
+void cal_date_ctor_from_input(struct cal_date *cd, char const *i)
+{
+	long year = 0, month = 0, day = 0, hour = 99, min = 0;
+	// Try to reckognize a date and a time from user inputs
+	while (isblank(*i)) i++;
+	if (*i != '\0') {
+		char const *j;
+		year = strtol(i, (char **)&j, 10);
+		if (*j == '\0') with_error(0, "Invalid date : lacks a month") return;
+		while (issep(*j)) j++;
+		month = strtol(j, (char **)&i, 10);
+		if (*i == '\0') with_error(0, "Invalid date : lacks a day") return;
+		if (month < 1 || month > 12) with_error(0, "Invalid month (%ld)", month) return;
+		month --;
+		while (issep(*i)) i++;
+		day = strtol(i, (char **)&j, 10);
+		if (day < 1 || day > 31) with_error(0, "Invalid day (%ld)", day) return;
+		if (day > month_days(year, month)) with_error(0, "No such day (%ld) in this month (%ld)", day, month) return;
+		while (isblank(*j)) j++;
+		if (*j != '\0') {
+			hour = strtol(j, (char **)&i, 10);
+			if (hour < 0 || hour > 23) with_error(0, "Invalid hour (%ld)", hour) return;
+			while (issep(*i)) i++;
+			if (*i != '\0') {
+				min = strtol(i, (char **)&j, 10);
+				if (min < 0 || min > 59) with_error(0, "Invalid minutes (%ld)", min) return;
+			}
+		}
+	}
+	cal_date_ctor(cd, year, month, day, hour, min);
+}
+
 static int guint_compare(guint a, guint b)
 {
 	if (a < b) return -1;
@@ -99,7 +172,7 @@ static int guint_compare(guint a, guint b)
 
 int cal_date_compare(struct cal_date const *a, struct cal_date const *b)
 {
-	debug("compare %s and %s", a->str, b->str);
+//	debug("compare %s and %s", a->str, b->str);
 #	define COMPARE_FIELD(f) if (a->f != b->f) return guint_compare(a->f, b->f)
 	COMPARE_FIELD(year);
 	COMPARE_FIELD(month);
@@ -140,13 +213,9 @@ static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct c
 {
 	ce->folder = cf;
 	ce->start = *start;
-	if (stop) {
-		ce->stop = *stop;
-	} else {
-		ce->stop.year = 0;
-		assert(! cal_date_is_set(&ce->stop));
-	}
-	if (cal_date_compare(&ce->start, &ce->stop) > 0) with_error(0, "event stop > start") return;
+	ce->stop = *stop;
+	debug("event from %s to %s", start->str, stop->str);
+	if (cal_date_is_set(stop) && cal_date_compare(start, stop) > 0) with_error(0, "event stop > start") return;
 	ce->version = version;
 	ce->description = descr ? strdup(descr) : NULL;
 	cal_event_insert(ce);
@@ -184,9 +253,15 @@ void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (
 	LIST_FOREACH(ce, &cal_events, entry) {
 		debug("test event '%s' in between %s and %s", ce->description, start->str, stop->str);
 		if (cal_date_compare(&ce->start, stop) > 0) break;	// cal_events are sorted by start date
-		if (! ce->folder->displayed) continue;
+		if (! ce->folder->displayed) {
+			debug(" skip because not displayed");
+			continue;
+		}
 		struct cal_date *end = cal_date_is_set(&ce->stop) ? &ce->stop : &ce->start;
-		if (cal_date_compare(end, start) < 0) continue;
+		if (cal_date_compare(end, start) < 0) {
+			debug("  skip because end date (%s) before start (%s)", end->str, start->str);
+			continue;
+		}
 		cb(ce);
 	}
 }
@@ -271,10 +346,11 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 			return;
 		}
 	} else {
-		stop.year = 0;
+		cal_date_ctor(&stop, 0, 0, 0, 0, 0);
 	}
 	char const *desc = header_search(header, SCAMBIO_DESCR_FIELD);
 	(void)cal_event_new(cf, &start, &stop, desc, version);
+	on_error error_clear();	// forget this event, go ahead with others
 	cal_date_dtor(&stop);
 	cal_date_dtor(&start);
 }
@@ -302,7 +378,7 @@ void refresh(void)
 int main(int nb_args, char *args[])
 {
 	if_fail(init("merecal.log", nb_args, args)) return EXIT_FAILURE;
-	char const *folders[] = { "/calendars/rixed", "/calendars/project X" };
+	char const *folders[] = { "/calendars/rixed", "/calendars/project-X" };
 	for (unsigned f=0; f<sizeof_array(folders); f++) {
 		(void)cal_folder_new(folders[f]);
 		on_error return EXIT_FAILURE;

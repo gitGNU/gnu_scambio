@@ -139,7 +139,7 @@ static void new_cb(GtkToolButton *button, gpointer user_data)
 	struct cal_date start, stop;
 	cal_date_ctor(&start, year, month, day, 99, 99);
 	cal_date_ctor(&stop,  0, month, day, 99, 99);
-	GtkWidget *win = make_edit_window(LIST_FIRST(&cal_folders), &start, &stop, "(edit)");
+	GtkWidget *win = make_edit_window(LIST_FIRST(&cal_folders), &start, &stop, "", NULL);
 	gtk_widget_show_all(win);
 }
 

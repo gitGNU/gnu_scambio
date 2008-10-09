@@ -22,8 +22,10 @@ struct cal_date {
 static inline bool cal_date_is_set(struct cal_date const *cd) { return cd->year != 0; }
 static inline bool cal_date_has_time(struct cal_date const *cd) { return cal_date_is_set(cd) && cd->hour <= 23; }
 static inline void cal_date_dtor(struct cal_date *cd) { (void)cd; }
-void cal_date_ctor(struct cal_date *cd, guint y, guint M, guint d, guint h, guint m);
+void cal_date_ctor(struct cal_date *, guint y, guint M, guint d, guint h, guint m);
+void cal_date_ctor_from_input(struct cal_date *, char const *input);
 int cal_date_compare(struct cal_date const *a, struct cal_date const *b);
+void cal_date_to_str(struct cal_date *, char *, size_t);
 
 extern LIST_HEAD(cal_folders, cal_folder) cal_folders;
 
@@ -53,6 +55,6 @@ void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (
 
 void refresh(void);
 GtkWidget *make_cal_window(void);
-GtkWidget *make_edit_window(struct cal_folder *, struct cal_date *start, struct cal_date *end, char const *descr);
+GtkWidget *make_edit_window(struct cal_folder *, struct cal_date *start, struct cal_date *end, char const *descr, struct cal_event *replaced);
 
 #endif
