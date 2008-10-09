@@ -74,20 +74,21 @@ void header_to_file(struct header *h, char const *filename);
 bool header_has_type(struct header *h, char const *type);
 bool header_is_directory(struct header *h);
 
-#define SCAMBIO_TYPE_FIELD          "sc-type"
-#define SCAMBIO_TARGET_FIELD        "sc-target"
-#define SCAMBIO_DIRID_FIELD         "sc-dirId"
-#define SCAMBIO_NAME_FIELD          "sc-name"
-#define SCAMBIO_EMAIL_FROM_FIELD    "sc-from"
-#define SCAMBIO_EMAIL_SUBJECT_FIELD "sc-subject"
-#define SCAMBIO_CAL_START           "sc-start"
-#define SCAMBIO_CAL_STOP            "sc-stop"
-#define SCAMBIO_CAL_PERIOD          "sc-period"
+#define SCAMBIO_TYPE_FIELD   "sc-type"
+#define SCAMBIO_TARGET_FIELD "sc-target"
+#define SCAMBIO_DIRID_FIELD  "sc-dirId"
+#define SCAMBIO_NAME_FIELD   "sc-name"
+#define SCAMBIO_FROM_FIELD   "sc-from"
+#define SCAMBIO_DESCR_FIELD  "sc-descr"
+#define SCAMBIO_START        "sc-start"
+#define SCAMBIO_STOP         "sc-stop"
+#define SCAMBIO_PERIOD       "sc-period"
 
 // Common values for type field
-#define SCAMBIO_DIR_TYPE            "dir"
-#define SCAMBIO_EMAIL_TYPE          "mail"
-#define SCAMBIO_CAL_TYPE            "cal"
-#define SCAMBIO_IM_TYPE             "im"
+#define SCAMBIO_DIR_TYPE     "dir"
+#define SCAMBIO_MAIL_TYPE    "mail"
+#define SCAMBIO_CAL_TYPE     "cal"
+#define SCAMBIO_IM_TYPE      "im"
+#define SCAMBIO_DIR_TYPE     "dir"
 
 #endif

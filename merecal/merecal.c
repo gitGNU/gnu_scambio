@@ -50,19 +50,29 @@ void cal_date_ctor(struct cal_date *cd, guint y, guint M, guint d, guint h, guin
 	cd->day = d;
 	cd->hour = h;
 	cd->min = m;
+	if (! cal_date_is_set(cd)) {
+		snprintf(cd->str, sizeof(cd->str), "unset");
+	} else {
+		int len = snprintf(cd->str, sizeof(cd->str), "%04u-%02u-%02u", cd->year, cd->month+1, cd->day);
+		if (cal_date_has_time(cd)) {
+			snprintf(cd->str+len, sizeof(cd->str)-len, " %02uh%02u", cd->hour, cd->min);
+		}
+	}
 }
 
 static void cal_date_ctor_from_str(struct cal_date *cd, char const *str)
 {
 	unsigned year, month, day, hour, min;
 	int ret = sscanf(str, "%u %u %u %u %u", &year, &month, &day, &hour, &min);
+	year -= 1900;
+	month -= 1;
 	if (ret == 3) {	// OK, make it a date only (no timezone adjustement)
 		hour = 99;
 		min = 99;
 	} else if (ret == 5) {	// Adjust timezone (we were given UTC timestamp
 		struct tm tm;
 		memset(&tm, 0, sizeof(tm));
-		tm.tm_year = year - 1900;
+		tm.tm_year = year;
 		tm.tm_mon  = month;
 		tm.tm_mday = day;
 		tm.tm_hour = hour;
@@ -74,7 +84,7 @@ static void cal_date_ctor_from_str(struct cal_date *cd, char const *str)
 		day   = now->tm_mday;
 		hour  = now->tm_hour;
 		min   = now->tm_min;
-		debug("UTC '%s' converted to local '%u %u %u %u %u'", str, year, month, day, hour, min);
+		debug("UTC '%s' converted to local '%u %u %u %u %u'", str, year, month+1, day, hour, min);
 	} else with_error(0, "Cannot convert string '%s' to date", str) return;
 	cal_date_ctor(cd, year, month, day, hour, min);
 }
@@ -88,6 +98,7 @@ static int guint_compare(guint a, guint b)
 
 int cal_date_compare(struct cal_date const *a, struct cal_date const *b)
 {
+	debug("compare %s and %s", a->str, b->str);
 #	define COMPARE_FIELD(f) if (a->f != b->f) return guint_compare(a->f, b->f)
 	COMPARE_FIELD(year);
 	COMPARE_FIELD(month);
@@ -105,27 +116,35 @@ int cal_date_compare(struct cal_date const *a, struct cal_date const *b)
 
 struct cal_events cal_events = LIST_HEAD_INITIALIZER(&cal_events);
 
-static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, mdir_version version)
+static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
 {
 	ce->folder = cf;
 	ce->start = *start;
 	ce->stop = *stop;
 	if (cal_date_compare(start, stop) > 0) with_error(0, "event stop > start") return;
 	ce->version = version;
+	ce->description = descr ? strdup(descr) : NULL;
 	struct cal_event *e;
 	LIST_FOREACH(e, &cal_events, entry) {
-		if (cal_date_compare(&e->start, &ce->start) <= 0) continue;
-		LIST_INSERT_BEFORE(e, ce, entry);
-		return;
+		if (cal_date_compare(&e->start, &ce->start) > 0) {
+			debug("insert before this one");
+			LIST_INSERT_BEFORE(e, ce, entry);
+			return;
+		} else if (! LIST_NEXT(e, entry)) {
+			debug("insert after this last one");
+			LIST_INSERT_AFTER(e, ce, entry);
+			return;
+		}
 	}
+	debug("insert as first");
 	LIST_INSERT_HEAD(&cal_events, ce, entry);
 }
 
-static struct cal_event *cal_event_new(struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, mdir_version version)
+static struct cal_event *cal_event_new(struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
 {
 	struct cal_event *ce = malloc(sizeof(*ce));
 	if (! ce) with_error(ENOMEM, "malloc cal_event") return NULL;
-	cal_event_ctor(ce, cf, start, stop, version);
+	cal_event_ctor(ce, cf, start, stop, descr, version);
 	on_error {
 		free(ce);
 		ce = NULL;
@@ -138,6 +157,7 @@ static void cal_event_dtor(struct cal_event *ce)
 	LIST_REMOVE(ce, entry);
 	cal_date_dtor(&ce->start);
 	cal_date_dtor(&ce->stop);
+	if (ce->description) free(ce->description);
 }
 
 static void cal_event_del(struct cal_event *ce)
@@ -150,6 +170,7 @@ void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (
 {
 	struct cal_event *ce;
 	LIST_FOREACH(ce, &cal_events, entry) {
+		debug("test event '%s' in between %s and %s", ce->description, start->str, stop->str);
 		if (cal_date_compare(&ce->start, stop) > 0) break;	// cal_events are sorted by start date
 		if (! ce->folder->displayed) continue;
 		struct cal_date *end = cal_date_is_set(&ce->stop) ? &ce->stop : &ce->start;
@@ -219,19 +240,18 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 {
 	(void)mdir;
 	if (action != MDIR_ADD) return;
-	if (! header_has_type(header, SCAMBIO_CAL_TYPE)) return;
 	struct cal_folder *cf = (struct cal_folder *)data;
 	mdir_version version = new ? 0 : param.version;
 	struct cal_date start, stop;
-	char const *start_str = header_search(header, SCAMBIO_CAL_START);
+	char const *start_str = header_search(header, SCAMBIO_START);
 	if (start_str) {
 		cal_date_ctor_from_str(&start, start_str);
 		on_error return;
 	} else {
-		error("Invalid calendar message with no "SCAMBIO_CAL_START" field");
+		error("Invalid calendar message with no "SCAMBIO_START" field");
 		return;
 	}
-	char const *stop_str = header_search(header, SCAMBIO_CAL_STOP);
+	char const *stop_str = header_search(header, SCAMBIO_STOP);
 	if (stop_str) {
 		cal_date_ctor_from_str(&stop, stop_str);
 		on_error {
@@ -241,7 +261,8 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	} else {
 		stop.year = 0;
 	}
-	(void)cal_event_new(cf, &start, &stop, version);
+	char const *desc = header_search(header, SCAMBIO_DESCR_FIELD);
+	(void)cal_event_new(cf, &start, &stop, desc, version);
 	cal_date_dtor(&stop);
 	cal_date_dtor(&start);
 }

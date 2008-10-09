@@ -260,13 +260,6 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		header_add_field(h, SCAMBIO_NAME_FIELD, name);
 		on_error return;
 	}
-	char const *type = header_search(h, SCAMBIO_TYPE_FIELD);
-	if (type) {
-		if (0 != strcmp(type, SCAMBIO_DIR_TYPE)) with_error(0, "Bad header type (%s)", type) return;
-	} else {
-		header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_DIR_TYPE);
-		on_error return;
-	}
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
 	struct mdir *child;

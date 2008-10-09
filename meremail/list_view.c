@@ -31,16 +31,17 @@ static void close_cb(GtkToolButton *button, gpointer user_data)
 static void add_patch_to_store(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
 {
 	if (action != MDIR_ADD) return;
-	char const *type = header_search(header, SCAMBIO_TYPE_FIELD);
-	if (! type || 0 != strcmp(type, SCAMBIO_EMAIL_TYPE)) return;
+	char const *from = header_search(header, SCAMBIO_FROM_FIELD);
+	char const *subject = header_search(header, SCAMBIO_DESCR_FIELD);
+	if (! from || ! subject) return;	// not an email
 	
 	(void)mdir;
 	(void)new;	// TODO: add an icon to represent this
 	GtkListStore *msg_store = (GtkListStore *)data;
 	GtkTreeIter iter;
 	gtk_list_store_insert_with_values(msg_store, &iter, G_MAXINT,
-		MSG_STORE_FROM, header_search(header, SCAMBIO_EMAIL_FROM_FIELD),
-		MSG_STORE_SUBJECT, header_search(header, SCAMBIO_EMAIL_SUBJECT_FIELD),
+		MSG_STORE_FROM, from,
+		MSG_STORE_SUBJECT, subject,
 		MSG_STORE_VERSION, new ? 0 : param.version,	// 0 is never a valid version number
 		-1);
 }

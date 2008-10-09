@@ -1,5 +1,6 @@
 #include <string.h>
 #include <time.h>
+#include <assert.h>
 #include "merecal.h"
 
 /*
@@ -18,6 +19,7 @@ enum {
 };
 
 static GtkWidget *calendar;
+static GtkListStore *event_store;
 
 struct day2event {
 	TAILQ_ENTRY(day2event) entry;
@@ -46,28 +48,42 @@ static void day2event_del(struct day2event *d2e, unsigned day)
 
 static void display_event(struct cal_event *ce)
 {
-	(void)ce;	// TODO
+	char hour[5+3+5+1];
+	if (! cal_date_has_time(&ce->start)) {
+		hour[0] = '\0';
+	} else {
+		int len = snprintf(hour, sizeof(hour), "%02uh%02u", (unsigned)ce->start.hour, (unsigned)ce->start.min);
+		if (cal_date_has_time(&ce->stop)) {
+			snprintf(hour+len, sizeof(hour)-len, " - %02uh%02u", (unsigned)ce->stop.hour, (unsigned)ce->stop.min);
+		}
+	}
+	debug("adding event '%s' : '%s'", hour, ce->description);
+	GtkTreeIter iter;
+	gtk_list_store_insert_with_values(event_store, &iter, G_MAXINT,
+			FIELD_HOUR, hour,
+			FIELD_TEXT, ce->description,
+			FIELD_VERSION, ce->version,
+			-1);
 }
 
 // month or day changed, so we must refresh the event list for that day
 static void reset_day(void)
 {
-	// TODO: clear the list store
+	// Clear the list store
+	gtk_list_store_clear(GTK_LIST_STORE(event_store));
+	// Add new ones
 	guint year, month, day;
 	gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
-	struct cal_date day_start, day_stop;
-	cal_date_ctor(&day_start, year, month, 1, 0, 0);
-	cal_date_ctor(&day_stop,  year, month, 31, 23, 29);
+	debug("new day : %u %u %u", year, month+1, day);
 	struct day2event *d2e;
 	TAILQ_FOREACH(d2e, day2events+day, entry) {
 		display_event(d2e->event);
 	}
-	cal_date_dtor(&day_start);
-	cal_date_dtor(&day_stop);
 }
 
 static void select_event(struct cal_event *ce)
 {
+	debug("event '%s' selected", ce->description);
 	struct cal_date *end = cal_date_is_set(&ce->stop) ? &ce->stop : &ce->start;
 	for (
 		struct cal_date period = ce->start;
@@ -76,6 +92,7 @@ static void select_event(struct cal_event *ce)
 	) {
 		gtk_calendar_mark_day(GTK_CALENDAR(calendar), period.day);
 		day2event_new(ce, period.day);
+		debug("  and added to day %u", period.day);
 	}
 }
 
@@ -83,6 +100,7 @@ static void select_event(struct cal_event *ce)
 // day2events array, and mark the used days
 static void reset_month(void)
 {
+	debug("new month");
 	// Clean per-month datas
 	gtk_calendar_clear_marks(GTK_CALENDAR(calendar));
 	for (unsigned i=0; i<sizeof_array(day2events); i++) {
@@ -111,6 +129,20 @@ static void quit_cb(GtkToolButton *button, gpointer user_data)
 	destroy_cb(GTK_WIDGET(button), user_data);
 }
 
+static void day_changed_cb(GtkCalendar *cal, gpointer user_data)
+{
+	assert(cal == GTK_CALENDAR(calendar));
+	(void)user_data;
+	reset_day();
+}
+
+static void month_changed_cb(GtkCalendar *cal, gpointer user_data)
+{
+	assert(cal == GTK_CALENDAR(calendar));
+	(void)user_data;
+	reset_month();
+}
+
 /*
  * Build the view
  */
@@ -133,9 +165,8 @@ GtkWidget *make_cal_window(void)
 	}
 
 	GtkWidget *window = make_window(NULL);
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	
-	GtkListStore *event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, MDIR_VERSION_G_TYPE);
+	event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, MDIR_VERSION_G_TYPE);
 	GtkWidget *event_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(event_store));
 	g_object_unref(G_OBJECT(event_store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(event_list), FALSE);
@@ -143,14 +174,11 @@ GtkWidget *make_cal_window(void)
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes("Hour", renderer,
 		"text", FIELD_HOUR, NULL);
-	g_object_unref(G_OBJECT(renderer));
 	gtk_tree_view_append_column(GTK_TREE_VIEW(event_list), column);
 	renderer = gtk_cell_renderer_text_new();
 	column = gtk_tree_view_column_new_with_attributes("Description", renderer,
 		"text", FIELD_TEXT, NULL);
-	g_object_unref(G_OBJECT(renderer));
 	gtk_tree_view_append_column(GTK_TREE_VIEW(event_list), column);
-	gtk_container_add(GTK_CONTAINER(vbox), event_list);
 	
 	calendar = gtk_calendar_new();
 	GtkCalendarDisplayOptions flags = GTK_CALENDAR_SHOW_HEADING;
@@ -159,7 +187,8 @@ GtkWidget *make_cal_window(void)
 	gtk_calendar_set_detail_func(GTK_CALENDAR(calendar), cal_details, NULL, NULL);
 #	endif
 	gtk_calendar_set_display_options(GTK_CALENDAR(calendar), flags);
-	gtk_container_add(GTK_CONTAINER(vbox), calendar);
+	g_signal_connect(G_OBJECT(calendar), "day-selected",  G_CALLBACK(day_changed_cb), NULL);
+	g_signal_connect(G_OBJECT(calendar), "month-changed", G_CALLBACK(month_changed_cb), NULL);
 
 	GtkWidget *toolbar = gtk_toolbar_new();
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
@@ -169,7 +198,11 @@ GtkWidget *make_cal_window(void)
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);
 	g_signal_connect(G_OBJECT(button_close), "clicked", G_CALLBACK(quit_cb), window);
 
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
+	gtk_container_add(GTK_CONTAINER(vbox), event_list);
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
+	gtk_container_add(GTK_CONTAINER(vbox), calendar);
+	gtk_box_set_child_packing(GTK_BOX(vbox), calendar, FALSE, TRUE, 1, GTK_PACK_END);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
 
 	gtk_container_add(GTK_CONTAINER(window), vbox);

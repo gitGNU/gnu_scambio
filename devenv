@@ -38,6 +38,21 @@ sc-name: rixed
 sc-type: dir
 sc-name: project X
 
+6 put calendars/rixed
+sc-start: 2008 10 21 12 00
+sc-stop:  2008 10 21 13 00
+sc-descr: lunch time
+
+7 put calendars/rixed
+sc-start: 2008 10 21 15 00
+sc-stop:  2008 10 21 15 30
+sc-descr: meeting prod
+
+8 put calendars/rixed
+sc-start: 2008 10 21 15 30
+sc-stop:  2008 10 21 16 00
+sc-descr: meeting support
+
 999 quit
 EOF
 }
