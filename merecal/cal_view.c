@@ -129,6 +129,20 @@ static void quit_cb(GtkToolButton *button, gpointer user_data)
 	destroy_cb(GTK_WIDGET(button), user_data);
 }
 
+static void new_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	(void)user_data;
+	debug("new");
+	guint year, month, day;
+	gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
+	struct cal_date start, stop;
+	cal_date_ctor(&start, year, month, day, 99, 99);
+	cal_date_ctor(&stop,  0, month, day, 99, 99);
+	GtkWidget *win = make_edit_window(LIST_FIRST(&cal_folders), &start, &stop, "(edit)");
+	gtk_widget_show_all(win);
+}
+
 static void day_changed_cb(GtkCalendar *cal, gpointer user_data)
 {
 	assert(cal == GTK_CALENDAR(calendar));
@@ -194,6 +208,9 @@ GtkWidget *make_cal_window(void)
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_REFRESH), -1);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);	// Choose amongst available calendars (folders)
+	GtkToolItem *button_new = gtk_tool_button_new_from_stock(GTK_STOCK_NEW);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_new, -1);
+	g_signal_connect(G_OBJECT(button_new), "clicked", G_CALLBACK(new_cb), NULL);
 	GtkToolItem *button_close = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);
 	g_signal_connect(G_OBJECT(button_close), "clicked", G_CALLBACK(quit_cb), window);

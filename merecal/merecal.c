@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
@@ -51,7 +52,7 @@ void cal_date_ctor(struct cal_date *cd, guint y, guint M, guint d, guint h, guin
 	cd->hour = h;
 	cd->min = m;
 	if (! cal_date_is_set(cd)) {
-		snprintf(cd->str, sizeof(cd->str), "unset");
+		cd->str[0] = '\0';
 	} else {
 		int len = snprintf(cd->str, sizeof(cd->str), "%04u-%02u-%02u", cd->year, cd->month+1, cd->day);
 		if (cal_date_has_time(cd)) {
@@ -116,14 +117,9 @@ int cal_date_compare(struct cal_date const *a, struct cal_date const *b)
 
 struct cal_events cal_events = LIST_HEAD_INITIALIZER(&cal_events);
 
-static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
+// insert in the event list, ordered by start date
+static void cal_event_insert(struct cal_event *ce)
 {
-	ce->folder = cf;
-	ce->start = *start;
-	ce->stop = *stop;
-	if (cal_date_compare(start, stop) > 0) with_error(0, "event stop > start") return;
-	ce->version = version;
-	ce->description = descr ? strdup(descr) : NULL;
 	struct cal_event *e;
 	LIST_FOREACH(e, &cal_events, entry) {
 		if (cal_date_compare(&e->start, &ce->start) > 0) {
@@ -138,6 +134,22 @@ static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct c
 	}
 	debug("insert as first");
 	LIST_INSERT_HEAD(&cal_events, ce, entry);
+}
+
+static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
+{
+	ce->folder = cf;
+	ce->start = *start;
+	if (stop) {
+		ce->stop = *stop;
+	} else {
+		ce->stop.year = 0;
+		assert(! cal_date_is_set(&ce->stop));
+	}
+	if (cal_date_compare(&ce->start, &ce->stop) > 0) with_error(0, "event stop > start") return;
+	ce->version = version;
+	ce->description = descr ? strdup(descr) : NULL;
+	cal_event_insert(ce);
 }
 
 static struct cal_event *cal_event_new(struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
@@ -190,8 +202,8 @@ static void cal_folder_ctor(struct cal_folder *cf, char const *path)
 	debug("New cal_folder @%p for %s", cf, path);
 	int len = snprintf(cf->path, sizeof(cf->path), "%s", path);
 	if (len >= (int)sizeof(cf->path)) with_error(0, "Path too long : %s", path) return;
-	cf->short_name = cf->path + len;
-	while (cf->short_name > cf->path && *(cf->short_name-1) != '/') cf->short_name--;
+	cf->name = cf->path + len;
+	while (cf->name > cf->path && *(cf->name-1) != '/') cf->name--;
 	if_fail (cf->mdir = mdir_lookup(path)) return;
 	cf->displayed = true;	// TODO: save user prefs somewhere
 	LIST_INSERT_HEAD(&cal_folders, cf, entry);

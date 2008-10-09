@@ -6,9 +6,6 @@
 #include "scambio/header.h"
 #include "merelib.h"
 
-void refresh(void);
-GtkWidget *make_cal_window(void);
-
 /*
  * Event structure
  */
@@ -33,7 +30,7 @@ extern LIST_HEAD(cal_folders, cal_folder) cal_folders;
 struct cal_folder {
 	LIST_ENTRY(cal_folder) entry;
 	char path[PATH_MAX];
-	char *short_name;	// points onto path
+	char *name;	// points onto path
 	struct mdir *mdir;
 	bool displayed;
 };
@@ -49,5 +46,13 @@ struct cal_event {
 };
 
 void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (*cb)(struct cal_event *));
+
+/*
+ * GUI functions
+ */
+
+void refresh(void);
+GtkWidget *make_cal_window(void);
+GtkWidget *make_edit_window(struct cal_folder *, struct cal_date *start, struct cal_date *end, char const *descr);
 
 #endif

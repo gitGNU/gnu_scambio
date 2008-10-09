@@ -5,7 +5,8 @@ bin_PROGRAMS = merecal
 
 merecal_SOURCES = \
 	merecal.c \
-	cal_view.c
+	cal_view.c \
+	edit_view.c
 
 merecal_LDADD = ../merelib/libgui.la ../lib/libmdir.la ../commons/libcommons.la $(GTKS_LIBS)
 

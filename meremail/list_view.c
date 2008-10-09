@@ -19,8 +19,8 @@ enum {
 static void close_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
-	GtkWidget *window = (GtkWidget *)user_data;
 	debug("close");
+	GtkWidget *window = (GtkWidget *)user_data;
 	gtk_widget_destroy(window);
 }
 
