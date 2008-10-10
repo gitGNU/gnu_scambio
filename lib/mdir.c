@@ -347,7 +347,7 @@ static struct jnl *find_jnl(struct mdir *mdir, mdir_version version)
 {
 	struct jnl *jnl;
 	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
-		if (jnl->version <= version && jnl->version + jnl->nb_patches < version) return jnl;
+		if (jnl->version <= version && jnl->version + jnl->nb_patches > version) return jnl;
 	}
 	return NULL;
 }
@@ -361,9 +361,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 	do {
 		// If it's a removal, check the header and the deleted version
 		if (action == MDIR_REM) {
-			char const *target = header_search(header, SCAMBIO_TARGET_FIELD);
-			if (! target) with_error(0, "Rem patch lacks the target") break;
-			mdir_version to_del = mdir_str2version(target);
+			mdir_version to_del = header_target(header);
 			on_error break;
 			struct jnl *old_jnl = find_jnl(mdir, to_del);
 			on_error break;

@@ -59,6 +59,6 @@ void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (
 
 void refresh(void);
 GtkWidget *make_cal_window(void);
-GtkWidget *make_edit_window(struct cal_folder *, struct cal_date *start, struct cal_date *end, char const *descr, struct cal_event *replaced);
+GtkWidget *make_edit_window(struct cal_folder *, struct cal_date *start, struct cal_date *end, char const *descr, mdir_version replaced);
 
 #endif

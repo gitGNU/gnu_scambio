@@ -14,7 +14,7 @@
 enum {
 	FIELD_HOUR,
 	FIELD_TEXT,
-	FIELD_VERSION,
+	FIELD_EVENT,
 	NB_STORE_FIELDS
 };
 
@@ -62,7 +62,7 @@ static void display_event(struct cal_event *ce)
 	gtk_list_store_insert_with_values(event_store, &iter, G_MAXINT,
 			FIELD_HOUR, hour,
 			FIELD_TEXT, ce->description,
-			FIELD_VERSION, ce->version,
+			FIELD_EVENT, ce,
 			-1);
 }
 
@@ -138,20 +138,75 @@ static void refresh_cb(GtkToolButton *button, gpointer user_data)
 	reset_month();
 }
 
-static void new_cb(GtkToolButton *button, gpointer user_data)
+static void edit_cb(GtkToolButton *button, gpointer user_data)
 {
-	(void)button;
-	(void)user_data;
-	debug("new");
-	guint year, month, day;
-	gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
+	GtkTreeView *list = (GtkTreeView *)user_data;
+	bool const new = 0 == strcmp(gtk_tool_button_get_stock_id(button), GTK_STOCK_NEW);
+	debug("%s", new ? "new":"edit");
 	struct cal_date start, stop;
-	cal_date_ctor(&start, year, month, day, 99, 99);
-	cal_date_ctor(&stop,  0, month, day, 99, 99);
-	GtkWidget *win = make_edit_window(LIST_FIRST(&cal_folders), &start, &stop, "", NULL);
+	char *descr;
+	struct cal_folder *cf;
+	mdir_version replaced;
+	if (new) {
+		guint year, month, day;
+		gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
+		cal_date_ctor(&start, year, month, day, 99, 99);
+		cal_date_ctor(&stop,  0, month, day, 99, 99);
+		descr = "";
+		cf = LIST_FIRST(&cal_folders);
+		replaced = 0;
+	} else {	// Retrieve selected event
+		GtkTreeSelection *selection = gtk_tree_view_get_selection(list);
+		GtkTreeIter iter;
+		if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
+			error("No events selected");
+			return;
+		}
+		GValue gevent;
+		memset(&gevent, 0, sizeof(gevent));
+		gtk_tree_model_get_value(GTK_TREE_MODEL(event_store), &iter, FIELD_EVENT, &gevent);
+		struct cal_event *ce = g_value_get_pointer(&gevent);
+		g_value_unset(&gevent);
+		replaced = ce->version;
+		if (replaced == 0) {
+			alert(GTK_MESSAGE_ERROR, "Cannot edit a transient event");
+			return;
+		}
+		start = ce->start;
+		stop = ce->stop;
+		descr = ce->description;
+		cf = ce->folder;
+	}
+	GtkWidget *win = make_edit_window(cf, &start, &stop, descr, replaced);
 	// We want our view to be refreshed once the user quits the editor
 	g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(refresh_cb), NULL);
 	gtk_widget_show_all(win);
+}
+
+static void del_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	GtkTreeView *list = (GtkTreeView *)user_data;
+	GtkTreeSelection *selection = gtk_tree_view_get_selection(list);
+	GtkTreeIter iter;
+	if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
+		error("No events selected");
+		return;
+	}
+	GValue gevent;
+	memset(&gevent, 0, sizeof(gevent));
+	gtk_tree_model_get_value(GTK_TREE_MODEL(event_store), &iter, FIELD_EVENT, &gevent);
+	struct cal_event *ce = g_value_get_pointer(&gevent);
+	g_value_unset(&gevent);
+	if (ce->version == 0) {
+		alert(GTK_MESSAGE_ERROR, "Cannot delete a transient event");
+		return;
+	}
+	if (confirm("Delete this event ?")) {
+		mdir_del_request(ce->folder->mdir, ce->version);
+		refresh();
+		reset_month();
+	}
 }
 
 static void day_changed_cb(GtkCalendar *cal, gpointer user_data)
@@ -191,7 +246,7 @@ GtkWidget *make_cal_window(void)
 
 	GtkWidget *window = make_window(NULL);
 	
-	event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, MDIR_VERSION_G_TYPE);
+	event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	GtkWidget *event_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(event_store));
 	g_object_unref(G_OBJECT(event_store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(event_list), FALSE);
@@ -206,7 +261,7 @@ GtkWidget *make_cal_window(void)
 	gtk_tree_view_append_column(GTK_TREE_VIEW(event_list), column);
 	
 	calendar = gtk_calendar_new();
-	GtkCalendarDisplayOptions flags = GTK_CALENDAR_SHOW_HEADING;
+	GtkCalendarDisplayOptions flags = GTK_CALENDAR_SHOW_HEADING|GTK_CALENDAR_SHOW_DAY_NAMES|GTK_CALENDAR_SHOW_WEEK_NUMBERS;
 #	ifdef HAVE_CAL_DETAILS
 	flags |= GTK_CALENDAR_SHOW_DETAILS;
 	gtk_calendar_set_detail_func(GTK_CALENDAR(calendar), cal_details, NULL, NULL);
@@ -223,7 +278,13 @@ GtkWidget *make_cal_window(void)
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);	// Choose amongst available calendars (folders)
 	GtkToolItem *button_new = gtk_tool_button_new_from_stock(GTK_STOCK_NEW);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_new, -1);
-	g_signal_connect(G_OBJECT(button_new), "clicked", G_CALLBACK(new_cb), NULL);
+	g_signal_connect(G_OBJECT(button_new), "clicked", G_CALLBACK(edit_cb), GTK_TREE_VIEW(event_list));
+	GtkToolItem *button_edit = gtk_tool_button_new_from_stock(GTK_STOCK_EDIT);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_edit, -1);
+	g_signal_connect(G_OBJECT(button_edit), "clicked", G_CALLBACK(edit_cb), GTK_TREE_VIEW(event_list));
+	GtkToolItem *button_del = gtk_tool_button_new_from_stock(GTK_STOCK_DELETE);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_del, -1);
+	g_signal_connect(G_OBJECT(button_del), "clicked", G_CALLBACK(del_cb), GTK_TREE_VIEW(event_list));
 	GtkToolItem *button_close = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);
 	g_signal_connect(G_OBJECT(button_close), "clicked", G_CALLBACK(quit_cb), window);

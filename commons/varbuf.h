@@ -39,13 +39,13 @@ static inline void varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocat
 	vb->actual = init_size;
 	vb->relocatable = relocatable;
 	vb->buf = malloc(init_size);
-	debug("ctor @%p, size=%zu, buf=%p", vb, init_size, vb->buf);
+//	debug("ctor @%p, size=%zu, buf=%p", vb, init_size, vb->buf);
 	if (! vb->buf) with_error(ENOMEM, "Cannot malloc for varbuf") return;
 }
 
 static inline void varbuf_dtor(struct varbuf *vb)
 {
-	debug("deleting @%p", vb);
+//	debug("deleting @%p", vb);
 	free(vb->buf);
 }
 
@@ -53,7 +53,7 @@ static inline void *varbuf_unbox(struct varbuf *vb)
 {
 	// unboxing mean that the caller wants the buffer, but not the varbuf
 	// we merely returns here, since we have nothing to destruct in the varbuf.
-	debug("unboxing @%p", vb);
+//	debug("unboxing @%p", vb);
 	return vb->buf;
 }
 

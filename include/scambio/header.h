@@ -73,6 +73,8 @@ struct header *header_from_file(char const *filename);
 void header_to_file(struct header *h, char const *filename);
 bool header_has_type(struct header *h, char const *type);
 bool header_is_directory(struct header *h);
+#include "scambio/mdir.h"
+mdir_version header_target(struct header *h);
 
 #define SCAMBIO_TYPE_FIELD   "sc-type"
 #define SCAMBIO_TARGET_FIELD "sc-target"

@@ -38,7 +38,8 @@ typedef uint64_t mdir_version;
 // Do not use these but inherit from them
 struct jnl {
 	STAILQ_ENTRY(jnl) entry;
-	int patch_fd;	// to the patch file
+	int patch_fd;	// to the patch file, in append mode
+	int repatch_fd;	// to the same file, in random write mode (used for marking patches as removed)
 	int idx_fd;	// to the index file
 	mdir_version version;	// version of the first patch in this journal
 	unsigned nb_patches;	// number of patches in this file

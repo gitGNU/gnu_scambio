@@ -10,7 +10,7 @@
 struct editor {
 	GtkWidget *window, *folder_combo, *start_entry, *stop_entry;
 	GtkTextBuffer *descr_buffer;
-	struct cal_event *replaced;
+	mdir_version replaced;
 };
 
 /*
@@ -55,6 +55,17 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	(void)button;
 	assert(! is_error());
 	struct editor *e = (struct editor *)user_data;
+	// Find the folder
+	gint f = gtk_combo_box_get_active(GTK_COMBO_BOX(e->folder_combo));
+	if (f == -1) {
+		alert(GTK_MESSAGE_ERROR, "You must choose a folder");
+		return;
+	}
+	struct cal_folder *cf;
+	LIST_FOREACH(cf, &cal_folders, entry) {
+		if (0 == f--) break;
+	}
+	assert(cf);
 	// build a new header
 	struct header *h = header_new();
 	on_error return;
@@ -79,29 +90,24 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		char *descr = get_serial_text(e->descr_buffer);
 		on_error break;
 		if (descr) header_add_field(h, SCAMBIO_DESCR_FIELD, descr);
-		gint f = gtk_combo_box_get_active(GTK_COMBO_BOX(e->folder_combo));
-		if (f == -1) {
-			alert(GTK_MESSAGE_ERROR, "You must choose a folder");
-			break;
-		}
-		struct cal_folder *cf;
-		LIST_FOREACH(cf, &cal_folders, entry) {
-			if (0 == f--) break;
-		}
-		assert(cf);
 		debug("sending patch");
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);
 	} while (0);
 	header_del(h);
-	// TODO : if e->replaced, request removal
-	unless_error editor_del(e);
+	unless_error {
+		// Now that the new msg is in, remove the replaced one
+		if (e->replaced != 0) {
+			mdir_del_request(cf->mdir, e->replaced);
+		}
+		editor_del(e);
+	}
 }
 
 /*
  * Build the view
  */
 
-GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *start, struct cal_date *stop, char const *descr, struct cal_event *replaced)
+GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *start, struct cal_date *stop, char const *descr, mdir_version replaced)
 {
 	struct editor *editor = malloc(sizeof(*editor));
 	if (! editor) with_error(ENOMEM, "malloc editor") return NULL;

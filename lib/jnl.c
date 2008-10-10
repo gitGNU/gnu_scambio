@@ -114,12 +114,14 @@ static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 	int len = snprintf(path, sizeof(path), "%s/%s", mdir->path, filename);
 	jnl->patch_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
 	if (jnl->patch_fd == -1) with_error(errno, "open '%s'", path) return;
+	jnl->repatch_fd = open(path, O_RDWR);
+	if (jnl->repatch_fd == -1) with_error(errno, "open '%s'", path) goto q0;
 	memcpy(path + len - 3, "idx", 4);	// change extention
 	jnl->idx_fd = open(path, O_RDWR|O_APPEND|O_CREAT, 0660);
-	if (jnl->patch_fd == -1) with_error(errno, "open '%s'", path) goto q0;
+	if (jnl->idx_fd == -1) with_error(errno, "open '%s'", path) goto q1;
 	// get sizes
 	jnl->nb_patches = fetch_nb_patches(jnl->idx_fd);
-	on_error goto q1;
+	on_error goto q2;
 	// All is OK, insert it as a journal
 	if (STAILQ_EMPTY(&mdir->jnls)) {
 		STAILQ_INSERT_HEAD(&mdir->jnls, jnl, entry);
@@ -127,7 +129,7 @@ static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 		struct jnl *j, *prev = NULL;
 		STAILQ_FOREACH(j, &mdir->jnls, entry) {
 			if (j->version > jnl->version) break;
-			if (j->version >= jnl->version || j->version + j->nb_patches > jnl->version) with_error(0, "Bad journals in '%s'", mdir->path) goto q1;
+			if (j->version >= jnl->version || j->version + j->nb_patches > jnl->version) with_error(0, "Bad journals in '%s'", mdir->path) goto q2;
 			prev = j;
 		}
 		if (prev) {
@@ -138,8 +140,10 @@ static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 	}
 	jnl->mdir = mdir;
 	return;
-q1:
+q2:
 	(void)close(jnl->idx_fd);
+q1:
+	(void)close(jnl->repatch_fd);
 q0:
 	(void)close(jnl->patch_fd);
 }
@@ -166,6 +170,7 @@ static void may_close(int *fd)
 static void jnl_dtor(struct jnl *jnl)
 {
 	STAILQ_REMOVE(&jnl->mdir->jnls, jnl, jnl, entry);
+	may_close(&jnl->repatch_fd);
 	may_close(&jnl->patch_fd);
 	may_close(&jnl->idx_fd);
 }
@@ -231,7 +236,7 @@ void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
 	Read(&tag, jnl->patch_fd, offset, 1);
 	on_error return;
 	if (tag != '+') with_error(0, "Cannot delete version %"PRIversion" : tag is '%c'", to_del, tag) return;
-	WriteTo(jnl->patch_fd, offset, "%", 1);
+	WriteTo(jnl->repatch_fd, offset, "%", 1);
 }
 
 /*

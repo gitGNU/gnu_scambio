@@ -388,3 +388,11 @@ bool header_is_directory(struct header *h)
 {
 	return header_has_type(h, SCAMBIO_DIR_TYPE);
 }
+
+mdir_version header_target(struct header *h)
+{
+	char const *target = header_search(h, SCAMBIO_TARGET_FIELD);
+	if (! target) with_error(0, "Header lacks a target") return 0;
+	return mdir_str2version(target);
+}
+

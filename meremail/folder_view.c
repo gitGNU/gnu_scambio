@@ -53,33 +53,31 @@ static void enter_cb(GtkToolButton *button, gpointer user_data)
 	GtkTreeSelection *selection = gtk_tree_view_get_selection(tree);
 	GtkTreeIter iter;
 	if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
-		puts("No selection");
+		error("No selection");
 		return;
 	}
 	GValue gsize;
 	memset(&gsize, 0, sizeof(gsize));
 	gtk_tree_model_get_value(GTK_TREE_MODEL(folder_store), &iter, FOLDER_STORE_SIZE, &gsize);
-	do {
-		assert(G_VALUE_HOLDS_UINT(&gsize));
-		unsigned size = g_value_get_uint(&gsize);
-		if (size == 0) {
-			alert(GTK_MESSAGE_INFO, "No messages in this folder");
-			break;
-		}
-		GtkTreePath *treePath = gtk_tree_model_get_path(GTK_TREE_MODEL(folder_store), &iter);
-		char path[PATH_MAX];	// As we are going to delete this view and the whole tree
-		make_path_name_rec(path, sizeof(path), treePath);
-		gtk_tree_path_free(treePath);
-		debug("Enter list view in '%s'", path);
-		GtkWidget *new_win = make_list_window(path);
-		on_error {
-			alert(GTK_MESSAGE_ERROR, error_str());
-			error_clear();
-		} else {
-			gtk_widget_show_all(new_win);
-		}
-	} while(0);
+	assert(G_VALUE_HOLDS_UINT(&gsize));
+	unsigned size = g_value_get_uint(&gsize);
 	g_value_unset(&gsize);
+	if (size == 0) {
+		alert(GTK_MESSAGE_INFO, "No messages in this folder");
+		return;
+	}
+	GtkTreePath *treePath = gtk_tree_model_get_path(GTK_TREE_MODEL(folder_store), &iter);
+	char path[PATH_MAX];	// As we are going to delete this view and the whole tree
+	make_path_name_rec(path, sizeof(path), treePath);
+	gtk_tree_path_free(treePath);
+	debug("Enter list view in '%s'", path);
+	GtkWidget *new_win = make_list_window(path);
+	on_error {
+		alert(GTK_MESSAGE_ERROR, error_str());
+		error_clear();
+	} else {
+		gtk_widget_show_all(new_win);
+	}
 }
 
 /*

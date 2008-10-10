@@ -172,12 +172,16 @@ static int guint_compare(guint a, guint b)
 
 int cal_date_compare(struct cal_date const *a, struct cal_date const *b)
 {
-//	debug("compare %s and %s", a->str, b->str);
+	debug("compare %s and %s", a->str, b->str);
 #	define COMPARE_FIELD(f) if (a->f != b->f) return guint_compare(a->f, b->f)
 	COMPARE_FIELD(year);
 	COMPARE_FIELD(month);
 	COMPARE_FIELD(day);
-	if (! cal_date_has_time(a) || ! cal_date_has_time(b)) return 0;
+	if (! cal_date_has_time(a)) {
+		if (cal_date_has_time(b)) return -1;
+		return 0;
+	}
+	if (! cal_date_has_time(b)) return 1;
 	COMPARE_FIELD(hour);
 	COMPARE_FIELD(min);
 	return 0;
@@ -196,16 +200,16 @@ static void cal_event_insert(struct cal_event *ce)
 	struct cal_event *e;
 	LIST_FOREACH(e, &cal_events, entry) {
 		if (cal_date_compare(&e->start, &ce->start) > 0) {
-			debug("insert before this one");
+			debug("insert '%s' before '%s'", ce->description, e->description);
 			LIST_INSERT_BEFORE(e, ce, entry);
 			return;
 		} else if (! LIST_NEXT(e, entry)) {
-			debug("insert after this last one");
+			debug("insert '%s' after last one '%s'", ce->description, e->description);
 			LIST_INSERT_AFTER(e, ce, entry);
 			return;
 		}
 	}
-	debug("insert as first");
+	debug("insert '%s' as sole", ce->description);
 	LIST_INSERT_HEAD(&cal_events, ce, entry);
 }
 
@@ -241,7 +245,9 @@ static struct cal_event *cal_event_new(struct cal_folder *cf, struct cal_date co
 
 static void cal_event_dtor(struct cal_event *ce)
 {
+	debug("%s", ce->description);
 	LIST_REMOVE(ce, entry);
+	if (ce->version == 0) LIST_REMOVE(ce, new_entry);
 	cal_date_dtor(&ce->start);
 	cal_date_dtor(&ce->stop);
 	if (ce->description) free(ce->description);
@@ -334,7 +340,19 @@ static void cal_folder_del(struct cal_folder *cf)
 static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
 {
 	(void)mdir;
-	if (action != MDIR_ADD) return;
+	if (action == MDIR_REM) {
+		mdir_version target = header_target(header);
+		on_error return;
+		struct cal_event *ce, *tmp;
+		LIST_FOREACH_SAFE(ce, &cal_events, entry, tmp) {
+			if (ce->folder->mdir == mdir && ce->version && ce->version == target) {
+				cal_event_del(ce);
+				break;
+			}
+		}
+		return;
+	}
+	assert(action == MDIR_ADD);
 	struct cal_folder *cf = (struct cal_folder *)data;
 	mdir_version version = new ? 0 : param.version;
 	struct cal_date start, stop;
