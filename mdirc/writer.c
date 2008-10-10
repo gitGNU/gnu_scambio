@@ -87,7 +87,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	}
 	// Synchronize up its content
 	debug("list patches");
-	mdir_patch_list(&mdirc->mdir, true, ls_patch, path);
+	mdir_patch_list(&mdirc->mdir, 0, true, ls_patch, path);
 	on_error return;
 	// Recurse
 	debug("list folders");

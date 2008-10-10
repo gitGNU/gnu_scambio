@@ -36,7 +36,6 @@ static void add_patch_to_store(struct mdir *mdir, struct header *header, enum md
 	if (! from || ! subject) return;	// not an email
 	
 	(void)mdir;
-	(void)new;	// TODO: add an icon to represent this
 	GtkListStore *msg_store = (GtkListStore *)data;
 	GtkTreeIter iter;
 	gtk_list_store_insert_with_values(msg_store, &iter, G_MAXINT,
@@ -56,7 +55,7 @@ GtkWidget *make_list_window(char const *folder)
 	// The list of messages
 	GtkListStore *msg_store = gtk_list_store_new(NB_MSG_STORES, G_TYPE_STRING, G_TYPE_STRING, MDIR_VERSION_G_TYPE);
 	// Fill this store
-	mdir_patch_list(mdir, false, add_patch_to_store, msg_store);
+	mdir_patch_list(mdir, 0, false, add_patch_to_store, msg_store);
 	
 	GtkWidget *msg_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(msg_store));
 	g_object_unref(G_OBJECT(msg_store));

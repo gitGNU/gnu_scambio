@@ -67,16 +67,17 @@ static void mdir_free_default(struct mdir *mdir)
  * mdir creation
  */
 
-// path must be mdir_root + "/" + id
-static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
+static void mdir_empty(struct mdir *mdir)
 {
-	snprintf(mdir->path, sizeof(mdir->path), "%s/%s", mdir_root, id);
-	if (create) {
-		Mkdir(mdir->path);
-		on_error return;
+	struct jnl *jnl;
+	while (NULL != (jnl = STAILQ_FIRST(&mdir->jnls))) {
+		jnl_del(jnl);
 	}
-	(void)pth_rwlock_init(&mdir->rwlock);	// FIXME: if this can schedule some other thread, we need to prevent addition of the same dir twice
-	STAILQ_INIT(&mdir->jnls);
+}
+
+static void mdir_reload(struct mdir *mdir)
+{
+	mdir_empty(mdir);
 	// Find journals
 	DIR *d = opendir(mdir->path);
 	if (! d) with_error(errno, "opendir %s", mdir->path) return;
@@ -88,6 +89,19 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 		}
 	}
 	if (0 != closedir(d)) error_push(errno, "Cannot closedir %s", mdir->path);
+}
+
+// path must be mdir_root + "/" + id
+static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
+{
+	snprintf(mdir->path, sizeof(mdir->path), "%s/%s", mdir_root, id);
+	if (create) {
+		Mkdir(mdir->path);
+		on_error return;
+	}
+	(void)pth_rwlock_init(&mdir->rwlock);	// FIXME: if this can schedule some other thread, we need to prevent addition of the same dir twice
+	STAILQ_INIT(&mdir->jnls);
+	mdir_reload(mdir);
 	unless_error LIST_INSERT_HEAD(&mdirs, mdir, entry);
 }
 
@@ -118,10 +132,7 @@ static void mdir_dtor(struct mdir *mdir)
 {
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);
 	LIST_REMOVE(mdir, entry);
-	struct jnl *jnl;
-	while (NULL != (jnl = STAILQ_FIRST(&mdir->jnls))) {
-		jnl_del(jnl);
-	}
+	mdir_empty(mdir);
 	pth_rwlock_release(&mdir->rwlock);
 }
 
@@ -417,21 +428,48 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
  * List
  */
 
-void mdir_patch_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool, union mdir_list_param, void *), void *data)
+static mdir_version get_target(struct header *h)
 {
+	char const *target_str = header_search(h, SCAMBIO_TARGET_FIELD);
+	if (! target_str) with_error(0, "Removal patch with no target ?") return 0;
+	return mdir_str2version(target_str);
+}
+
+void mdir_patch_list(struct mdir *mdir, mdir_version from, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool, union mdir_list_param, void *), void *data)
+{
+	mdir_reload(mdir);	// journals may have changed, other appended
+	debug("listing from version %"PRIversion" %s", from, new_only ? "(new only)":"");
 	struct jnl *jnl;
 	if (! new_only) {
 		// List content of journals
 		debug("listing journal");
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
-			for (unsigned index=0; index < jnl->nb_patches; index++) {
+			if (jnl->version + jnl->nb_patches <= from) {
+				debug("  jnl starting at %"PRIversion" too short (%u)", jnl->version, jnl->nb_patches);
+				continue;
+			}
+			for (
+				unsigned index = from <= jnl->version ? 0:from - jnl->version;
+				index < jnl->nb_patches; index++)
+			{
 				enum mdir_action action;
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
-				if (h) {
-					cb(mdir, h, action, true, (union mdir_list_param){ .version = jnl->version + index }, data);
-					header_del(h);
+				if (! h) continue;
+				bool skip = false;
+				if (action == MDIR_REM) {	// don't report removals of patches we did not report
+					mdir_version target = get_target(h);
+					on_error {
+						error_clear();
+						skip = true;
+					} else if (target >= from) {
+						skip = true;
+					}
 				}
+				if (! skip) {
+					cb(mdir, h, action, false, (union mdir_list_param){ .version = jnl->version + index }, data);
+				}
+				header_del(h);
 				on_error return;
 			}
 		}
@@ -449,6 +487,7 @@ void mdir_patch_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *,
 	struct dirent *dirent;
 	while (NULL != (dirent = readdir(dir))) {
 		char const *const filename = dirent->d_name;
+		debug("  considering '%s'", filename);
 		// patch files start with the action code '+' or '-'.
 		enum mdir_action action;
 		if (filename[0] == '+') action = MDIR_ADD;
@@ -472,6 +511,7 @@ void mdir_patch_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *,
 				continue;
 			}
 			if (new_only) continue;
+			if (version < from) continue;
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
@@ -583,6 +623,6 @@ static void count_patch(struct mdir *mdir, struct header *header, enum mdir_acti
 unsigned mdir_size(struct mdir *mdir)
 {
 	unsigned size = 0;
-	mdir_patch_list(mdir, false, count_patch, &size);
+	mdir_patch_list(mdir, 0, false, count_patch, &size);
 	return size;
 }

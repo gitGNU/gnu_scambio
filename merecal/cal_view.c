@@ -129,6 +129,15 @@ static void quit_cb(GtkToolButton *button, gpointer user_data)
 	destroy_cb(GTK_WIDGET(button), user_data);
 }
 
+static void refresh_cb(GtkToolButton *button, gpointer user_data)
+{
+	debug("refresh");
+	(void)button;
+	(void)user_data;
+	refresh();
+	reset_month();
+}
+
 static void new_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
@@ -140,6 +149,8 @@ static void new_cb(GtkToolButton *button, gpointer user_data)
 	cal_date_ctor(&start, year, month, day, 99, 99);
 	cal_date_ctor(&stop,  0, month, day, 99, 99);
 	GtkWidget *win = make_edit_window(LIST_FIRST(&cal_folders), &start, &stop, "", NULL);
+	// We want our view to be refreshed once the user quits the editor
+	g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(refresh_cb), NULL);
 	gtk_widget_show_all(win);
 }
 
@@ -206,7 +217,9 @@ GtkWidget *make_cal_window(void)
 
 	GtkWidget *toolbar = gtk_toolbar_new();
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_REFRESH), -1);
+	GtkToolItem *button_refresh = gtk_tool_button_new_from_stock(GTK_STOCK_REFRESH);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_refresh, -1);
+	g_signal_connect(G_OBJECT(button_refresh), "clicked", G_CALLBACK(refresh_cb), NULL);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);	// Choose amongst available calendars (folders)
 	GtkToolItem *button_new = gtk_tool_button_new_from_stock(GTK_STOCK_NEW);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_new, -1);

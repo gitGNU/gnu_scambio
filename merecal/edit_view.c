@@ -118,20 +118,17 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 		if (cf == default_cf) gtk_combo_box_set_active(GTK_COMBO_BOX(editor->folder_combo), i);
 		i++;
 	}
-	GtkWidget *folder_hbox = make_labeled_hbox("Folder :", editor->folder_combo);
-
+	
 	// Then two date editors (text inputs), the second one being optional
-	GtkWidget *table = gtk_table_new(2, 2, FALSE);
-	GtkWidget *start_label = gtk_label_new("From :");
-	gtk_table_attach(GTK_TABLE(table), start_label, 0, 1, 0, 1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 1, 1);
 	editor->start_entry = gtk_entry_new_with_max_length(100);
 	gtk_entry_set_text(GTK_ENTRY(editor->start_entry), start->str);
-	gtk_table_attach(GTK_TABLE(table), editor->start_entry, 1, 2, 0, 1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 1, 1);
-	GtkWidget *stop_label = gtk_label_new("To :");
-	gtk_table_attach(GTK_TABLE(table), stop_label, 0, 1, 1, 2, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 1, 1);
 	editor->stop_entry = gtk_entry_new_with_max_length(100);
 	gtk_entry_set_text(GTK_ENTRY(editor->stop_entry), stop->str);
-	gtk_table_attach(GTK_TABLE(table), editor->stop_entry, 1, 2, 1, 2, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 1, 1);
+
+	GtkWidget *table = make_labeled_hboxes(3,
+		"Folder :", editor->folder_combo,
+		"From :", editor->start_entry,
+		"To :", editor->stop_entry);
 	
 	// Then a text editor for the description
 	GtkWidget *descr_text = gtk_text_view_new();
@@ -148,12 +145,10 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	g_signal_connect(G_OBJECT(button_ok), "clicked", G_CALLBACK(send_cb), editor);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
-	gtk_container_add(GTK_CONTAINER(vbox), folder_hbox);
 	gtk_container_add(GTK_CONTAINER(vbox), table);
 	gtk_container_add(GTK_CONTAINER(vbox), descr_text);
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
-	gtk_box_set_child_packing(GTK_BOX(vbox), folder_hbox, FALSE, TRUE, 1, GTK_PACK_START);
 	gtk_box_set_child_packing(GTK_BOX(vbox), table, FALSE, TRUE, 1, GTK_PACK_START);
 	gtk_box_set_child_packing(GTK_BOX(vbox), descr_text, TRUE, TRUE, 1, GTK_PACK_START);
 

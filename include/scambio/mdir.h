@@ -120,7 +120,7 @@ union mdir_list_param {
 	mdir_version version;	// if not new (ie. not on server yet)
 	char const *path;	// if new
 };
-void mdir_patch_list(struct mdir *, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, union mdir_list_param, void *data), void *data);
+void mdir_patch_list(struct mdir *, mdir_version from, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, union mdir_list_param, void *data), void *data);
 
 // returns only the symlinks.
 void mdir_folder_list(struct mdir *, bool new_only, void (*cb)(struct mdir *parent, struct mdir *child, bool new, char const *name, void *data), void *data);

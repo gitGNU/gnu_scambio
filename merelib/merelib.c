@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
@@ -60,7 +61,7 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 {
 	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), "MereMail "VERSION);
-	gtk_window_set_default_size(GTK_WINDOW(win), 200, 450);
+	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
 	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
 	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), NULL);
 	return win;
@@ -75,4 +76,18 @@ GtkWidget *make_labeled_hbox(char const *label_text, GtkWidget *other)
 	gtk_box_set_child_packing(GTK_BOX(hbox), label, FALSE, FALSE, 1, GTK_PACK_START);
 	gtk_box_set_child_packing(GTK_BOX(hbox), other, TRUE, TRUE, 1, GTK_PACK_END);
 	return hbox;
+}
+
+GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...)
+{
+	va_list ap;
+	va_start(ap, nb_rows);
+	GtkWidget *table = gtk_table_new(2, nb_rows, FALSE);
+	for (unsigned r=0; r<nb_rows; r++) {
+		GtkWidget *label = gtk_label_new(va_arg(ap, char const *));
+		gtk_table_attach(GTK_TABLE(table), label, 0, 1, r, r+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 1, 1);
+		gtk_table_attach(GTK_TABLE(table), va_arg(ap, GtkWidget *), 1, 2, r, r+1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 1, 1);
+	}
+	va_end(ap);
+	return table;
 }

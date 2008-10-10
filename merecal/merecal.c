@@ -219,6 +219,12 @@ static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct c
 	ce->version = version;
 	ce->description = descr ? strdup(descr) : NULL;
 	cal_event_insert(ce);
+	on_error return;
+	if (0 == ce->version) {	// not synchronized yet
+		LIST_INSERT_HEAD(&cf->new_events, ce, new_entry);
+	} else if (cf->last_version < ce->version) {
+		cf->last_version = ce->version;
+	}
 }
 
 static struct cal_event *cal_event_new(struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
@@ -278,9 +284,11 @@ static void cal_folder_ctor(struct cal_folder *cf, char const *path)
 	int len = snprintf(cf->path, sizeof(cf->path), "%s", path);
 	if (len >= (int)sizeof(cf->path)) with_error(0, "Path too long : %s", path) return;
 	cf->name = cf->path + len;
+	cf->last_version = 0;
 	while (cf->name > cf->path && *(cf->name-1) != '/') cf->name--;
 	if_fail (cf->mdir = mdir_lookup(path)) return;
 	cf->displayed = true;	// TODO: save user prefs somewhere
+	LIST_INIT(&cf->new_events);
 	LIST_INSERT_HEAD(&cal_folders, cf, entry);
 }
 
@@ -296,6 +304,7 @@ static struct cal_folder *cal_folder_new(char const *path)
 	return cf;
 }
 
+#if 0
 static void cal_folder_del_events(struct cal_folder *cf)
 {
 	struct cal_event *ce, *tmp;
@@ -304,7 +313,6 @@ static void cal_folder_del_events(struct cal_folder *cf)
 	}
 }
 
-#if 0
 static void cal_folder_dtor(struct cal_folder *cf)
 {
 	cal_folder_del_events(cf);
@@ -357,9 +365,14 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 
 static void refresh_folder(struct cal_folder *cf)
 {
-	cal_folder_del_events(cf);
-	on_error return;
-	mdir_patch_list(cf->mdir, false, add_event_cb, cf);
+	debug("refreshing folder %s", cf->name);
+	// First we delete all the events that were not versionned yet
+	struct cal_event *ce;
+	while (NULL != (ce = LIST_FIRST(&cf->new_events))) {
+		cal_event_del(ce);
+	}
+	// Then we ask for the newer or not synched events
+	mdir_patch_list(cf->mdir, cf->last_version+1, false, add_event_cb, cf);
 }
 
 void refresh(void)
