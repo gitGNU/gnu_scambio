@@ -76,13 +76,12 @@ GtkWidget *make_list_window(char const *folder)
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
 	
-	GtkWidget *toolbar = gtk_toolbar_new();
-	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DIRECTORY), -1);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_EDIT), -1);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_JUMP_TO), -1);	// poor man's forward
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DELETE), -1);	// the confirmation will ask if this is a spam and report it accordingly
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);
+	GtkWidget *toolbar = make_toolbar(5,
+		GTK_STOCK_DIRECTORY, NULL, NULL,
+		GTK_STOCK_EDIT,      NULL, NULL,
+		GTK_STOCK_JUMP_TO,   NULL, NULL,
+		GTK_STOCK_DELETE,    NULL, NULL,
+		GTK_STOCK_FIND,      NULL, NULL);
 
 	GtkToolItem *button_close = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);

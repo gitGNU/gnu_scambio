@@ -99,3 +99,21 @@ GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...)
 	va_end(ap);
 	return table;
 }
+
+GtkWidget *make_toolbar(unsigned nb_buttons, ...)
+{
+	va_list ap;
+	va_start(ap, nb_buttons);
+	GtkWidget *toolbar = gtk_toolbar_new();
+	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
+	while (nb_buttons--) {
+		const gchar *stock_id = va_arg(ap, const gchar *);
+		void (*cb)(void) = va_arg(ap, void (*)(void));
+		gpointer data = va_arg(ap, gpointer);
+		GtkToolItem *button = gtk_tool_button_new_from_stock(stock_id);
+		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
+		if (cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(cb), data);
+	}
+	va_end(ap);
+	return toolbar;
+}

@@ -270,24 +270,13 @@ GtkWidget *make_cal_window(void)
 	g_signal_connect(G_OBJECT(calendar), "day-selected",  G_CALLBACK(day_changed_cb), NULL);
 	g_signal_connect(G_OBJECT(calendar), "month-changed", G_CALLBACK(month_changed_cb), NULL);
 
-	GtkWidget *toolbar = gtk_toolbar_new();
-	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
-	GtkToolItem *button_refresh = gtk_tool_button_new_from_stock(GTK_STOCK_REFRESH);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_refresh, -1);
-	g_signal_connect(G_OBJECT(button_refresh), "clicked", G_CALLBACK(refresh_cb), NULL);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_FIND), -1);	// Choose amongst available calendars (folders)
-	GtkToolItem *button_new = gtk_tool_button_new_from_stock(GTK_STOCK_NEW);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_new, -1);
-	g_signal_connect(G_OBJECT(button_new), "clicked", G_CALLBACK(edit_cb), GTK_TREE_VIEW(event_list));
-	GtkToolItem *button_edit = gtk_tool_button_new_from_stock(GTK_STOCK_EDIT);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_edit, -1);
-	g_signal_connect(G_OBJECT(button_edit), "clicked", G_CALLBACK(edit_cb), GTK_TREE_VIEW(event_list));
-	GtkToolItem *button_del = gtk_tool_button_new_from_stock(GTK_STOCK_DELETE);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_del, -1);
-	g_signal_connect(G_OBJECT(button_del), "clicked", G_CALLBACK(del_cb), GTK_TREE_VIEW(event_list));
-	GtkToolItem *button_close = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);
-	g_signal_connect(G_OBJECT(button_close), "clicked", G_CALLBACK(quit_cb), window);
+	GtkWidget *toolbar = make_toolbar(6,
+		GTK_STOCK_REFRESH, refresh_cb, NULL,
+		GTK_STOCK_FIND,    NULL,       NULL,
+		GTK_STOCK_NEW,     edit_cb,    GTK_TREE_VIEW(event_list),
+		GTK_STOCK_EDIT,    edit_cb,    GTK_TREE_VIEW(event_list),
+		GTK_STOCK_DELETE,  del_cb,     GTK_TREE_VIEW(event_list),
+		GTK_STOCK_QUIT,    quit_cb,    window);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(vbox), event_list);

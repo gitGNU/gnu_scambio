@@ -138,15 +138,11 @@ GtkWidget *make_folder_window(char const *parent)
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 	gtk_container_add(GTK_CONTAINER(vbox), folder_tree);
 	
-	GtkWidget *toolbar = gtk_toolbar_new();
-	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
-	
-	GtkToolItem *button_enter = gtk_tool_button_new_from_stock(GTK_STOCK_OK);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_enter, -1);	// enter list view
-	g_signal_connect(G_OBJECT(button_enter), "clicked", G_CALLBACK(enter_cb), GTK_TREE_VIEW(folder_tree));
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_ADD), -1);	// create a new folder
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_DELETE), -1);	// delete a folder
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_tool_button_new_from_stock(GTK_STOCK_REFRESH), -1);	// refresh ?
+	GtkWidget *toolbar = make_toolbar(4,
+		GTK_STOCK_OK,      enter_cb, GTK_TREE_VIEW(folder_tree),
+		GTK_STOCK_ADD,     NULL,     NULL,
+		GTK_STOCK_DELETE,  NULL,     NULL,
+		GTK_STOCK_REFRESH, NULL,     NULL);
 
 	GtkToolItem *button_quit = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_quit, -1);
