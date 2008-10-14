@@ -141,4 +141,17 @@ enum mdir_action mdir_str2action(char const *str);
 bool mdir_is_transient(struct mdir *mdir);
 unsigned mdir_size(struct mdir *);
 
+/*
+ * Files/Channels
+ */
+
+struct channel;
+struct channel *channel_new(int fd);	// fd is optionnal (for persistent channel only)
+char const *channel_name(struct channel *);
+
+void mdir_file_create(char *name, size_t max_size);
+struct channel *mdir_file_open(char *name);
+void mdir_file_write(int fd, int in, off_t offset, size_t length);
+void mdir_file_read(int fd, int out, off_t offset, size_t length);
+
 #endif

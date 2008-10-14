@@ -198,10 +198,10 @@ static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 	struct index_entry ie[2];
 	if (size) *size = 0;
 	if (index < jnl->nb_patches - 1) {	// can read 2 entires
-		Read(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
+		ReadFrom(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
 		on_error return 0;
 	} else {	// at end of index file, will need log file size
-		Read(ie, jnl->idx_fd, index*sizeof(*ie), 1*sizeof(*ie));
+		ReadFrom(ie, jnl->idx_fd, index*sizeof(*ie), 1*sizeof(*ie));
 		on_error return 0;
 		ie[1].offset = filesize(jnl->patch_fd);
 		on_error return 0;
@@ -233,7 +233,7 @@ void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
 	off_t offset = jnl_offset_size(jnl, to_del - jnl->version, NULL);
 	on_error return;
 	char tag;
-	Read(&tag, jnl->patch_fd, offset, 1);
+	ReadFrom(&tag, jnl->patch_fd, offset, 1);
 	on_error return;
 	if (tag != '+') with_error(0, "Cannot delete version %"PRIversion" : tag is '%c'", to_del, tag) return;
 	WriteTo(jnl->repatch_fd, offset, "%", 1);
@@ -254,7 +254,7 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 	char *buf = malloc(size+1);
 	if (! buf) with_error(ENOMEM, "malloc %zu bytes", size) return NULL;
 	do {
-		Read(buf, jnl->patch_fd, offset, size);
+		ReadFrom(buf, jnl->patch_fd, offset, size);
 		buf[size] = '\0';
 		on_error break;
 		if (buf[1] != '\n' || buf[size-2] != '\n' || buf [size-1] != '\n') with_error(0, "Invalid patch @%lu", (unsigned long)offset) break;

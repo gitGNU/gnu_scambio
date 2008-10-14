@@ -8,9 +8,9 @@ export MERELIB_LOG_LEVEL=5
 export SMTPD_PORT=1025
 
 function auth_user {
-	dir=$1
+	path=$1
 	name=$2
-	cat > $dir/$name <<EOF
+	cat > $path/$name <<EOF
 key: 1234567890DEADBEAF
 method: 3des
 
@@ -26,6 +26,7 @@ function auth_users {
 function run_server {
 	export MDIR_ROOT_DIR=/tmp/mdird
 	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
+	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/files
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_MAX_JNL_SIZE=30
 	rm -f /tmp/mdird.log
@@ -87,6 +88,7 @@ function run_client {
 	export MDIRC_LOG_LEVEL=5
 	export MDIR_ROOT_DIR=/tmp/mdirc
 	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
+	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/files
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_MAX_JNL_SIZE=10
 	rm -f /tmp/mdirc.log

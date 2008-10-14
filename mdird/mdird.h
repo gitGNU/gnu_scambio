@@ -49,5 +49,7 @@ void exec_unsub(struct cnx_env *, long long seq, char const *dir);
 void exec_put  (struct cnx_env *, long long seq, char const *dir);
 void exec_rem  (struct cnx_env *, long long seq, char const *dir);
 void exec_quit (struct cnx_env *, long long seq);
+void exec_creat(struct cnx_env *, long long seq);
+void exec_chan (struct cnx_env *, long long seq);
 
 #endif

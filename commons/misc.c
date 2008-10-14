@@ -56,14 +56,29 @@ void Write_strs(int fd, ...)
 	va_end(ap);
 }
 
-void Read(void *buf, int fd, off_t offset, size_t len)
+void ReadFrom(void *buf, int fd, off_t offset, size_t len)
 {
-	debug("Read(%p, %d, %zu)", buf, fd, len);
+	debug("ReadFrom(%p, %d, %zu)", buf, fd, len);
 	size_t done = 0;
 	while (done < len) {
 		ssize_t ret = pth_pread(fd, buf + done, len - done, offset + done);
 		if (ret < 0) {
 			if (errno != EINTR) with_error(errno, "Cannot pth_pread") return;
+			continue;
+		}
+		done += ret;
+	}
+	assert(done == len);
+}
+
+void Read(void *buf, int fd, size_t len)
+{
+	debug("Read(%p, %d, %zu)", buf, fd, len);
+	size_t done = 0;
+	while (done < len) {
+		ssize_t ret = pth_read(fd, buf + done, len - done);
+		if (ret < 0) {
+			if (errno != EINTR) with_error(errno, "Cannot pth_read") return;
 			continue;
 		}
 		done += ret;

@@ -87,7 +87,7 @@ void exec_unsub(struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing UNSUB for '%s'", dir);
 	if (! env->user) {
-		answer(env, seq, "SUB", 401, "No auth");
+		answer(env, seq, "UNSUB", 401, "No auth");
 		return;
 	}
 	struct subscription *sub = subscription_find(env, dir);
@@ -117,7 +117,7 @@ static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_
 {
 	debug("doing %s in '%s'", cmdtag, dir);
 	if (! env->user) {
-		answer(env, seq, "SUB", 401, "No auth");
+		answer(env, seq, cmdtag, 401, "No auth");
 		return;
 	}
 	struct header *h;
@@ -169,3 +169,33 @@ void exec_auth(struct cnx_env *env, long long seq, char const *name)
 	answer(env, seq, "AUTH", is_error() ? 500:200, is_error() ? error_str():"OK");
 	error_clear();
 }
+
+/*
+ * File/Channel operations
+ */
+
+void exec_creat(struct cnx_env *env, long long seq)
+{
+	debug("doing creat");
+	if (! env->user) {
+		answer(env, seq, "CREAT", 401, "No auth");
+		return;
+	}
+	char name[PATH_MAX];
+	mdir_file_create(name, sizeof(name));
+	answer(env, seq, "CREAT", is_error() ? 500:200, is_error() ? error_str():name);
+	error_clear();
+}
+
+void exec_chan(struct cnx_env *env, long long seq)
+{
+	debug("doing chan");
+	if (! env->user) {
+		answer(env, seq, "CHAN", 401, "No auth");
+		return;
+	}
+	struct channel *chan = channel_new();
+	answer(env, seq, "CHAN", is_error() ? 500:200, is_error() ? error_str():channel_name(chan));
+	error_clear();
+}
+

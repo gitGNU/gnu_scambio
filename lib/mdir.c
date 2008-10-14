@@ -30,11 +30,11 @@
 #include "scambio/header.h"
 #include "scambio/mdir.h"
 #include "varbuf.h"
-#include "log.h"
 #include "misc.h"
 #include "digest.h"
 #include "persist.h"
 #include "jnl.h"
+#include "channel.h"
 
 /*
  * Data Definitions
@@ -195,8 +195,8 @@ void mdir_begin(void)
 	conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir");
 	conf_set_default_str("MDIR_DIRSEQ", "/tmp/.dirid.seq");
 	on_error return;
-	jnl_begin();
-	on_error return;
+	if_fail (jnl_begin()) return;
+	if_fail (mdir_channel_begin()) return;
 	// Inits
 	LIST_INIT(&mdirs);
 	mdir_root = conf_get_str("MDIR_ROOT_DIR");
