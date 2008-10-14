@@ -39,13 +39,11 @@ struct registered_cmd {
 	enum cmd_arg_type types[CMD_MAX_ARGS];
 };
 
-static LIST_HEAD(rcmds, registered_cmd) rcmds;
-
 /*
  * Command (un)registration
  */
 
-static void rcmd_ctor(struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
+static void rcmd_ctor(struct cmd_parser *cmdp, struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
 {
 	reg->keyword = keyword;
 	reg->nb_arg_min = nb_arg_min;
@@ -56,7 +54,7 @@ static void rcmd_ctor(struct registered_cmd *reg, char const *keyword, unsigned 
 		if (reg->nb_types >= sizeof_array(reg->types)) with_error(E2BIG, "Too many commands") return;
 		reg->types[ reg->nb_types++ ] = type;
 	}
-	LIST_INSERT_HEAD(&rcmds, reg, entry);	// will shadow previously registered keywords
+	LIST_INSERT_HEAD(&cmdp->rcmds, reg, entry);	// will shadow previously registered keywords
 }
 
 static void rcmd_dtor(struct registered_cmd *reg)
@@ -64,11 +62,11 @@ static void rcmd_dtor(struct registered_cmd *reg)
 	LIST_REMOVE(reg, entry);
 }
 
-static struct registered_cmd *rcmd_new(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
+static struct registered_cmd *rcmd_new(struct cmd_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
 {
 	struct registered_cmd *reg = malloc(sizeof(*reg));
 	if (! reg) with_error(ENOMEM, "Cannot alloc cmd") return NULL;
-	rcmd_ctor(reg, keyword, nb_arg_min, nb_arg_max, ap);
+	rcmd_ctor(cmdp, reg, keyword, nb_arg_min, nb_arg_max, ap);
 	on_error {
 		free(reg);
 		return NULL;
@@ -82,18 +80,18 @@ static void rcmd_del(struct registered_cmd *reg)
 	free(reg);
 }
 
-void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...)
+void cmd_register_keyword(struct cmd_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...)
 {
 	va_list ap;
 	va_start(ap, nb_arg_max);
-	(void)rcmd_new(keyword, nb_arg_min, nb_arg_max, ap);
+	(void)rcmd_new(cmdp, keyword, nb_arg_min, nb_arg_max, ap);
 	va_end(ap);
 }
 
-void cmd_unregister_keyword(char const *keyword)
+void cmd_unregister_keyword(struct cmd_parser *cmdp, char const *keyword)
 {
 	struct registered_cmd *reg, *tmp;
-	LIST_FOREACH_SAFE(reg, &rcmds, entry, tmp) {
+	LIST_FOREACH_SAFE(reg, &cmdp->rcmds, entry, tmp) {
 		if (reg->keyword == keyword) {
 			rcmd_del(reg);
 			break;	// removes only the topmost matching keyword, so that shadowed keywords are still there
@@ -105,15 +103,15 @@ void cmd_unregister_keyword(char const *keyword)
  * (De)Initialization
  */
 
-void cmd_begin(void)
+void cmd_parser_ctor(struct cmd_parser *cmdp)
 {
-	LIST_INIT(&rcmds);
+	LIST_INIT(&cmdp->rcmds);
 }
 
-void cmd_end(void)
+void cmd_parser_dtor(struct cmd_parser *cmdp)
 {
 	struct registered_cmd *reg;
-	while (NULL != (reg = LIST_FIRST(&rcmds))) {
+	while (NULL != (reg = LIST_FIRST(&cmdp->rcmds))) {
 		rcmd_del(reg);
 	}
 }
@@ -186,7 +184,7 @@ static int read_seq(long long *seq, char const *str)
 	return 0;
 }
 
-static void parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
+static void parse_line(struct cmd_parser *cmdp, struct cmd *cmd, struct varbuf *vb, int fd)
 {
 	varbuf_clean(vb);
 	varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL);
@@ -203,7 +201,7 @@ static void parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
 	cmd->seq = -1;
 	if (with_seq && read_seq(&cmd->seq, tokens[0].val.string) && is_error()) return;
 	struct registered_cmd *reg;
-	LIST_FOREACH(reg, &rcmds, entry) {
+	LIST_FOREACH(reg, &cmdp->rcmds, entry) {
 		if (same_keyword(reg->keyword, keyword)) {
 			build_cmd(cmd, reg, nb_args, args);	// will check args types and number, and convert some args from string to integer, and copy nb_args and keyword
 			return;
@@ -212,14 +210,14 @@ static void parse_line(struct cmd *cmd, struct varbuf *vb, int fd)
 	with_error(ENOENT, "No such keyword '%s'", keyword) return;
 }
 
-void cmd_read(struct cmd *cmd, int fd)
+void cmd_read(struct cmd_parser *cmdp, struct cmd *cmd, int fd)
 {
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
 	on_error return;
 	cmd->keyword = NULL;
 	while (! cmd->keyword) {
-		parse_line(cmd, &vb, fd);
+		parse_line(cmdp, cmd, &vb, fd);
 		on_error break;
 	}
 	varbuf_dtor(&vb);

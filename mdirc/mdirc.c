@@ -76,18 +76,20 @@ static void mdirc_free(struct mdir *mdir)
  * and the writer once the connection is ready.
  */
 
+struct cmd_parser parser;
+
 static void client_end(void)
 {
 	writer_end();
 	reader_end();
 	mdir_end();
-	cmd_end();
+	cmd_parser_dtor(&parser);
 }
 
 static void client_begin(void)
 {
 	debug("init client lib");
-	cmd_begin();
+	cmd_parser_ctor(&parser);
 	on_error return;
 	mdir_begin();
 	on_error goto q0;
@@ -106,7 +108,7 @@ q2:
 q1:
 	mdir_end();
 q0:
-	cmd_end();
+	cmd_parser_dtor(&parser);
 }
 static void init_conf(void)
 {

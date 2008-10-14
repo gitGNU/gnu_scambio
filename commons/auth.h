@@ -29,6 +29,19 @@
  * It would be a good idea to compress the flow _before_ encrypting.
  * Also, the same keys should serve to discuss with the file server(s), which then
  * must also know all users keys.
+ *
+ * Some special users have no key but an alias list : they are equivalent to unix
+ * groups.
+ * Also every directory have an optional .write and .read files describing who can(not)
+ * write or read this directory. This is a list of allow/deny commands followed by a
+ * list of users, ended by an implied allow all or deny all depending on the global
+ * policy, which is a parameter of mdird (thus when there is no file at all the
+ * write/read rights is given by global policy).
+ * Beware that the conf must be preparsed but renewed whenever a file change, including
+ * a user group file - so the groups must not be expended or the dependancy over the
+ * group file will be missed.
  */
+
+#define USRDIR "users"
 
 #endif

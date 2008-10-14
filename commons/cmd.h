@@ -47,13 +47,18 @@ struct cmd {
 	struct cmd_arg args[CMD_MAX_ARGS];
 };
 
-void cmd_begin(void);
+struct registered_cmd;
+struct cmd_parser {
+	LIST_HEAD(rcmds, registered_cmd) rcmds;
+};
+
+void cmd_parser_ctor(struct cmd_parser *);
+void cmd_parser_dtor(struct cmd_parser *);
 // keyword is not copied. Should be a static constant.
-void cmd_register_keyword(char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
-void cmd_unregister_keyword(char const *keyword);
-void cmd_end(void);
+void cmd_register_keyword(struct cmd_parser *, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
+void cmd_unregister_keyword(struct cmd_parser *, char const *keyword);
 // construct a struct cmd that must be destroyed with cmd_dtor
-void cmd_read(struct cmd *cmd, int fd);
+void cmd_read(struct cmd_parser *, struct cmd *cmd, int fd);
 void cmd_dtor(struct cmd *cmd);
 #define SEQ_BUF_LEN 21
 char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);

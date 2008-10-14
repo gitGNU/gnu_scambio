@@ -37,6 +37,7 @@ static struct cnx_server server;
 static sig_atomic_t terminate = 0;
 char my_hostname[256];
 
+struct cmd_parser parser;
 char const *const kw_ehlo = "ehlo";
 char const *const kw_helo = "helo";
 char const *const kw_mail = "mail";
@@ -70,23 +71,28 @@ static void init_log(void)
 	debug("Seting log level to %d", log_level);
 }
 
+static void cmd_end(void)
+{
+	cmd_parser_dtor(&parser);
+}
+
 static void init_cmd(void)
 {
 	debug("init cmd");
-	cmd_begin();
+	cmd_parser_ctor(&parser);
 	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
 	// Put most used commands at end, so that they end up at the beginning of the commands list
-	cmd_register_keyword(kw_ehlo, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_helo, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_mail, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// no support for extended mail parameters, but we accept them (and ignore them)
-	cmd_register_keyword(kw_rcpt, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// same
-	cmd_register_keyword(kw_data, 0, 0, CMD_EOA);
-	cmd_register_keyword(kw_rset, 0, 0, CMD_EOA);
-	cmd_register_keyword(kw_vrfy, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_expn, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_help, 0, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_noop, 0, UINT_MAX, CMD_EOA);
-	cmd_register_keyword(kw_quit, 0, 0, CMD_EOA);
+	cmd_register_keyword(&parser, kw_ehlo, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_helo, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_mail, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// no support for extended mail parameters, but we accept them (and ignore them)
+	cmd_register_keyword(&parser, kw_rcpt, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// same
+	cmd_register_keyword(&parser, kw_data, 0, 0, CMD_EOA);
+	cmd_register_keyword(&parser, kw_rset, 0, 0, CMD_EOA);
+	cmd_register_keyword(&parser, kw_vrfy, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_expn, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_help, 0, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_noop, 0, UINT_MAX, CMD_EOA);
+	cmd_register_keyword(&parser, kw_quit, 0, 0, CMD_EOA);
 }
 
 static void deinit_server(void)
@@ -166,7 +172,7 @@ static void *serve_cnx(void *arg)
 	if_fail (answer(env, 220, my_hostname)) return NULL;
 	while (! quit && !is_error()) {	// read a command and exec it
 		struct cmd cmd;
-		if_fail (cmd_read(&cmd, env->fd)) break;
+		if_fail (cmd_read(&parser, &cmd, env->fd)) break;
 		debug("Read keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_ehlo) {
 			exec_ehlo(env, cmd.args[0].val.string);

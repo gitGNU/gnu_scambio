@@ -25,8 +25,10 @@
 #include "cnx.h"
 #include "scambio/mdir.h"
 #include "command.h"
+#include "cmd.h"
 
 extern struct cnx_client cnx;
+struct cmd_parser parser;
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
 pth_t reader_pthid, writer_pthid;

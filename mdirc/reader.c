@@ -164,7 +164,7 @@ void *reader_thread(void *args)
 		// read and parse one command
 		struct cmd cmd;
 		debug("Reading cmd on socket");
-		cmd_read(&cmd, cnx.sock_fd);
+		cmd_read(&parser, &cmd, cnx.sock_fd);
 		on_error break;
 		debug("Received keyword '%s'", cmd.keyword);
 		if (cmd.keyword == kw_patch) {
@@ -197,19 +197,19 @@ void reader_begin(void)
 {
 	// FIXME: LIST_INIT should go in a command_begin()
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		cmd_register_keyword(command_types[t].keyword,  2, UINT_MAX, CMD_INTEGER, CMD_STRING, CMD_EOA);
+		cmd_register_keyword(&parser, command_types[t].keyword,  2, UINT_MAX, CMD_INTEGER, CMD_STRING, CMD_EOA);
 		LIST_INIT(&command_types[t].commands);
 	}
-	cmd_register_keyword(kw_quit, 1, 1, CMD_INTEGER, CMD_EOA);
-	cmd_register_keyword(kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_quit, 1, 1, CMD_INTEGER, CMD_EOA);
+	cmd_register_keyword(&parser, kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
 }
 
 void reader_end(void)
 {
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		cmd_unregister_keyword(command_types[t].keyword);
+		cmd_unregister_keyword(&parser, command_types[t].keyword);
 	}
-	cmd_unregister_keyword(kw_quit);
-	cmd_unregister_keyword(kw_patch);
+	cmd_unregister_keyword(&parser, kw_quit);
+	cmd_unregister_keyword(&parser, kw_patch);
 }
 

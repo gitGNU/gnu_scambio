@@ -35,6 +35,7 @@
 static struct cnx_server server;
 static sig_atomic_t terminate = 0;
 
+struct cmd_parser parser;
 static char const *const kw_sub   = "sub";
 static char const *const kw_unsub = "unsub";
 static char const *const kw_put   = "put";
@@ -86,17 +87,22 @@ static void init_log(void)
 	debug("Seting log level to %d", log_level);
 }
 
+static void cmd_end(void)
+{
+	cmd_parser_dtor(&parser);
+}
+
 static void init_cmd(void)
 {
 	debug("init cmd");
-	cmd_begin();
+	cmd_parser_ctor(&parser);
 	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
 	// Put most used commands at end, so that they end up at the beginning of the commands list
-	cmd_register_keyword(kw_quit,  0, 0, CMD_EOA);
-	cmd_register_keyword(kw_rem,   1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_put,   1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
+	cmd_register_keyword(&parser, kw_quit,  0, 0, CMD_EOA);
+	cmd_register_keyword(&parser, kw_rem,   1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_put,   1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
+	cmd_register_keyword(&parser, kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
 }
 
 static void deinit_server(void)
@@ -170,7 +176,7 @@ static void *serve_cnx(void *arg)
 	bool quit = false;
 	do {	// read a command and exec it
 		struct cmd cmd;
-		cmd_read(&cmd, env->fd);
+		cmd_read(&parser, &cmd, env->fd);
 		on_error break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		if (cmd.keyword == kw_sub) {
