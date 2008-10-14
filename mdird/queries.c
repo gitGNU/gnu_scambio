@@ -29,6 +29,7 @@
 #include "scambio/header.h"
 #include "scambio/mdir.h"
 #include "sub.h"
+#include "auth.h"
 
 /*
  * Init
@@ -61,6 +62,10 @@ static void answer(struct cnx_env *env, long long seq, char const *cmd_name, int
 void exec_sub(struct cnx_env *env, long long seq, char const *dir, mdir_version version)
 {
 	debug("doing SUB for '%s', last version %"PRIversion, dir, version);
+	if (! env->user) {
+		answer(env, seq, "SUB", 401, "No auth");
+		return;
+	}
 	int substatus = 0;
 	// Check if we are already registered
 	struct subscription *sub = subscription_find(env, dir);
@@ -81,6 +86,10 @@ void exec_sub(struct cnx_env *env, long long seq, char const *dir, mdir_version 
 void exec_unsub(struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing UNSUB for '%s'", dir);
+	if (! env->user) {
+		answer(env, seq, "SUB", 401, "No auth");
+		return;
+	}
 	struct subscription *sub = subscription_find(env, dir);
 	if (! sub) {
 		answer(env, seq, "UNSUB", 501, "Not subscribed");
@@ -107,6 +116,10 @@ static mdir_version add_header(char const *dir, struct header *h, enum mdir_acti
 static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_env *env, long long seq, char const *dir)
 {
 	debug("doing %s in '%s'", cmdtag, dir);
+	if (! env->user) {
+		answer(env, seq, "SUB", 401, "No auth");
+		return;
+	}
 	struct header *h;
 	h = header_new();
 	on_error return;
@@ -139,8 +152,20 @@ void exec_rem(struct cnx_env *env, long long seq, char const *dir)
  * Quit
  */
 
-void exec_quit (struct cnx_env *env, long long seq)
+void exec_quit(struct cnx_env *env, long long seq)
 {
 	debug("doing QUIT");
 	answer(env, seq, "QUIT", 200, "OK");
+}
+
+/*
+ * Auth
+ */
+
+void exec_auth(struct cnx_env *env, long long seq, char const *name)
+{
+	debug("doing AUTH");
+	env->user = user_load(name);
+	answer(env, seq, "AUTH", is_error() ? 500:200, is_error() ? error_str():"OK");
+	error_clear();
 }

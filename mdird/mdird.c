@@ -36,6 +36,7 @@ static struct cnx_server server;
 static sig_atomic_t terminate = 0;
 
 struct cmd_parser parser;
+static char const *const kw_auth  = "auth";
 static char const *const kw_sub   = "sub";
 static char const *const kw_unsub = "unsub";
 static char const *const kw_put   = "put";
@@ -103,6 +104,7 @@ static void init_cmd(void)
 	cmd_register_keyword(&parser, kw_put,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(&parser, kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(&parser, kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
+	cmd_register_keyword(&parser, kw_auth,  1, 1, CMD_STRING, CMD_EOA);
 }
 
 static void deinit_server(void)
@@ -127,6 +129,8 @@ static void init_server(void)
 	exec_begin();
 	on_error return;
 	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
+	if_fail(auth_begin()) return;
+	if (0 != atexit(auth_end)) with_error(0, "atexit") return;
 }
 
 static void init(void)
@@ -153,6 +157,7 @@ static void cnx_env_del(void *env_)
 		subscription_del(sub);
 	}
 	close(env->fd);
+	env->user = NULL;
 	free(env);
 }
 
@@ -161,6 +166,7 @@ static struct cnx_env *cnx_env_new(int fd)
 	struct cnx_env *env = malloc(sizeof(*env));
 	if (! env) with_error(ENOMEM, "Cannot alloc a cnx_env") return NULL;
 	env->fd = fd;
+	env->user = NULL;
 	pth_mutex_init(&env->wfd);
 	LIST_INIT(&env->subscriptions);
 	return env;
@@ -179,7 +185,9 @@ static void *serve_cnx(void *arg)
 		cmd_read(&parser, &cmd, env->fd);
 		on_error break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
-		if (cmd.keyword == kw_sub) {
+		if (cmd.keyword == kw_auth) {
+			exec_auth(env, cmd.seq, cmd.args[0].val.string);
+		} else if (cmd.keyword == kw_sub) {
 			exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
 		} else if (cmd.keyword == kw_unsub) {
 			exec_unsub(env, cmd.seq, cmd.args[0].val.string);

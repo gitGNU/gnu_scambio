@@ -42,6 +42,8 @@
  * group file will be missed.
  */
 
-#define USRDIR "users"
+void auth_begin(void);
+void auth_end(void);
+struct user *user_load(char const *name);
 
 #endif

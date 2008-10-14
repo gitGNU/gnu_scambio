@@ -21,12 +21,14 @@
 #include <stddef.h>
 #include <pth.h>
 #include "scambio/mdir.h"
+#include "auth.h"
 
 struct subscription;
 struct cnx_env {
 	int fd;
 	LIST_HEAD(subscriptions, subscription) subscriptions;
 	pth_mutex_t wfd;	// protects fd on write
+	struct user *user;
 };
 
 struct mdird {
@@ -41,6 +43,7 @@ static inline struct mdird *mdir2mdird(struct mdir *mdir)
 
 void exec_begin(void);
 void exec_end(void);
+void exec_auth (struct cnx_env *, long long seq, char const *name);
 void exec_sub  (struct cnx_env *, long long seq, char const *dir, mdir_version version);
 void exec_unsub(struct cnx_env *, long long seq, char const *dir);
 void exec_put  (struct cnx_env *, long long seq, char const *dir);
