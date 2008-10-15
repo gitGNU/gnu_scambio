@@ -94,13 +94,17 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	mdir_folder_list(mdir, false, parse_dir_rec, path);
 }
 
-void *writer_thread(void *args)
+void *writer_thread(void *arg)
 {
-	(void)args;
+	char const *const username = arg;
 	debug("starting writer thread");
 	terminate_writer = false;
+	struct mdir *root = mdir_lookup("/");
+	struct mdirc *rootc = mdir2mdirc(root);
+	// First log in
+	(void)command_new(AUTH_CMD_TYPE, rootc, username, "");
+	// Then traverse folders
 	do {
-		struct mdir *root = mdir_lookup("/");
 		on_error break;
 		parse_dir_rec(NULL, root, false, "", "");
 		on_error break;

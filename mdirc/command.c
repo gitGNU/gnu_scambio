@@ -37,10 +37,12 @@
 
 // NOTE: respect enum command_type order ! (FIXME with something like .0:{...}, .1:{...}, ... ?)
 struct command_types command_types[NB_CMD_TYPES] = {
+	{ .keyword = "auth",  .finalize = finalize_auth },
 	{ .keyword = "sub",   .finalize = finalize_sub },
 	{ .keyword = "unsub", .finalize = finalize_unsub },
 	{ .keyword = "put",   .finalize = finalize_put },
 	{ .keyword = "rem",   .finalize = finalize_rem },
+	{ .keyword = "quit",  .finalize = finalize_quit },
 };
 
 /*

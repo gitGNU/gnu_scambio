@@ -28,7 +28,7 @@ struct command {
 	time_t creation;
 };
 enum command_type {
-	SUB_CMD_TYPE, UNSUB_CMD_TYPE, PUT_CMD_TYPE, REM_CMD_TYPE, NB_CMD_TYPES
+	AUTH_CMD_TYPE, SUB_CMD_TYPE, UNSUB_CMD_TYPE, PUT_CMD_TYPE, REM_CMD_TYPE, QUIT_CMD_TYPE, NB_CMD_TYPES
 };
 extern struct command_types {
 	char const *const keyword;

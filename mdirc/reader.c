@@ -84,6 +84,25 @@ void finalize_rem(struct command *cmd, int status, char const *compl)
 	}
 }
 
+void finalize_auth(struct command *cmd, int status, char const *compl)
+{
+	(void)cmd;
+	(void)compl;
+	debug("auth : %d", status);
+	if (status != 200) {
+		terminate_reader = true;
+	}
+}
+
+void finalize_quit(struct command *cmd, int status, char const *compl)
+{
+	(void)cmd;
+	(void)status;
+	(void)compl;
+	debug("quit : %d", status);
+	terminate_reader = true;
+}
+
 struct patch {
 	LIST_ENTRY(patch) entry;
 	mdir_version old_version, new_version;
@@ -175,8 +194,6 @@ void *reader_thread(void *args)
 			on_error break;
 			try_apply(mdirc);
 			on_error break;
-		} else if (cmd.keyword == kw_quit) {
-			terminate_reader = true;
 		} else for (unsigned t=0; t<sizeof_array(command_types); t++) {
 			if (cmd.keyword == command_types[t].keyword) {
 				struct command *command = command_get_by_seqnum(t, cmd.seq);

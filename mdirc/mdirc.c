@@ -145,7 +145,7 @@ int main(int nb_args, char **args)
 	if (! pth_init()) return EXIT_FAILURE;
 	if_fail(init()) goto q0;
 	while (1) {
-		connecter_thread(NULL);
+		connecter_thread("Alice");
 	}
 	ret = EXIT_SUCCESS;
 q0:

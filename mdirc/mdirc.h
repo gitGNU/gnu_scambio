@@ -43,6 +43,7 @@ void finalize_unsub(struct command *cmd, int status, char const *compl);
 void finalize_put(struct command *cmd, int status, char const *compl);
 void finalize_rem(struct command *cmd, int status, char const *compl);
 void finalize_quit(struct command *cmd, int status, char const *compl);
+void finalize_auth(struct command *cmd, int status, char const *compl);
 
 struct mdirc {
 	struct mdir mdir;

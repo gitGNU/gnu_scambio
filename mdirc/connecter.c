@@ -35,12 +35,12 @@ struct cnx_client cnx;
 void *connecter_thread(void *arg)
 {
 	debug("Starting connecter");
-	(void)arg;
+	char *username = arg;
 	cnx_client_ctor(&cnx, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"));
 	on_error return NULL;
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
-	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
+	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, username);
 	while (reader_pthid && writer_pthid) {
 /*
 		pth_event_t ev_r = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, reader_pthid);
