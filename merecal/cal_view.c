@@ -54,12 +54,14 @@ static void day2event_new(struct cal_event *ce, unsigned day)
 	struct day2event *d2e = malloc(sizeof(*d2e));
 	if (! d2e) with_error(ENOMEM, "malloc d2e") return;
 	d2e->event = ce;
-	TAILQ_INSERT_TAIL(day2events+day, d2e, entry);
+	assert(day > 0 && day-1 < sizeof_array(day2events));
+	TAILQ_INSERT_TAIL(day2events+day-1, d2e, entry);
 }
 
 static void day2event_del(struct day2event *d2e, unsigned day)
 {
-	TAILQ_REMOVE(day2events+day, d2e, entry);
+	assert(day > 0 && day-1 < sizeof_array(day2events));
+	TAILQ_REMOVE(day2events+day-1, d2e, entry);
 	free(d2e);
 }
 
@@ -93,7 +95,8 @@ static void reset_day(void)
 	gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
 	debug("new day : %u %u %u", year, month+1, day);
 	struct day2event *d2e;
-	TAILQ_FOREACH(d2e, day2events+day, entry) {
+	assert(day > 0 && day-1 < sizeof_array(day2events));
+	TAILQ_FOREACH(d2e, day2events+day-1, entry) {
 		display_event(d2e->event);
 	}
 }
