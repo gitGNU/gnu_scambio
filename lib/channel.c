@@ -33,8 +33,6 @@
 
 static char const *mdir_files;
 
-struct channel;
-
 /*
  * Init
  */

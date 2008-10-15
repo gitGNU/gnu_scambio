@@ -196,7 +196,6 @@ void mdir_begin(void)
 	conf_set_default_str("MDIR_DIRSEQ", "/tmp/.dirid.seq");
 	on_error return;
 	if_fail (jnl_begin()) return;
-	if_fail (mdir_channel_begin()) return;
 	// Inits
 	LIST_INIT(&mdirs);
 	mdir_root = conf_get_str("MDIR_ROOT_DIR");

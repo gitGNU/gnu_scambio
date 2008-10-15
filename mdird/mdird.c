@@ -41,13 +41,6 @@ static char const *const kw_sub   = "sub";
 static char const *const kw_unsub = "unsub";
 static char const *const kw_put   = "put";
 static char const *const kw_rem   = "rem";
-static char const *const kw_creat = "creat";	// create a persistent file
-static char const *const kw_chan  = "chan";	// create a RT channel
-static char const *const kw_write = "write";	// write onto a file/channel (all are forwarded to readers, file are also writtento in the file store)
-static char const *const kw_read  = "read";	// read a file/channel
-static char const *const kw_copy  = "copy";	// transfert datas (parameters are offset, length, EOF flag)
-static char const *const kw_skip  = "skip";	// same as copy, but without the datas
-static char const *const kw_miss  = "miss";	// report a gap in the transfered stream
 static char const *const kw_quit  = "quit";
 
 /*
@@ -109,15 +102,8 @@ static void init_cmd(void)
 	cmd_register_keyword(&parser, kw_auth,  1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(&parser, kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(&parser, kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
-	cmd_register_keyword(&parser, kw_creat, 0, 0, CMD_EOA);
-	cmd_register_keyword(&parser, kw_chan,  0, 0, CMD_EOA);
 	cmd_register_keyword(&parser, kw_rem,   1, 1, CMD_STRING, CMD_EOA);
 	cmd_register_keyword(&parser, kw_put,   1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_write, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_read,  1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_copy,  2, 3, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_skip,  2, 2, CMD_INTEGER, CMD_INTEGER, CMD_EOA);
-	cmd_register_keyword(&parser, kw_miss,  2, 2, CMD_INTEGER, CMD_INTEGER, CMD_EOA);
 }
 
 static void deinit_server(void)
@@ -211,10 +197,6 @@ static void *serve_cnx(void *arg)
 		} else if (cmd.keyword == kw_quit) {
 			exec_quit(env, cmd.seq);
 			quit = true;
-		} else if (cmd.keyword == kw_creat) {
-			exec_creat(env, cmd.seq);
-		} else if (cmd.keyword == kw_chan) {
-			exec_chan(env, cmd.seq);
 		}
 		pth_mutex_release(&env->wfd);
 		cmd_dtor(&cmd);
