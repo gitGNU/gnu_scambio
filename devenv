@@ -8,9 +8,9 @@ export MERELIB_LOG_LEVEL=5
 export SMTPD_PORT=1025
 
 function auth_user {
-	path=$1
+	dir=$1
 	name=$2
-	cat > $path/$name <<EOF
+	cat > $dir/$name <<EOF
 key: 1234567890DEADBEAF
 method: 3des
 
