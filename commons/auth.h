@@ -42,9 +42,9 @@
  * group file will be missed.
  */
 
-struct user;
+struct mdir_user;
 void auth_begin(void);
 void auth_end(void);
-struct user *user_load(char const *name);
+struct mdir_user *mdir_user_load(char const *name);
 
 #endif
