@@ -5,15 +5,58 @@
  * Data Definitions
  */
 
-struct mdir_cnx {
-	int fd;
-	struct user *user;
-	bool outbound;	// ie server, ie seqnums are <0
-	// TODO : a list of sent queries, and a list of recently sent data boxes
+struct sent_query {
+	LIST_ENTRY(sent_query) def_entry;	// list head is in the definition of the query
+	LIST_ENTRY(sent_query) cnx_entry;	// list head is in the cnx
+	long long seqnum;
+	void *user_data;
+};
+
+// When we register a query, we add a definition for the answer,
+// with a special callback that looks for the very query that was sent, and call its callback.
+struct query_def {
+	struct mdir_cmd_def def;
+	LIST_HEAD(sent_queries, sent_query) sent_queries;
+	mdir_cnx_answ_cb *cb;
 };
 
 /*
- * Constructors
+ * Constructors for sent_query
+ */
+
+static void sent_query_ctor(struct sent_query *sq, struct mdir_cnx *cnx, struct query_def *def, long long seq, void *user_data)
+{
+	sq->seqnum = seq;
+	sq->user_data = user_data;
+	LIST_INSERT_HEAD(&def->sent_queries, sq, def_entry);
+	LIST_INSERT_HEAD(&cnx->sent_queries, sq, cnx_entry);
+}
+
+static void sent_query_dtor(struct sent_query *sq)
+{
+	LIST_REMOVE(sq, def_entry);
+	LIST_REMOVE(sq, cnx_entry);
+}
+
+static struct sent_query *sent_query_new(struct mdir_cnx *cnx, struct query_def *def, long long seq, void *user_data)
+{
+	struct sent_query *sq = malloc(sizeof(*sq));
+	if (! sq) with_error(ENOMEM, "malloc(sent_query)") return NULL;
+	if_fail (sent_query_ctor(sq, cnx, def, seq, user_data)) {
+		free(sq);
+		sq = NULL;
+	}
+	return sq;
+}
+
+static void sent_query_del(struct sent_query *sq)
+{
+	sent_query_dtor(sq);
+	free(sq);
+}
+
+/*
+ * Constructors for mdir_cnx
  */
 
 static struct mdir_cnx *cnx_alloc(void)
@@ -22,21 +65,9 @@ static struct mdir_cnx *cnx_alloc(void)
 	if (! cnx) with_error(ENOMEM, "malloc(mdir_cnx)") return NULL;
 	cnx->fd = -1;
 	cnx->user = NULL;
+	mdir_syntax_ctor(&cnx->syntax);
+	LIST_INIT(&cnx->sent_queries);
 	return cnx;
-}
-
-void mdir_cnx_dtor(struct mdir_cnx *cnx)
-{
-	if (cnx->fd != -1) {
-		(void)close(cnx->fd);
-		cnx->fd = -1;
-	}
-}
-
-void mdir_cnx_del(struct mdir_cnx *cnx)
-{
-	mdir_cnx_dtor(cnx);
-	(void)free(cnx);
 }
 
 static int gaierr2errno(int err)
@@ -98,48 +129,34 @@ void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const host, char const *s
 	}
 }
 
-struct mdir_cnx *mdir_cnx_new_outbound(char const *host, char const *service, char const *username)
-{
-	struct mdir_cnx *cnx = cnx_alloc();
-	on_error return NULL;
-	if_fail (mdir_cnx_ctor_outbound(cnx, host, service, username)) {
-		free(cnx);
-		cnx = NULL;
-	}
-	return cnx;
-}
-
 void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd)
 {
 	cnx->outbound = false;
 	cnx->user = NULL;
 	cnx->fd = fd;
+	// TODO: wait for user auth and set user or return error
 }
 
-struct mdir_cnx *mdir_cnx_new_inbound(int fd)
+void mdir_cnx_dtor(struct mdir_cnx *cnx)
 {
-	struct mdir_cnx *cnx = cnx_alloc();
-	if_fail (cnx_ctor_inbound(cnx, fd)) {
-		free(cnx);
-		cnx = NULL;
+	if (cnx->fd != -1) {
+		(void)close(cnx->fd);
+		cnx->fd = -1;
 	}
-	return cnx;
-}
-
-void mdir_cnx_set_user(struct mdir_cnx *cnx, char const *username)
-{
-	cnx->user = user_load(username);
+	mdir_syntax_dtor(&cnx->syntax);
+	struct sent_query *sq;
+	while (NULL != (sq = LIST_FIRT(&cnx->sent_queries, cnx_entry))) {
+		sent_query_del(sq);
+	}
 }
 
 /*
  * Read
  */
 
-void mdir_cnx_read(struct mdir_cnx *cnx, struct mdir_cmd *cmd, struct mdir_parser *parser)
+void mdir_cnx_read(struct mdir_cnx *cnx)
 {
-	assert(parser && cmd);
-	if_fail (mdir_cmd_read(parser, cmd, cnx->fd)) return;
-	// Look for a query waiting for this answer. If found, exec its callback.
-	// otherwise it's a command, for 
-	// TODO
+	// pour les query, le callback query sera appelé, donc au saura qu'on n'a pas a faire
+	// a une vulgaire mdir_cmd_def mais a une query_def, et de la on pourra lire la liste des
+	// query envoyées, etc...
 }

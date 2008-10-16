@@ -27,43 +27,81 @@
 #define CMD_H_080616
 #include <stdbool.h>
 
-struct mdir_cmd_arg {
-	enum mdir_cmd_arg_type { CMD_STRING, CMD_INTEGER, CMD_EOA } type;
-	union {
-		char *string;
-		long long integer;
-	} val;
-};
-
 #define CMD_MAX_ARGS 8
 
-struct mdir_cmd {
-	char const *keyword;	// keywords are compared eq by address
-	long long seq;	// 0 if no seqnum was read (0 is then an invalid seqnum)
-	unsigned nb_args;
-	struct mdir_cmd_arg args[CMD_MAX_ARGS];
-};
+struct mdir_cmd;
+typedef void mdir_cmd_cb(struct mdir_cmd *cmd, void *user_data);
 
-struct mdir_registered_cmd {
-	LIST_ENTRY(registered_cmd) entry;
+/* This defines a valid command, and keeps a pointer to the proper callback.
+ * It can be inherited.
+ */
+struct mdir_cmd_def {
+	LIST_ENTRY(mdir_cmd_def) entry;
 	char const *keyword;
 	unsigned nb_arg_min, nb_arg_max;
 	unsigned nb_types;	// after which STRING is assumed
-	enum cmd_arg_type types[CMD_MAX_ARGS];
-};
-struct mdir_parser {
-	LIST_HEAD(rcmds, mdir_registered_cmd) rcmds;
+	enum mdir_cmd_arg_type { CMD_STRING, CMD_INTEGER } types[CMD_MAX_ARGS];
 };
 
-void mdir_parser_ctor(struct mdir_parser *);
-void mdir_parser_dtor(struct mdir_parser *);
-// keyword is not copied. Should be a static constant.
-void mdir_parser_register_keyword(struct mdir_parser *, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
-void mdir_parser_unregister_keyword(struct mdir_parser *, char const *keyword);
-// construct a struct cmd that must be destroyed with mdir_cmd_dtor
-void mdir_cmd_read(struct mdir_parser *, struct mdir_cmd *, int fd);
-void mdir_cmd_dtor(struct mdir_cmd *);
+/* This structure stores a command, once parsed and once the syntax is checked against its definition.
+ */
+struct mdir_cmd {
+	struct mdir_cmd_def *def;
+	long long seq;	// 0 if no seqnum was read (0 is then an invalid seqnum)
+	unsigned nb_args;
+	union mdir_cmd_arg {	// actual type is taken from the definition. Past def->nb_arg_max it's STRING.
+		char *string;
+		long long integer;
+	} args[CMD_MAX_ARGS];
+};
+
+/* A syntax is then merely a set of definitions.
+ * Can also be inherited.
+ */
+struct mdir_syntax {
+	LIST_HEAD(cmd_defs, mdir_cmd_def) defs;
+};
+
+/* Construct and destruct a syntax.
+ */
+static inline void mdir_syntax_ctor(struct mdir_syntax *syntax)
+{
+	LIST_INIT(&syntax->defs);
+}
+static inline void mdir_syntax_dtor(struct mdir_syntax *syntax)
+{
+	struct mdir_cmd_def *def;
+	while (NULL != (def = LIST_FIRST(&syntax->defs))) {
+		LIST_REMOVE(def, entry);
+	}
+}
+
+/* Add the given def to the syntax (merely link to the defs).
+ */
+static inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_cmd_def *def)
+{
+	LIST_INSERT_HEAD(&syntax->defs, def, entry);
+}
+
+/* Read a line from fd, and parse it according to syntax.
+ * Construct a mdir_cmd that must be destroyed with mdir_cmd_dtor
+ */
+void mdir_cmd_read(struct mdir_syntax *, struct mdir_cmd *, int fd);
+
+static inline void mdir_cmd_dtor(struct mdir_cmd *cmd)
+{
+	for (unsigned a=0; a<cmd->nb_types; a++) {	// Copy and transcode args
+		if (a >= cmd->def->nb_arg_max || cmd->def->types[a] == CMD_STRING) free(cmd->args[a].string);
+	}
+}
+
+/* Utility function to convert a seqnum to a string
+ */
 #define SEQ_BUF_LEN 21
-char const *mdir_cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
+static inline char const *mdir_cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq)
+{
+	snprintf(buf, sizeof(buf), "%lld", seq);
+	return buf;
+}
 
 #endif

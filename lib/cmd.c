@@ -32,84 +32,17 @@
 #define MAX_CMD_LINE (PATH_MAX + 256)
 
 /*
- * Command (un)registration
+ * Various inline functions
  */
 
-static void rcmd_ctor(struct mdir_parser *cmdp, struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
-{
-	reg->keyword = keyword;
-	reg->nb_arg_min = nb_arg_min;
-	reg->nb_arg_max = nb_arg_max;
-	reg->nb_types = 0;
-	enum cmd_arg_type type;
-	while (CMD_EOA != (type = va_arg(ap, enum cmd_arg_type))) {
-		if (reg->nb_types >= sizeof_array(reg->types)) with_error(E2BIG, "Too many commands") return;
-		reg->types[ reg->nb_types++ ] = type;
-	}
-	LIST_INSERT_HEAD(&cmdp->rcmds, reg, entry);	// will shadow previously registered keywords
-}
-
-static void rcmd_dtor(struct registered_cmd *reg)
-{
-	LIST_REMOVE(reg, entry);
-}
-
-static struct registered_cmd *rcmd_new(struct mdir_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
-{
-	struct registered_cmd *reg = malloc(sizeof(*reg));
-	if (! reg) with_error(ENOMEM, "Cannot alloc cmd") return NULL;
-	rcmd_ctor(cmdp, reg, keyword, nb_arg_min, nb_arg_max, ap);
-	on_error {
-		free(reg);
-		return NULL;
-	}
-	return reg;
-}
-
-static void rcmd_del(struct registered_cmd *reg)
-{
-	rcmd_dtor(reg);
-	free(reg);
-}
-
-void cmd_register_keyword(struct mdir_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...)
-{
-	va_list ap;
-	va_start(ap, nb_arg_max);
-	(void)rcmd_new(cmdp, keyword, nb_arg_min, nb_arg_max, ap);
-	va_end(ap);
-}
-
-void cmd_unregister_keyword(struct mdir_parser *cmdp, char const *keyword)
-{
-	struct registered_cmd *reg, *tmp;
-	LIST_FOREACH_SAFE(reg, &cmdp->rcmds, entry, tmp) {
-		if (reg->keyword == keyword) {
-			rcmd_del(reg);
-			break;	// removes only the topmost matching keyword, so that shadowed keywords are still there
-		}
-	}
-}
+extern inline void mdir_syntax_ctor(struct mdir_syntax *syntax);
+extern inline void mdir_syntax_dtor(struct mdir_syntax *syntax);
+extern inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_cmd_def *def);
+extern inline void mdir_cmd_dtor(struct mdir_cmd *cmd);
+extern inline char const *mdir_cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
 
 /*
- * (De)Initialization
- */
-
-void mdir_parser_ctor(struct mdir_parser *cmdp)
-{
-	LIST_INIT(&cmdp->rcmds);
-}
-
-void mdir_parser_dtor(struct mdir_parser *cmdp)
-{
-	struct registered_cmd *reg;
-	while (NULL != (reg = LIST_FIRST(&cmdp->rcmds))) {
-		rcmd_del(reg);
-	}
-}
-
-/*
- * Read a commend from a file
+ * Read a command from a file
  */
 
 static bool same_keyword(char const *a, char const *b)
@@ -117,31 +50,20 @@ static bool same_keyword(char const *a, char const *b)
 	return 0 == strcasecmp(a, b);
 }
 
-static void build_cmd(struct cmd *cmd, struct registered_cmd *reg, unsigned nb_args, struct cmd_arg *args)
+static void build_cmd(struct mdir_cmd *cmd, union mdir_cmd_arg *args)
 {
-	cmd->keyword = reg->keyword;	// set original pointer
-	cmd->nb_args = nb_args;
-	if (nb_args < reg->nb_arg_min || nb_args > reg->nb_arg_max) with_error(EDOM, "Bad nb args") return;
-	for (unsigned a=0; a<nb_args; a++) {	// Copy and transcode args
-		if (a < reg->nb_types && reg->types[a] == CMD_INTEGER) {	// transcode
+	if (cmd->nb_args < cmd->def->nb_arg_min || cmd->nb_args > cmd->def->nb_arg_max) with_error(EDOM, "Bad nb args (%u)", cmd->nb_args) return;
+	for (unsigned a=0; a<cmd->nb_args; a++) {	// Copy and transcode args
+		if (a < cmd->def->nb_types && cmd->def->types[a] == CMD_INTEGER) {	// transcode
 			char *end;
-			long long integer = strtoll(args[a].val.string, &end, 0);
-			if (*end != '\0') with_error(EINVAL, "'%s' is not integer", args[a].val.string) return;
-			cmd->args[a].type = CMD_INTEGER;
-			cmd->args[a].val.integer = integer;
-		} else {
-			cmd->args[a].type = CMD_STRING;
-			cmd->args[a].val.string = strdup(args[a].val.string);
+			long long integer = strtoll(args[a].string, &end, 0);
+			if (*end != '\0') with_error(EINVAL, "'%s' is not integer", args[a].string) return;
+			cmd->args[a].integer = integer;
+		} else {	// duplicate the string
+			cmd->args[a].string = strdup(args[a].string);
 		}
 	}
 	return;
-}
-
-void cmd_dtor(struct cmd *cmd)
-{
-	for (unsigned a=0; a<cmd->nb_args; a++) {	// Copy and transcode args
-		if (cmd->args[a].type == CMD_STRING) free(cmd->args[a].val.string);
-	}
 }
 
 static bool is_delimiter(int c)
@@ -150,7 +72,7 @@ static bool is_delimiter(int c)
 }
 
 // vb stores a line terminated by \n\0 or just \0.
-static int tokenize(struct varbuf *vb, struct cmd_arg *tokens)
+static int tokenize(struct varbuf *vb, union mdir_cmd_arg *tokens)
 {
 	int nb_tokens = 0;
 	size_t c = 0;
@@ -158,8 +80,7 @@ static int tokenize(struct varbuf *vb, struct cmd_arg *tokens)
 		if (nb_tokens >= MAX_CMD_LINE) return -E2BIG;
 		while (c < vb->used && is_delimiter(vb->buf[c])) c++;	// trim left
 		if (c >= vb->used) break;
-		tokens[nb_tokens].type = CMD_STRING;
-		tokens[nb_tokens].val.string = vb->buf+c;
+		tokens[nb_tokens].string = vb->buf+c;
 		while (c < vb->used && !is_delimiter(vb->buf[c])) c++;	// reach end of token
 		if (c >= vb->used) break;
 		vb->buf[c] = '\0';	// replace first delimiter with '\0'
@@ -182,49 +103,42 @@ static bool is_seq(char const *str)
 	return isdigit(str[0]);
 }
 
-static void parse_line(struct mdir_parser *cmdp, struct mdir_cmd *cmd, struct varbuf *vb, int fd)
+static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct varbuf *vb, int fd)
 {
 	varbuf_clean(vb);
 	varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL);
 	on_error return;
-	struct cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
+	union mdir_cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
 	on_error return;
 	if (nb_tokens == 0) with_error(EINVAL, "No token found on line") return;
-	bool with_seq = is_seq(tokens[0].val.string);
+	bool with_seq = is_seq(tokens[0].string);
 	if (with_seq && nb_tokens < 2) with_error(EINVAL, "Bad number of tokens (%d)", nb_tokens) return;
-	char const *const keyword = tokens[with_seq ? 1:0].val.string;
-	unsigned nb_args = nb_tokens - (with_seq ? 2:1);
-	struct cmd_arg *const args = tokens + (with_seq ? 2:1);
+	char const *const keyword = tokens[with_seq ? 1:0].string;
+	cmd->nb_args = nb_tokens - (with_seq ? 2:1);
+	union mdir_cmd_arg *const args = tokens + (with_seq ? 2:1);
 	cmd->seq = 0;
-	if (with_seq) if_fail (read_seq(&cmd->seq, tokens[0].val.string)) return;
-	struct registered_cmd *reg;
-	LIST_FOREACH(reg, &cmdp->rcmds, entry) {
-		if (same_keyword(reg->keyword, keyword)) {
-			build_cmd(cmd, reg, nb_args, args);	// will check args types and number, and convert some args from string to integer, and copy nb_args and keyword
+	if (with_seq) if_fail (read_seq(&cmd->seq, tokens[0].string)) return;
+	LIST_FOREACH(cmd->def, &syntax->defs, entry) {
+		if (same_keyword(cmd->def->keyword, keyword)) {
+			build_cmd(cmd, args);	// will check args types and number, and convert some args from string to integer
 			return;
 		}
 	}
 	with_error(ENOENT, "No such keyword '%s'", keyword) return;
 }
 
-void mdir_cmd_read(struct mdir_parser *cmdp, struct mdir_cmd *cmd, int fd)
+void mdir_cmd_read(struct mdir_syntax *syntax, struct mdir_cmd *cmd, int fd)
 {
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
 	on_error return;
-	cmd->keyword = NULL;
-	while (! cmd->keyword) {
-		parse_line(cmdp, cmd, &vb, fd);
+	cmd->def = NULL;
+	while (! cmd->def) {
+		parse_line(syntax, cmd, &vb, fd);
 		on_error break;
 	}
 	varbuf_dtor(&vb);
 	return;
-}
-
-char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq)
-{
-	snprintf(buf, sizeof(buf), "%lld", seq);
-	return buf;
 }
 

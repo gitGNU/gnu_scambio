@@ -19,31 +19,30 @@
 #define CNX_H_081016
 #include <scambio/cmd.h>
 
-/* Struct mdir_cnx describe a connection to the chnd server (from a plugin or from
- * chnd itself), with socket, user name and key used.
- * Clients (plugins) and server (channeld) are assymetric here.
+/* Struct mdir_cnx describe a connection following mdir protocol.
+ * Client and server are assymetric but similar.
  */
-struct mdir_cnx;
+struct sent_query;
+struct mdir_cnx {
+	int fd;
+	struct mdir_user *user;
+	struct mdir_syntax syntax;
+	LIST_HEAD(sent_queries, sent_query) sent_queries;
+};
 
 /* Connect to MDIRD_HOST:MDIRD_PORT and send auth.
  */
-struct mdir_cnx *mdir_cnx_new_outbound(char const *host, char const *service, char const *username);
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const host, char const *service, char const *username);
 
-/* Accept and set user to NULL
+/* After you accepted the connection.
+ * Handle user auth.
  */
-struct mdir_cnx *mdir_cnx_new_inbound(int fd);
 void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd);
-
-/* Then set the user for the connection
- */
-void mdir_cnx_set_user(struct mdir_cnx *cnx, char const *username);
 
 /* Delete a cnx object.
  * Notice that the connection will not necessarily be closed at once,
- * but may be kept for future mdir_cnx_new().
+ * but may be kept for future mdir_cnx_new(). (TODO)
  */
-void mdir_cnx_del(struct mdir_cnx *cnx);
 void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
 /* Sends a query to the peer.
@@ -52,17 +51,15 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
  * are server side).
  * Otherwise, the cb will be called when the answer is received, while in mdir_cnx_read().
  */
-typedef void mdir_cnx_answ_cb(char const *kw, int status, char const *compl, void *user_data);
-void mdir_cnx_query(struct mdir_cnx *cnx, mdir_cnx_answ_cb *cb, void *user_data, char const *kw, ...);
+typedef void mdir_cnx_answ_cb(char const *kw, struct mdir_cmd *cmd, void *user_data);
+void mdir_cnx_register_query(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_answ_cb *cb);
+void mdir_cnx_query(struct mdir_cnx *cnx, void *user_data, char const *kw, ...);
 
 /* Register that a given command definition is handled by the given callback.
+ * Will only call mdir_cmd_def_register for the cnx syntax
  */
 typedef void mdir_cnx_serve_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
-struct mdir_cnx_service {
-	struct mdir_registered_cmd cmd;
-	mdir_cnx_serve_cb *cb;
-};
-void mdir_cnx_register_service(struct mdir_cnx *cnx, struct mdir_cnx_service *serv);
+void mdir_cnx_register_service(struct mdir_cnx *cnx, struct mdir_cmd_def *def);
 
 /* Will use a mdir_parser build from all expected query responses, and by all
  * registered services.
