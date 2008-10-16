@@ -82,13 +82,6 @@ void jnl_end(void)
  * New/Del
  */
 
-static off_t filesize(int fd)
-{
-	off_t size = lseek(fd, 0, SEEK_END);
-	if ((off_t)-1 == size) error_push(errno, "lseek");
-	return size;
-}
-
 static unsigned fetch_nb_patches(int fd)
 {
 	off_t size = filesize(fd);

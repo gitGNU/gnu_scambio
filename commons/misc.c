@@ -22,8 +22,9 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <pth.h>
+#include <unistd.h>
 #include <ctype.h>
+#include <pth.h>
 #include "scambio.h"
 #include "misc.h"
 
@@ -193,4 +194,12 @@ void path_pop(char path[])
 	}
 	*last_sl = '\0';
 }
+
+off_t filesize(int fd)
+{
+	off_t size = lseek(fd, 0, SEEK_END);
+	if ((off_t)-1 == size) error_push(errno, "lseek");
+	return size;
+}
+
 

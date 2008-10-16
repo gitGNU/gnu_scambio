@@ -41,5 +41,8 @@ bool line_match(char *restrict line, char *restrict delim);
 
 void path_push(char path[], char const *next);
 void path_pop(char path[]);
+ 
+#include <sys/types.h>
+off_t filesize(int fd);
 
 #endif
