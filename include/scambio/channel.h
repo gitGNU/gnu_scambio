@@ -43,14 +43,14 @@ void chn_begin(void);
 void chn_end(void);
 
 #if 0
-static char const *const kw_creat = "auth";	// create a persistent file
+static char const *const kw_auth  = "auth";	// create a persistent file
 static char const *const kw_creat = "creat";	// create a persistent file
 static char const *const kw_chan  = "chan";	// create a RT channel
 static char const *const kw_write = "write";	// write onto a file/channel (all are forwarded to readers, file are also writtento in the file store)
 static char const *const kw_read  = "read";	// read a file/channel
 static char const *const kw_copy  = "copy";	// transfert datas (parameters are offset, length, EOF flag)
 static char const *const kw_skip  = "skip";	// same as copy, but without the datas
-static char const *const kw_miss  = "miss";	// report a gap in the transfered stream
+static char const *const kw_miss  = "miss";	// report a gap in the transfered stream, or that the end of file is missing (parameter = next expected offset)
 
 	cmd_register_keyword(&parser, kw_creat, 0, 0, CMD_EOA);
 	cmd_register_keyword(&parser, kw_chan,  0, 0, CMD_EOA);

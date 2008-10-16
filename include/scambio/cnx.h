@@ -55,9 +55,22 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
 typedef void mdir_cnx_answ_cb(char const *kw, int status, char const *compl, void *user_data);
 void mdir_cnx_query(struct mdir_cnx *cnx, mdir_cnx_answ_cb *cb, void *user_data, char const *kw, ...);
 
-/* parser and cmd may be NULL if you are only interrested in answers.
+/* Register that a given command definition is handled by the given callback.
  */
-void mdir_cnx_read(struct mdir_cnx *cnx, struct mdir_cmd *cmd, struct mdir_parser *parser);
+typedef void mdir_cnx_serve_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
+struct mdir_cnx_service {
+	struct mdir_registered_cmd cmd;
+	mdir_cnx_serve_cb *cb;
+};
+void mdir_cnx_register_service(struct mdir_cnx *cnx, struct mdir_cnx_service *serv);
+
+/* Will use a mdir_parser build from all expected query responses, and by all
+ * registered services.
+ * It is not possible to confuse answers from commands, since commands are either
+ * assymetric, or not acknowledged (the only symetrical commands, which are the
+ * copy/skip data transfert commands, are not answered except for miss commands).
+ */
+void mdir_cnx_read(struct mdir_cnx *cnx);
 
 /* Once in a server callback, you may want to answer a query.
  * If the seqnum is 0 the answer is ignored (you may as well not call this function then).

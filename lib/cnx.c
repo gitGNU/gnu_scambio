@@ -135,24 +135,11 @@ void mdir_cnx_set_user(struct mdir_cnx *cnx, char const *username)
  * Read
  */
 
-static bool is_my_seqnum(struct mdir_cnx *cnx, long long seqnum)
-{
-	// TODO
-}
-
 void mdir_cnx_read(struct mdir_cnx *cnx, struct mdir_cmd *cmd, struct mdir_parser *parser)
 {
-	// TODO: add to the parser the parser for sent queries (so that we got the response)
-	// so we have a parser in any case.
-	// Then use cmd.seqnum sign to find out if its a command or an answer
-	// oubien réécrire cmd_read pour qu'il renvoit les commandes inconnues (sans check de syntax
-	// dans ce cas). Et aussi, il faut que parser soit un paramètre optionnel. On peut alors
-	// faire ceci :
-	assert(cmd);
+	assert(parser && cmd);
 	if_fail (mdir_cmd_read(parser, cmd, cnx->fd)) return;
-	if (is_my_seqnum(cnx, cmd.seqnum)) {	// handle as a query
-		// TODO : find the query with this seqnum and keyword, and call the CB
-	} else {	// handle as a response
-		if (! cmd.checked) with_error(0, "Unknown command '%s' or invalid syntax", cmd.keyword) return;
-	}
+	// Look for a query waiting for this answer. If found, exec its callback.
+	// otherwise it's a command, for 
+	// TODO
 }

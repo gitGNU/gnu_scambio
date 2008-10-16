@@ -44,7 +44,13 @@ struct mdir_cmd {
 	struct mdir_cmd_arg args[CMD_MAX_ARGS];
 };
 
-struct mdir_registered_cmd;
+struct mdir_registered_cmd {
+	LIST_ENTRY(registered_cmd) entry;
+	char const *keyword;
+	unsigned nb_arg_min, nb_arg_max;
+	unsigned nb_types;	// after which STRING is assumed
+	enum cmd_arg_type types[CMD_MAX_ARGS];
+};
 struct mdir_parser {
 	LIST_HEAD(rcmds, mdir_registered_cmd) rcmds;
 };

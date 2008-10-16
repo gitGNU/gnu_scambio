@@ -31,19 +31,11 @@
 
 #define MAX_CMD_LINE (PATH_MAX + 256)
 
-struct registered_cmd {
-	LIST_ENTRY(registered_cmd) entry;
-	char const *keyword;
-	unsigned nb_arg_min, nb_arg_max;
-	unsigned nb_types;	// after which STRING is assumed
-	enum cmd_arg_type types[CMD_MAX_ARGS];
-};
-
 /*
  * Command (un)registration
  */
 
-static void rcmd_ctor(struct cmd_parser *cmdp, struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
+static void rcmd_ctor(struct mdir_parser *cmdp, struct registered_cmd *reg, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
 {
 	reg->keyword = keyword;
 	reg->nb_arg_min = nb_arg_min;
@@ -62,7 +54,7 @@ static void rcmd_dtor(struct registered_cmd *reg)
 	LIST_REMOVE(reg, entry);
 }
 
-static struct registered_cmd *rcmd_new(struct cmd_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
+static struct registered_cmd *rcmd_new(struct mdir_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, va_list ap)
 {
 	struct registered_cmd *reg = malloc(sizeof(*reg));
 	if (! reg) with_error(ENOMEM, "Cannot alloc cmd") return NULL;
@@ -80,7 +72,7 @@ static void rcmd_del(struct registered_cmd *reg)
 	free(reg);
 }
 
-void cmd_register_keyword(struct cmd_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...)
+void cmd_register_keyword(struct mdir_parser *cmdp, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...)
 {
 	va_list ap;
 	va_start(ap, nb_arg_max);
@@ -88,7 +80,7 @@ void cmd_register_keyword(struct cmd_parser *cmdp, char const *keyword, unsigned
 	va_end(ap);
 }
 
-void cmd_unregister_keyword(struct cmd_parser *cmdp, char const *keyword)
+void cmd_unregister_keyword(struct mdir_parser *cmdp, char const *keyword)
 {
 	struct registered_cmd *reg, *tmp;
 	LIST_FOREACH_SAFE(reg, &cmdp->rcmds, entry, tmp) {
@@ -103,12 +95,12 @@ void cmd_unregister_keyword(struct cmd_parser *cmdp, char const *keyword)
  * (De)Initialization
  */
 
-void cmd_parser_ctor(struct cmd_parser *cmdp)
+void mdir_parser_ctor(struct mdir_parser *cmdp)
 {
 	LIST_INIT(&cmdp->rcmds);
 }
 
-void cmd_parser_dtor(struct cmd_parser *cmdp)
+void mdir_parser_dtor(struct mdir_parser *cmdp)
 {
 	struct registered_cmd *reg;
 	while (NULL != (reg = LIST_FIRST(&cmdp->rcmds))) {
@@ -190,7 +182,7 @@ static bool is_seq(char const *str)
 	return isdigit(str[0]);
 }
 
-static void parse_line(struct cmd_parser *cmdp, struct cmd *cmd, struct varbuf *vb, int fd)
+static void parse_line(struct mdir_parser *cmdp, struct mdir_cmd *cmd, struct varbuf *vb, int fd)
 {
 	varbuf_clean(vb);
 	varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL);
@@ -205,7 +197,7 @@ static void parse_line(struct cmd_parser *cmdp, struct cmd *cmd, struct varbuf *
 	unsigned nb_args = nb_tokens - (with_seq ? 2:1);
 	struct cmd_arg *const args = tokens + (with_seq ? 2:1);
 	cmd->seq = 0;
-	if (with_seq && read_seq(&cmd->seq, tokens[0].val.string) && is_error()) return;
+	if (with_seq) if_fail (read_seq(&cmd->seq, tokens[0].val.string)) return;
 	struct registered_cmd *reg;
 	LIST_FOREACH(reg, &cmdp->rcmds, entry) {
 		if (same_keyword(reg->keyword, keyword)) {
@@ -216,7 +208,7 @@ static void parse_line(struct cmd_parser *cmdp, struct cmd *cmd, struct varbuf *
 	with_error(ENOENT, "No such keyword '%s'", keyword) return;
 }
 
-void cmd_read(struct cmd_parser *cmdp, struct cmd *cmd, int fd)
+void mdir_cmd_read(struct mdir_parser *cmdp, struct mdir_cmd *cmd, int fd)
 {
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
