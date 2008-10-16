@@ -42,6 +42,7 @@
  * group file will be missed.
  */
 
+struct user;
 void auth_begin(void);
 void auth_end(void);
 struct user *user_load(char const *name);
