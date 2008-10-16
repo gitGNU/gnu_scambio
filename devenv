@@ -37,43 +37,43 @@ function run_server {
 
 function send_content {
 	nc $MDIRD_HOST $MDIRD_PORT <<EOF
-0 auth Alice
-1 put /
+1 auth Alice
+2 put /
 sc-type: dir
 sc-name: mailboxes
 
-2 put /
+3 put /
 sc-type: dir
 sc-name: calendars
 
-3 put mailboxes
+4 put mailboxes
 sc-type: dir
 sc-name: rixed@happyleptic.org
 
-4 put calendars
+5 put calendars
 sc-type: dir
 sc-name: rixed
 
-5 put calendars
+6 put calendars
 sc-type: dir
 sc-name: project-X
 
-6 put calendars/rixed
+7 put calendars/rixed
 sc-start: 2008 10 21 12 00
 sc-stop:  2008 10 21 13 00
 sc-descr: lunch time
 
-7 put calendars/rixed
+8 put calendars/rixed
 sc-start: 2008 10 21 15 00
 sc-stop:  2008 10 21 15 30
 sc-descr: meeting prod
 
-8 put calendars/rixed
+9 put calendars/rixed
 sc-start: 2008 10 21 15 30
 sc-stop:  2008 10 21 16 00
 sc-descr: meeting support
 
-9 put calendars/rixed
+10 put calendars/rixed
 sc-start: 2008 10 25 12 00
 sc-stop:  2008 10 26 12 00
 sc-descr: PACS Ramine et Sandron

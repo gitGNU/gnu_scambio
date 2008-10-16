@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include <scambio/cnx.h>
 
 /*
  * Init
@@ -84,33 +85,6 @@ void chn_create(char *name, size_t len, bool rt, char const *username);
 void chn_send_file(char const *name, int fd, char const *username);
 
 /* Low level API */
-
-/* Struct mdir_cnx describe a connection to the chnd server (from a plugin or from
- * chnd itself), with socket, user name and key used.
- * Clients (plugins) and server (channeld) are assymetric here.
- */
-struct mdir_cnx;
-
-/* Connect to MDIRD_HOST:MDIRD_PORT and send auth.
- */
-struct mdir_cnx *mdir_cnx_new_outbound(char const *username);
-
-/* Accept and set user to NULL
- */
-struct mdir_cnx *mdir_cnx_new_inbound(int fd);
-/* Then set the user for the connection
- */
-void mdir_cnx_set_user(struct mdir_cnx *cnx, char const *username);
-
-/* Delete a cnx object.
- * Notice that the connection will not necessarily be closed at once,
- * but may be kept for future mdir_cnx_new().
- */
-void mdir_cnx_del(struct mdir_cnx *cnx);
-
-typedef void mdir_cnx_cb(int status, char const *compl, void *user_data);
-void mdir_cnx_query(struct mdir_cnx *cnx, mdir_cnx_cb *cb, void *user_data, char const *kw, ...);
-void mdir_cnx_read(struct mdir_cnx *cnx);
 
 /* Since there are retransmissions data may be required to be send more than once. But we do not want
  * to have the whole file in memory, and we do not want the user of this API to handle retransmissions.

@@ -20,18 +20,15 @@
  * These commands consists merely on a list of strings or numbers, the first
  * word being a keyword that allows a minimal syntax check.
  *
- * Commands are entered in a text file.
- *
- * May evolve into a lisp.
+ * Also used as a base for the network protocols (mdirs/channels)
  */
 
 #ifndef CMD_H_080616
 #define CMD_H_080616
 #include <stdbool.h>
-#include "scambio.h"
 
-struct cmd_arg {
-	enum cmd_arg_type { CMD_STRING, CMD_INTEGER, CMD_EOA } type;
+struct mdir_cmd_arg {
+	enum mdir_cmd_arg_type { CMD_STRING, CMD_INTEGER, CMD_EOA } type;
 	union {
 		char *string;
 		long long integer;
@@ -40,27 +37,27 @@ struct cmd_arg {
 
 #define CMD_MAX_ARGS 8
 
-struct cmd {
-	char const *keyword;	// the same pointer than the one registered
-	long long seq;	// -1 if no seqnum was read
+struct mdir_cmd {
+	char const *keyword;	// keywords are compared eq by address
+	long long seq;	// 0 if no seqnum was read (0 is then an invalid seqnum)
 	unsigned nb_args;
-	struct cmd_arg args[CMD_MAX_ARGS];
+	struct mdir_cmd_arg args[CMD_MAX_ARGS];
 };
 
-struct registered_cmd;
-struct cmd_parser {
-	LIST_HEAD(rcmds, registered_cmd) rcmds;
+struct mdir_registered_cmd;
+struct mdir_parser {
+	LIST_HEAD(rcmds, mdir_registered_cmd) rcmds;
 };
 
-void cmd_parser_ctor(struct cmd_parser *);
-void cmd_parser_dtor(struct cmd_parser *);
+void mdir_parser_ctor(struct mdir_parser *);
+void mdir_parser_dtor(struct mdir_parser *);
 // keyword is not copied. Should be a static constant.
-void cmd_register_keyword(struct cmd_parser *, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
-void cmd_unregister_keyword(struct cmd_parser *, char const *keyword);
-// construct a struct cmd that must be destroyed with cmd_dtor
-void cmd_read(struct cmd_parser *, struct cmd *cmd, int fd);
-void cmd_dtor(struct cmd *cmd);
+void mdir_parser_register_keyword(struct mdir_parser *, char const *keyword, unsigned nb_arg_min, unsigned nb_arg_max, ...);
+void mdir_parser_unregister_keyword(struct mdir_parser *, char const *keyword);
+// construct a struct cmd that must be destroyed with mdir_cmd_dtor
+void mdir_cmd_read(struct mdir_parser *, struct mdir_cmd *, int fd);
+void mdir_cmd_dtor(struct mdir_cmd *);
 #define SEQ_BUF_LEN 21
-char const *cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
+char const *mdir_cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
 
 #endif

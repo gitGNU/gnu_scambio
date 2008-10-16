@@ -25,10 +25,9 @@
 
 struct subscription;
 struct cnx_env {
-	int fd;
+	struct mdir_cnx cnx;
 	LIST_HEAD(subscriptions, subscription) subscriptions;
-	pth_mutex_t wfd;	// protects fd on write
-	struct user *user;
+	pth_mutex_t wfd;	// protects fd on write (put that on mdir_cnx ?
 };
 
 struct mdird {

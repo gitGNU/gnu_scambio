@@ -22,9 +22,9 @@
 #include <string.h>
 #include "scambio.h"
 #include "daemon.h"
-#include "cnx.h"
+#include "server.h"
 #include "varbuf.h"
-#include "cmd.h"
+#include "scambio/cnx.h"
 #include "mdird.h"
 #include "sub.h"
 
@@ -32,7 +32,7 @@
  * Data Definitions
  */
 
-static struct cnx_server server;
+static struct server server;
 static sig_atomic_t terminate = 0;
 
 struct cmd_parser parser;
@@ -108,16 +108,14 @@ static void init_cmd(void)
 
 static void deinit_server(void)
 {
-	cnx_server_dtor(&server);
+	server_dtor(&server);
 }
 
 static void init_server(void)
 {
 	debug("init server");
-	cnx_begin();
 	on_error return;
-	if (0 != atexit(cnx_end)) with_error(0, "atexit") return;
-	cnx_server_ctor(&server, conf_get_int("MDIRD_PORT"));
+	server_ctor(&server, conf_get_int("MDIRD_PORT"));
 	on_error return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
 	mdir_begin();
@@ -155,7 +153,7 @@ static void cnx_env_del(void *env_)
 	while (NULL != (sub = LIST_FIRST(&env->subscriptions))) {
 		subscription_del(sub);
 	}
-	close(env->fd);
+	mdir_cnx_dtor(&env->cnx);
 	env->user = NULL;
 	free(env);
 }
@@ -164,7 +162,10 @@ static struct cnx_env *cnx_env_new(int fd)
 {
 	struct cnx_env *env = malloc(sizeof(*env));
 	if (! env) with_error(ENOMEM, "Cannot alloc a cnx_env") return NULL;
-	env->fd = fd;
+	if_fail (mdir_cnx_ctor_inbound(&env->cnx, fd)) {
+		free(env);
+		return;
+	}
 	env->user = NULL;
 	pth_mutex_init(&env->wfd);
 	LIST_INIT(&env->subscriptions);
@@ -181,7 +182,7 @@ static void *serve_cnx(void *arg)
 	bool quit = false;
 	do {	// read a command and exec it
 		struct cmd cmd;
-		cmd_read(&parser, &cmd, env->fd);
+		mdir_cnx_read(env->cnx, &cmd, &parser);
 		on_error break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		if (cmd.keyword == kw_auth) {
@@ -215,7 +216,7 @@ int main(void)
 	on_error return EXIT_FAILURE;
 	// Run server
 	while (! terminate) {
-		int fd = cnx_server_accept(&server);
+		int fd = server_accept(&server);
 		if (fd < 0) {
 			error("Cannot accept connection on fd %d, pausing for 5s", server.sock_fd);
 			(void)pth_sleep(5);

@@ -27,23 +27,11 @@
 #include "cnx.h"
 
 /*
- * (De)Initialization.
- */
-
-void cnx_begin(void)
-{
-}
-
-void cnx_end(void)
-{
-}
-
-/*
  * Server
  */
 
 // TODO: use getaddrinfo(3)
-void cnx_server_ctor(struct cnx_server *serv, unsigned short port)
+void server_ctor(struct server *serv, unsigned short port)
 {
 	int const one = 1;
 	struct sockaddr_in any_addr;
@@ -65,7 +53,7 @@ void cnx_server_ctor(struct cnx_server *serv, unsigned short port)
 	}
 }
 
-void cnx_server_dtor(struct cnx_server *serv)
+void server_dtor(struct server *serv)
 {
 	if (serv->sock_fd >= 0) {
 		(void)close(serv->sock_fd);
@@ -73,54 +61,8 @@ void cnx_server_dtor(struct cnx_server *serv)
 	}
 }
 
-int cnx_server_accept(struct cnx_server *serv)
+int server_accept(struct server *serv)
 {
 	return pth_accept(serv->sock_fd, &serv->last_accepted_addr, &serv->last_accepted_addr_len);
 }
 
-/*
- * Client
- */
-
-#include <netdb.h>
-static int gaierr2errno(int err)
-{
-	switch (err) {
-		case EAI_SYSTEM: return errno;
-		case EAI_MEMORY: return ENOMEM;
-	}
-	return -1;	// FIXME
-}
-
-void cnx_client_ctor(struct cnx_client *cnx, char const *host, char const *service)
-{
-	// Resolve hostname into sockaddr
-	struct addrinfo *info_head, *ainfo;
-	int err;
-	if (0 != (err = getaddrinfo(host, service, NULL, &info_head))) {
-		// TODO: check that freeaddrinfo is not required in this case
-		with_error(gaierr2errno(err), "Cannot getaddrinfo") return;
-	}
-	err = ENOENT;
-	for (ainfo = info_head; ainfo; ainfo = ainfo->ai_next) {
-		cnx->sock_fd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
-		if (cnx->sock_fd == -1) continue;
-		if (0 == connect(cnx->sock_fd, ainfo->ai_addr, ainfo->ai_addrlen)) {
-			info("Connected to '%s'", host);
-			break;
-		}
-		err = errno;
-		(void)close(cnx->sock_fd);
-		cnx->sock_fd = -1;
-	}
-	if (! ainfo) error_push(err, "No suitable address found for host '%s'", host);
-	freeaddrinfo(info_head);
-}
-
-void cnx_client_dtor(struct cnx_client *cnx)
-{
-	if (cnx->sock_fd >= 0) {
-		(void)close(cnx->sock_fd);
-		cnx->sock_fd = -1;
-	}
-}

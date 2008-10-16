@@ -8,8 +8,7 @@ libcommons_la_SOURCES = \
 	varbuf.c \
 	conf.c \
 	log.c \
-	cnx.c \
-	cmd.c \
+	server.c \
 	daemon.c \
 	persist.c \
 	digest.c \

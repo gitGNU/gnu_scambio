@@ -35,22 +35,7 @@
  */
 
 static char const *mdir_files;
-
-// FIXME: définir et implémenter les mdir_cnx ailleurs (et s'en servir dans mdir{d,c}
-// pour l'inbound, ajouter la liste des keyword connus et leur CB.
-// pour l'outbound, c'est pareil puisque les fonction de transfert le requiert.
-// Ce qu'on peut faire, c'est une autre fonction distincte pour attacher un parseur à une cnx,
-// qui sera utilisé pour les commandes entrantes (pour les réponses on n'en a pas besoin).
-// Ou plutot, on a un mdir_cnx_read a qui on donne un parseur (et il a en plus la liste des
-// commandes envoyées pour interpréter aussi les réponses). Ensuite il faut aussi, pour pouvoir
-// reconnaitre les réponse au requète de nouvelles requète dans l'autre sens, que l'on puisse
-// discerner nos seqnum des seqnum de l'autre peer. On peut considérer que le seqnum est signé, et
-// que les seqnum du serveur sont négatifs. (les commandes non préfixée d'un seqnum, qui n'attendent
-// pas de réponse, ne pose pas de problème : ce sont forcément des commandes, pas des réponses).
-struct mdir_cnx {
-	int fd;
-	struct user *user;
-};
+static char const *kw_creat = "creat";
 
 /*
  * Init
@@ -131,8 +116,10 @@ struct creat_param {
 	bool done;
 };
 
-static void finalize_creat(int status, char const *compl, void *data)
+static void finalize_creat(struct mdir_cnx *cnx, char const *kw, int status, char const *compl, void *data)
 {
+	(void)cnx;
+	assert(kw == kw_creat);
 	struct creat_param *param = (struct creat_param *)data;
 	assert(! param->done);
 	if (status != 200) return;
@@ -147,7 +134,7 @@ void chn_create(char *name, size_t len, bool rt, char const *username)
 	do {
 		struct creat_param param = { .name = name, .len = len, .done = false };
 		if_fail (mdir_cnx_query(cnx, finalize_creat, &param, kw_creat, rt ? "*":NULL, NULL)) break;
-		if_fail (mdir_cnx_read(cnx)) break;	// wait until all queries are answered or timeouted
+		if_fail (mdir_cnx_read(cnx, NULL)) break;	// wait until all queries are answered or timeouted
 		if (! param.done) with_error(0, "Cannot create new file") break;
 	} while (0);
 	mdir_cnx_del(cnx);

@@ -20,23 +20,15 @@
 
 #include <sys/socket.h>
 
-struct cnx_server {
+struct server {
 	int sock_fd;
-	// Following two are filled by cnx_server_accept
+	// Following two are filled by server_accept
 	struct sockaddr last_accepted_addr;
 	socklen_t last_accepted_addr_len;
 };
 
-struct cnx_client {
-	int sock_fd;
-};
-
-void cnx_begin(void);
-void cnx_end(void);
-void cnx_server_ctor(struct cnx_server *, unsigned short port);
-void cnx_server_dtor(struct cnx_server *);
-int cnx_server_accept(struct cnx_server *);
-void cnx_client_ctor(struct cnx_client *, char const *host, char const *service);
-void cnx_client_dtor(struct cnx_client *);
+void server_ctor(struct server *, unsigned short port);
+void server_dtor(struct server *);
+int server_accept(struct server *);
 
 #endif

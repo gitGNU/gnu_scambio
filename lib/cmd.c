@@ -184,6 +184,12 @@ static int read_seq(long long *seq, char const *str)
 	return 0;
 }
 
+static bool is_seq(char const *str)
+{
+	if (str[0] == '-') str++;
+	return isdigit(str[0]);
+}
+
 static void parse_line(struct cmd_parser *cmdp, struct cmd *cmd, struct varbuf *vb, int fd)
 {
 	varbuf_clean(vb);
@@ -193,12 +199,12 @@ static void parse_line(struct cmd_parser *cmdp, struct cmd *cmd, struct varbuf *
 	int nb_tokens = tokenize(vb, tokens);
 	on_error return;
 	if (nb_tokens == 0) with_error(EINVAL, "No token found on line") return;
-	bool with_seq = isdigit(tokens[0].val.string[0]);
+	bool with_seq = is_seq(tokens[0].val.string);
 	if (with_seq && nb_tokens < 2) with_error(EINVAL, "Bad number of tokens (%d)", nb_tokens) return;
 	char const *const keyword = tokens[with_seq ? 1:0].val.string;
 	unsigned nb_args = nb_tokens - (with_seq ? 2:1);
 	struct cmd_arg *const args = tokens + (with_seq ? 2:1);
-	cmd->seq = -1;
+	cmd->seq = 0;
 	if (with_seq && read_seq(&cmd->seq, tokens[0].val.string) && is_error()) return;
 	struct registered_cmd *reg;
 	LIST_FOREACH(reg, &cmdp->rcmds, entry) {
