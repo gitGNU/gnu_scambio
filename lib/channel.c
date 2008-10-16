@@ -20,12 +20,15 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
+#include "scambio/channel.h"
 #include "misc.h"
+#include "auth.h"
 
 /*
  * Data Definitions
@@ -33,94 +36,157 @@
 
 static char const *mdir_files;
 
+// FIXME: définir et implémenter les mdir_cnx ailleurs (et s'en servir dans mdir{d,c}
+// pour l'inbound, ajouter la liste des keyword connus et leur CB.
+// pour l'outbound, c'est pareil puisque les fonction de transfert le requiert.
+// Ce qu'on peut faire, c'est une autre fonction distincte pour attacher un parseur à une cnx,
+// qui sera utilisé pour les commandes entrantes (pour les réponses on n'en a pas besoin).
+// Ou plutot, on a un mdir_cnx_read a qui on donne un parseur (et il a en plus la liste des
+// commandes envoyées pour interpréter aussi les réponses). Ensuite il faut aussi, pour pouvoir
+// reconnaitre les réponse au requète de nouvelles requète dans l'autre sens, que l'on puisse
+// discerner nos seqnum des seqnum de l'autre peer. On peut considérer que le seqnum est signé, et
+// que les seqnum du serveur sont négatifs. (les commandes non préfixée d'un seqnum, qui n'attendent
+// pas de réponse, ne pose pas de problème : ce sont forcément des commandes, pas des réponses).
+struct mdir_cnx {
+	int fd;
+	struct user *user;
+};
+
 /*
  * Init
  */
 
-void mdir_channel_end(void)
+void chn_end(void)
 {
 }
 
-void mdir_channel_begin(void)
+void chn_begin(void)
 {
 	if_fail(conf_set_default_str("MDIR_FILES_DIR", "/tmp/mdir/files")) return;
 	mdir_files = conf_get_str("MDIR_FILES_DIR");
-	if (-1 == atexit(mdir_channel_end)) with_error(0, "atexit(mdir_channel_end)") return;
 }
 
 /*
- * Files
+ * High level API for mere files
  */
 
-void mdir_file_create(char *name, size_t max_size)
-{
-	unsigned now_tag = (unsigned)time(NULL) & 0xFF;
-	char path[PATH_MAX];
-	int len = snprintf(path, sizeof(path), "%s/%02x", mdir_files, now_tag);
-	Mkdir(path);
-	snprintf(path+len, sizeof(path)-len, "/XXXXXX");
-	int fd = mkstemp(path);
-	if (fd < 0) with_error(errno, "Cannot mkstemp(%s)", path) return;
-	close(fd);
-	if ((int)max_size <= snprintf(name, max_size, "%02x%s", now_tag, path+len)) with_error(0, "mdir_file_create(): name buffer too short") return;
-	return;
-}
+/*
+ * Get a file from cache (download it first if necessary)
+ */
 
-int mdir_file_open(char *name)
+static void fetch_file_with_cnx(struct mdir_cnx *cnx, char const *name, int fd)
 {
-	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", mdir_files, name);
-	int fd = open(path, O_RDWR);
-	if (fd < 0) with_error(errno, "Cannot open(%s)", path) return -1;
-	return fd;
-}
-
-#define COPY_BUF_LEN 10000
-void mdir_file_write(int fd, int in, off_t offset, size_t length)
-{
-	char *buf = malloc(COPY_BUF_LEN);
-	if (! buf) with_error(ENOMEM, "malloc buffer") return;
-	size_t copied = 0;
+	struct chn_rtx *tx;
+	if_fail (tx = chn_rtx_new(cnx, name)) return;
+	bool eof_received = false;
 	do {
-		size_t const to_read = length > COPY_BUF_LEN ? COPY_BUF_LEN:length;
-		if_fail (Read(buf, in, to_read)) break;
-		if_fail (WriteTo(fd, offset + copied, buf, to_read)) break;
-		copied += to_read;
-		length -= to_read;
-	} while (length);
-	free(buf);
+		struct chn_box *box;
+		off_t offset;
+		size_t length;
+		bool eof;
+		if_fail (box = chn_rtx_read(tx, &offset, &length, &eof)) break;
+		WriteTo(fd, offset, box->data, length);
+		chn_box_unref(box);
+		on_error break;
+		if (eof) eof_received = true;
+	} while (!chn_rtx_complete(tx) && chn_rtx_should_wait(tx));
+	if (! chn_rtx_complete(tx)) error_push(0, "Transfert incomplete");
+	chn_rtx_del(tx);
 }
 
-void mdir_file_read(int fd, int out, off_t offset, size_t length)
+int chn_get_file(char *localfile, size_t len, char const *name, char const *username)
 {
-	char *buf = malloc(COPY_BUF_LEN);
-	if (! buf) with_error(ENOMEM, "malloc buffer") return;
-	size_t copied = 0;
+	assert(localfile && name);
+	// Look into the file cache
+	int actual_len = snprintf(localfile, len, "%s/%s", mdir_files, name);
+	if (actual_len >= (int)len) with_error(0, "buffer too short (need %d)", actual_len) return actual_len;
+	int fd = open(localfile, O_RDONLY);
+	if (fd < 0) {
+		// TODO: Touch it
+		(void)close(fd);
+		return actual_len;
+	}
+	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return actual_len;
+	// So lets fetch it
+	fd = open(localfile, O_RDWR|O_CREAT);
+	if (fd < 0) with_error(errno, "Cannot create(%s)", localfile) return actual_len;
+	struct mdir_cnx *cnx = mdir_cnx_new_outbound(username);
+	on_error return actual_len;
+	fetch_file_with_cnx(cnx, name, fd);
+	on_error {
+		// delete the file if the transfert failed for some reason
+		if (0 != unlink(localfile)) error_push(errno, "Failed to download %s, but cannot unlink it", localfile);
+	}
+	mdir_cnx_del(cnx);
+	return actual_len;
+}
+
+/*
+ * Request a new file name
+ */
+
+struct creat_param {
+	char *name;
+	size_t len;
+	bool done;
+};
+
+static void finalize_creat(int status, char const *compl, void *data)
+{
+	struct creat_param *param = (struct creat_param *)data;
+	assert(! param->done);
+	if (status != 200) return;
+	snprintf(param->name, param->len, "%s", compl);
+	param->done = true;
+}
+
+void chn_create(char *name, size_t len, bool rt, char const *username)
+{
+	struct mdir_cnx *cnx;
+	if_fail (cnx = mdir_cnx_new_outbound(username)) return;
 	do {
-		size_t const to_read = length > COPY_BUF_LEN ? COPY_BUF_LEN:length;
-		if_fail (ReadFrom(buf, fd, offset + copied, to_read)) break;
-		if_fail (Write(out, buf, to_read)) break;
-		copied += to_read;
-		length -= to_read;
-	} while (length);
-	free(buf);
+		struct creat_param param = { .name = name, .len = len, .done = false };
+		if_fail (mdir_cnx_query(cnx, finalize_creat, &param, kw_creat, rt ? "*":NULL, NULL)) break;
+		if_fail (mdir_cnx_read(cnx)) break;	// wait until all queries are answered or timeouted
+		if (! param.done) with_error(0, "Cannot create new file") break;
+	} while (0);
+	mdir_cnx_del(cnx);
 }
 
 /*
- * Channels
+ * Send a local file to a channel
  */
 
-struct channel *channel_new(void)
+static void send_file_with_cnx(struct mdir_cnx *cnx, char const *name, int fd)
 {
-	return NULL;
+	off_t offset = 0, max_offset;
+	if_fail (max_offset = filesize(fd)) return;
+	struct chn_wtx *tx;
+	if_fail (tx = chn_wtx_new(cnx, name)) return;
+#	define READ_FILE_BLOCK 65500
+	do {
+		struct chn_box *box;
+		bool eof = true;
+		size_t len = max_offset - offset;
+		if (len > READ_FILE_BLOCK) {
+			len = READ_FILE_BLOCK;
+			eof = false;
+		}
+		if_fail (box = chn_box_alloc(len)) break;
+		ReadFrom(box->data, fd, offset, len);
+		unless_error chn_wtx_write(tx, offset, len, box, eof);
+		offset += len;
+		on_error break;
+	} while (offset < max_offset);
+#	undef READ_FILE_BLOCK
+	chn_wtx_del(tx);
 }
 
-char const *channel_name(struct channel *chan)
+void chn_send_file(char const *name, int fd, char const *username)
 {
-	return NULL;
+	struct mdir_cnx *cnx;
+	if_fail (cnx = mdir_cnx_new_outbound(username)) return;
+	send_file_with_cnx(cnx, name, fd);
+	mdir_cnx_del(cnx);
 }
-
-/*
- * Transfers
- */
 

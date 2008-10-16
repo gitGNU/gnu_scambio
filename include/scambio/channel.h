@@ -32,6 +32,15 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+/*
+ * Init
+ *
+ * Uses MDIR_FILES_DIR to locate file cache
+ */
+
+void chn_begin(void);
+void chn_end(void);
+
 #if 0
 static char const *const kw_creat = "auth";	// create a persistent file
 static char const *const kw_creat = "creat";	// create a persistent file
@@ -51,46 +60,57 @@ static char const *const kw_miss  = "miss";	// report a gap in the transfered st
 	cmd_register_keyword(&parser, kw_miss,  2, 2, CMD_INTEGER, CMD_INTEGER, CMD_EOA);
 #endif
 
-/* High level API */
+/* High level API (for clients only) */
 
 /* Will return the name of a file containing the full content.
  * (taken from the file cache).
  * If the cache lacks the file, it's downloaded first.
  * TODO: The file might be removed by the cache cleaner after this call
  * and before a subsequent open. Its touched to lower the risks.
+ * Returns the actual length of the filename.
  */
-void chn_get_file(char *filename, size_t len, char const *name);
+int chn_get_file(char *filename, size_t len, char const *name, char const *username);
 
 /* Request a new channel, optionnaly for realtime.
  * Will connect if not already.
  * Note : realtime channels are handled the same by both sides, except that
- * a file is kept if the channel is not realtime and not for a RT channel.
- * Thus it is not possible to chn_channel_make_local() a RT channel.
+ * a file is kept if the channel is not realtime.
+ * Thus it is not advisable to chn_get_file() a RT channel.
  */
-void chn_create(char *name, size_t len, bool rt, char const *user);
+void chn_create(char *name, size_t len, bool rt, char const *username);
 
 /* Write a local file to a channel
  */
-size_t chn_send_file(char *name, char *filename);
+void chn_send_file(char const *name, int fd, char const *username);
 
 /* Low level API */
 
-/* Struct chn_cnx describe a connection to the chnd server (from a plugin or from
+/* Struct mdir_cnx describe a connection to the chnd server (from a plugin or from
  * chnd itself), with socket, user name and key used.
  * Clients (plugins) and server (channeld) are assymetric here.
  */
-struct chn_cnx;
+struct mdir_cnx;
 
 /* Connect to MDIRD_HOST:MDIRD_PORT and send auth.
  */
-struct chn_cnx *chn_cnx_new_outbound(char const *username);
+struct mdir_cnx *mdir_cnx_new_outbound(char const *username);
 
 /* Accept and set user to NULL
  */
-struct chn_cnx *chn_cnx_new_inbound(int fd);
+struct mdir_cnx *mdir_cnx_new_inbound(int fd);
 /* Then set the user for the connection
  */
-void chn_cnx_set_user(struct chn_cnx *cnx, char const *username);
+void mdir_cnx_set_user(struct mdir_cnx *cnx, char const *username);
+
+/* Delete a cnx object.
+ * Notice that the connection will not necessarily be closed at once,
+ * but may be kept for future mdir_cnx_new().
+ */
+void mdir_cnx_del(struct mdir_cnx *cnx);
+
+typedef void mdir_cnx_cb(int status, char const *compl, void *user_data);
+void mdir_cnx_query(struct mdir_cnx *cnx, mdir_cnx_cb *cb, void *user_data, char const *kw, ...);
+void mdir_cnx_read(struct mdir_cnx *cnx);
 
 /* Since there are retransmissions data may be required to be send more than once. But we do not want
  * to have the whole file in memory, and we do not want the user of this API to handle retransmissions.
@@ -98,7 +118,7 @@ void chn_cnx_set_user(struct chn_cnx *cnx, char const *username);
  */
 struct chn_box {
 	int count;
-	void data[];
+	char data[];
 };
 
 static inline struct chn_box *chn_box_alloc(size_t bytes)
@@ -129,7 +149,7 @@ struct chn_rtx;
  *   read or the write. for the write, its not a problem since UDP wont do that and any way we could
  *   not retransmitter neither then. For the read, well, dont do blocking reads :)
  */
-struct chn_wtx *chn_wtx_new(struct chn_cnx *, char *name);
+struct chn_wtx *chn_wtx_new(struct mdir_cnx *, char const *name);
 
 /* Send the data according to the MTU (ie, given block may be split again).
  * This first sent the required retransmissions, then free the old box, then send the given box by packet
@@ -148,12 +168,12 @@ void chn_wtx_del(struct chn_wtx *tx);
  * with a new writer thread that will ask for retransmissions of missed packets.
  * The reader thread is now the caller.
  */
-struct chn_rtx *chn_rtx_new(struct chn_cnx *, char *name);
+struct chn_rtx *chn_rtx_new(struct mdir_cnx *, char const *name);
 
 /* Return the next data block received (not necessarily in sequence).
  * This is allocated in a box so that you can rewrite it to another channel if you wish,
  * but when returned you own the only ref to it.
- * Note : eof means that the block received is at the end of the datas, NOT the it will
+ * Note : eof means that the block received is at the end of the datas, NOT that it will
  * be the last received.
  */
 struct chn_box *chn_rtx_read(struct chn_rtx *tx, off_t *offset, size_t *length, bool *eof);
@@ -164,8 +184,12 @@ struct chn_box *chn_rtx_read(struct chn_rtx *tx, off_t *offset, size_t *length, 
 bool chn_rtx_complete(struct chn_rtx *tx);
 
 /* But if the other peer changed its mind, you may never receive it.
- * This one tell you if there are still hope to received the missing data.
+ * This one tell you if there are still hope to receive the missing data.
  */
-bool chn_rtx_waiting(struct chn_rtx *tx);
+bool chn_rtx_should_wait(struct chn_rtx *tx);
+
+/* Once you are done with the transfert, free it
+ */
+void chn_rtx_del(struct chn_rtx *tx);
 
 #endif
