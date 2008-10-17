@@ -23,11 +23,18 @@
  * Client and server are assymetric but similar.
  */
 struct sent_query;
+struct query_def {
+	LIST_ENTRY(query_def) cnx_entry;	// list head is in the definition of the query
+	struct mdir_cmd_def def;
+	LIST_HEAD(sent_queries, sent_query) sent_queries;
+	mdir_cnx_cb *cb;
+};
 struct mdir_cnx {
 	int fd;
+	long long next_seq;
 	struct mdir_user *user;
 	struct mdir_syntax syntax;
-	LIST_HEAD(sent_queries, sent_query) sent_queries;
+	LIST_HEAD(query_defs, query_def) query_defs;
 };
 
 /* Connect to MDIRD_HOST:MDIRD_PORT and send auth.
@@ -35,9 +42,9 @@ struct mdir_cnx {
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const host, char const *service, char const *username);
 
 /* After you accepted the connection.
- * Handle user auth.
+ * You must provide the storage for a mdir_cmd_def (used to handle the auth internally)
  */
-void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd);
+void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd, struct mdir_cmd_def *);
 
 /* Delete a cnx object.
  * Notice that the connection will not necessarily be closed at once,
@@ -46,19 +53,20 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd);
 void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
 /* Sends a query to the peer.
- * set the callback to NULL to indicate that no answer is expected, and then
- * no seqnum will be set. Otherwise a seqnum will be chosen in sequence (<0 if you
- * are server side).
- * Otherwise, the cb will be called when the answer is received, while in mdir_cnx_read().
+ * The query must have been registered first even if you do not expect an answer.
  */
-typedef void mdir_cnx_answ_cb(char const *kw, struct mdir_cmd *cmd, void *user_data);
-void mdir_cnx_register_query(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_answ_cb *cb);
-void mdir_cnx_query(struct mdir_cnx *cnx, void *user_data, char const *kw, ...);
+typedef void mdir_cnx_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
+/* You must provide storage for the query_def
+ */
+void mdir_cnx_register_query(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd);
+/* If !answ, no seqnum will be set (and you will receive no answer).
+ * If answ, the cb will be called later when the answer is received, while in mdir_cnx_read().
+ */
+void mdir_cnx_query(struct mdir_cnx *cnx, struct query_def *qd, bool answ, void *user_data, ...);
 
-/* Register that a given command definition is handled by the given callback.
+/* Register an incomming command definition.
  * Will only call mdir_cmd_def_register for the cnx syntax
  */
-typedef void mdir_cnx_serve_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
 void mdir_cnx_register_service(struct mdir_cnx *cnx, struct mdir_cmd_def *def);
 
 /* Will use a mdir_parser build from all expected query responses, and by all
@@ -66,6 +74,9 @@ void mdir_cnx_register_service(struct mdir_cnx *cnx, struct mdir_cmd_def *def);
  * It is not possible to confuse answers from commands, since commands are either
  * assymetric, or not acknowledged (the only symetrical commands, which are the
  * copy/skip data transfert commands, are not answered except for miss commands).
+ * For new commands, the mdir_cmd_cb of the definition will be called, with the cnx
+ * as user_data. For query answers the mdir_cnx_cb registered for the query will be
+ * called.
  */
 void mdir_cnx_read(struct mdir_cnx *cnx);
 

@@ -99,7 +99,6 @@ static int read_seq(long long *seq, char const *str)
 
 static bool is_seq(char const *str)
 {
-	if (str[0] == '-') str++;
 	return isdigit(str[0]);
 }
 
@@ -117,7 +116,7 @@ static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct 
 	char const *const keyword = tokens[with_seq ? 1:0].string;
 	cmd->nb_args = nb_tokens - (with_seq ? 2:1);
 	union mdir_cmd_arg *const args = tokens + (with_seq ? 2:1);
-	cmd->seq = 0;
+	cmd->seq = -1;
 	if (with_seq) if_fail (read_seq(&cmd->seq, tokens[0].string)) return;
 	LIST_FOREACH(cmd->def, &syntax->defs, entry) {
 		if (same_keyword(cmd->def->keyword, keyword)) {
@@ -128,17 +127,19 @@ static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct 
 	with_error(ENOENT, "No such keyword '%s'", keyword) return;
 }
 
-void mdir_cmd_read(struct mdir_syntax *syntax, struct mdir_cmd *cmd, int fd)
+void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data)
 {
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
 	on_error return;
+	struct mdir_cmd cmd;
 	cmd->def = NULL;
-	while (! cmd->def) {
-		parse_line(syntax, cmd, &vb, fd);
-		on_error break;
-	}
+	do {
+		if_fail (parse_line(syntax, &cmd, &vb, fd)) break;
+	} while (! cmd->def);
 	varbuf_dtor(&vb);
+	if (cmd->def->cb) cmd->def->cb(&cmd, user_data);
+	mdir_cmd_dtor(&cmd);
 	return;
 }
 

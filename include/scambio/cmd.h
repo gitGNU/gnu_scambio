@@ -37,6 +37,7 @@ typedef void mdir_cmd_cb(struct mdir_cmd *cmd, void *user_data);
  */
 struct mdir_cmd_def {
 	LIST_ENTRY(mdir_cmd_def) entry;
+	mdir_cmd_cb *cb;
 	char const *keyword;
 	unsigned nb_arg_min, nb_arg_max;
 	unsigned nb_types;	// after which STRING is assumed
@@ -47,7 +48,7 @@ struct mdir_cmd_def {
  */
 struct mdir_cmd {
 	struct mdir_cmd_def *def;
-	long long seq;	// 0 if no seqnum was read (0 is then an invalid seqnum)
+	long long seq;	// -1 if no seqnum was read
 	unsigned nb_args;
 	union mdir_cmd_arg {	// actual type is taken from the definition. Past def->nb_arg_max it's STRING.
 		char *string;
@@ -84,9 +85,9 @@ static inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_
 }
 
 /* Read a line from fd, and parse it according to syntax.
- * Construct a mdir_cmd that must be destroyed with mdir_cmd_dtor
+ * The registered callback will be called.
  */
-void mdir_cmd_read(struct mdir_syntax *, struct mdir_cmd *, int fd);
+void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data);
 
 static inline void mdir_cmd_dtor(struct mdir_cmd *cmd)
 {
