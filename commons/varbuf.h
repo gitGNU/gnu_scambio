@@ -59,6 +59,11 @@ static inline void *varbuf_unbox(struct varbuf *vb)
 
 void varbuf_make_room(struct varbuf *, size_t new_size);
 void varbuf_append(struct varbuf *, size_t size, void const *buf);
+void varbuf_append_strs(struct varbuf *, ...)
+#ifdef __GNUC__
+	__attribute__ ((sentinel))
+#endif
+;
 void varbuf_put(struct varbuf *, size_t size);
 void varbuf_chop(struct varbuf *, size_t size);
 // reads one more line of text into varbuf (converting CRLF into LF)
