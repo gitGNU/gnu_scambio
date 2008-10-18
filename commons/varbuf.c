@@ -58,6 +58,18 @@ void varbuf_append(struct varbuf *vb, size_t size, void const *buf)
 	memcpy(vb->buf + pos, buf, size);
 }
 
+void varbuf_append_strs(struct varbuf *vb, ...)
+{
+	va_list ap;
+	va_start(ap, vb);
+	char const *str;
+	while (NULL != (str = va_arg(ap, char const *))) {
+		size_t const len = strlen(str);
+		if_fail (varbuf_append(vb, len, str)) break;
+	}
+	va_end(ap);
+}
+
 void varbuf_put(struct varbuf *vb, size_t size)
 {
 	if (vb->used + size > vb->actual) {
