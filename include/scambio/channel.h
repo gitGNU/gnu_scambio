@@ -70,7 +70,7 @@ static char const *const kw_miss  = "miss";	// report a gap in the transfered st
  * and before a subsequent open. Its touched to lower the risks.
  * Returns the actual length of the filename.
  */
-int chn_get_file(char *filename, size_t len, char const *name, char const *username);
+int chn_get_file(char *localfile, size_t len, char const *name, char const *host, char const *service, char const *username);
 
 /* Request a new channel, optionnaly for realtime.
  * Will connect if not already.
@@ -78,11 +78,11 @@ int chn_get_file(char *filename, size_t len, char const *name, char const *usern
  * a file is kept if the channel is not realtime.
  * Thus it is not advisable to chn_get_file() a RT channel.
  */
-void chn_create(char *name, size_t len, bool rt, char const *username);
+void chn_create(char *name, size_t len, bool rt, char const *host, char const *service, char const *username);
 
 /* Write a local file to a channel
  */
-void chn_send_file(char const *name, int fd, char const *username);
+void chn_send_file(char const *name, int fd, char const *host, char const *service, char const *username);
 
 /* Low level API */
 
