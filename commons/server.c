@@ -24,7 +24,7 @@
 #include <arpa/inet.h>
 #include <pth.h>
 #include "scambio.h"
-#include "cnx.h"
+#include "server.h"
 
 /*
  * Server

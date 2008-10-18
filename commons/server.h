@@ -15,8 +15,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CNX_H_080622
-#define CNX_H_080622
+#ifndef SERVER_H_080622
+#define SERVER_H_080622
 
 #include <sys/socket.h>
 
