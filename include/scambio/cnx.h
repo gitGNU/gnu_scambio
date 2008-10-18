@@ -19,14 +19,32 @@
 #define CNX_H_081016
 #include <scambio/cmd.h>
 
+/* These store the keywords usefull for the mdir protocol.
+ * Keyword are compared by address so it's usefull to have all these here.
+ */
+extern char const kw_auth[];
+extern char const kw_put[];
+extern char const kw_rem[];
+extern char const kw_sub[];
+extern char const kw_unsub[];
+extern char const kw_quit[];
+extern char const kw_patch[];
+extern char const kw_creat[];
+extern char const kw_down[];
+extern char const kw_up[];
+extern char const kw_copy[];
+extern char const kw_skip[];
+
 /* Struct mdir_cnx describe a connection following mdir protocol.
  * Client and server are assymetric but similar.
  */
 struct sent_query;
+struct mdir_cnx;
+typedef void mdir_cnx_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
 struct query_def {
 	LIST_ENTRY(query_def) cnx_entry;	// list head is in the definition of the query
-	struct mdir_cmd_def def;
 	LIST_HEAD(sent_queries, sent_query) sent_queries;
+	struct mdir_cmd_def def;
 	mdir_cnx_cb *cb;
 };
 struct mdir_cnx {
@@ -39,7 +57,7 @@ struct mdir_cnx {
 
 /* Connect to MDIRD_HOST:MDIRD_PORT and send auth.
  */
-void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const host, char const *service, char const *username);
+void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const *host, char const *service, char const *username);
 
 /* After you accepted the connection.
  * You must provide the storage for a mdir_cmd_def (used to handle the auth internally)
@@ -54,11 +72,9 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
 /* Sends a query to the peer.
  * The query must have been registered first even if you do not expect an answer.
+ * You must provide storage for the query_def
  */
-typedef void mdir_cnx_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
-/* You must provide storage for the query_def
- */
-void mdir_cnx_register_query(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd);
+void mdir_cnx_query_register(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd);
 /* If !answ, no seqnum will be set (and you will receive no answer).
  * If answ, the cb will be called later when the answer is received, while in mdir_cnx_read().
  */
@@ -67,7 +83,10 @@ void mdir_cnx_query(struct mdir_cnx *cnx, struct query_def *qd, bool answ, void 
 /* Register an incomming command definition.
  * Will only call mdir_cmd_def_register for the cnx syntax
  */
-void mdir_cnx_register_service(struct mdir_cnx *cnx, struct mdir_cmd_def *def);
+static inline void mdir_cnx_service_register(struct mdir_cnx *cnx, struct mdir_cmd_def *def)
+{
+	mdir_syntax_register(&cnx->syntax, def);
+}
 
 /* Will use a mdir_parser build from all expected query responses, and by all
  * registered services.

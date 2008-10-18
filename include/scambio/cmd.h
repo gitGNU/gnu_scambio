@@ -26,6 +26,7 @@
 #ifndef CMD_H_080616
 #define CMD_H_080616
 #include <stdbool.h>
+#include <scambio/queue.h>
 
 #define CMD_MAX_ARGS 8
 
@@ -89,9 +90,10 @@ static inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_
  */
 void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data);
 
+#include <stdlib.h>
 static inline void mdir_cmd_dtor(struct mdir_cmd *cmd)
 {
-	for (unsigned a=0; a<cmd->nb_types; a++) {	// Copy and transcode args
+	for (unsigned a=0; a<cmd->def->nb_types; a++) {	// Copy and transcode args
 		if (a >= cmd->def->nb_arg_max || cmd->def->types[a] == CMD_STRING) free(cmd->args[a].string);
 	}
 }
@@ -99,6 +101,7 @@ static inline void mdir_cmd_dtor(struct mdir_cmd *cmd)
 /* Utility function to convert a seqnum to a string
  */
 #define SEQ_BUF_LEN 21
+#include <stdio.h>
 static inline char const *mdir_cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq)
 {
 	snprintf(buf, sizeof(buf), "%lld", seq);
