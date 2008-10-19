@@ -38,8 +38,8 @@ typedef void mdir_cmd_cb(struct mdir_cmd *cmd, void *user_data);
  */
 struct mdir_cmd_def {
 	LIST_ENTRY(mdir_cmd_def) entry;
-	mdir_cmd_cb *cb;
 	char const *keyword;
+	mdir_cmd_cb *cb;
 	unsigned nb_arg_min, nb_arg_max;
 	unsigned nb_types;	// after which STRING is assumed
 	enum mdir_cmd_arg_type { CMD_STRING, CMD_INTEGER } types[CMD_MAX_ARGS];

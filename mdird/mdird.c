@@ -35,8 +35,6 @@
 static struct server server;
 static sig_atomic_t terminate = 0;
 
-struct mdir_syntax syntax;
-
 /*
  * We overload mdir into mdird
  */
@@ -82,24 +80,6 @@ static void init_log(void)
 	debug("Seting log level to %d", log_level);
 }
 
-static void cmd_end(void)
-{
-	mdir_syntax_dtor(&syntax);
-}
-
-static void init_cmd(void)
-{
-	debug("init cmd");
-	mdir_syntax_ctor(&syntax);
-	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
-	cmd_register_keyword(&syntax, kw_quit,  0, 0, CMD_EOA);
-	cmd_register_keyword(&syntax, kw_auth,  1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&syntax, kw_unsub, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&syntax, kw_sub,   2, 2, CMD_STRING, CMD_INTEGER, CMD_EOA);
-	cmd_register_keyword(&syntax, kw_rem,   1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&syntax, kw_put,   1, 1, CMD_STRING, CMD_EOA);
-}
-
 static void deinit_server(void)
 {
 	server_dtor(&server);
@@ -131,7 +111,6 @@ static void init(void)
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	init_conf(); on_error return;
 	init_log();  on_error return;
-	init_cmd();  on_error return;
 	daemonize(); on_error return;
 	init_server();
 }
@@ -148,21 +127,50 @@ static void cnx_env_del(void *env_)
 		subscription_del(sub);
 	}
 	mdir_cnx_dtor(&env->cnx);
-	env->user = NULL;
 	free(env);
+}
+
+static void cnx_env_ctor(struct cnx_env *env, int fd)
+{
+	struct mdir_cmd_def auth_def;
+	if_fail (mdir_cnx_ctor_inbound(&env->cnx, fd, &auth_def)) return;
+	static struct mdir_cmd_def services[] = {
+		{
+			.keyword = kw_quit,  .cb = exec_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
+			.nb_types = 0,
+		}, {
+			.keyword = kw_unsub, .cb = exec_unsub, .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		}, {
+			.keyword = kw_sub,   .cb = exec_sub,   .nb_arg_min = 2, .nb_arg_max = 2,
+			.nb_types = 2, .types = { CMD_STRING, CMD_INTEGER }
+		},{
+			.keyword = kw_rem,   .cb = exec_rem,   .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		},{
+			.keyword = kw_put,   .cb = exec_put,   .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		}
+	};
+	for (unsigned s=0; s<sizeof_array(services); s++) {
+		if_fail (mdir_cnx_service_register(&env->cnx, services+s)) {
+			mdir_cnx_dtor(&env->cnx);
+			return;
+		}
+	}
+	env->quit = false;
+	pth_mutex_init(&env->wfd);
+	LIST_INIT(&env->subscriptions);
 }
 
 static struct cnx_env *cnx_env_new(int fd)
 {
 	struct cnx_env *env = malloc(sizeof(*env));
 	if (! env) with_error(ENOMEM, "Cannot alloc a cnx_env") return NULL;
-	if_fail (mdir_cnx_ctor_inbound(&env->cnx, fd)) {
+	if_fail (cnx_env_ctor(env, fd)) {
 		free(env);
-		return;
+		env = NULL;
 	}
-	env->user = NULL;
-	pth_mutex_init(&env->wfd);
-	LIST_INIT(&env->subscriptions);
 	return env;
 }
 
@@ -173,30 +181,12 @@ static void *serve_cnx(void *arg)
 		cnx_env_del(env);
 		return NULL;
 	}
-	bool quit = false;
 	do {	// read a command and exec it
-		struct cmd cmd;
-		mdir_cnx_read(env->cnx, &cmd, &syntax);
-		on_error break;
 		pth_mutex_acquire(&env->wfd, FALSE, NULL);
-		if (cmd.keyword == kw_auth) {
-			exec_auth(env, cmd.seq, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_sub) {
-			exec_sub(env, cmd.seq, cmd.args[0].val.string, cmd.args[1].val.integer);
-		} else if (cmd.keyword == kw_unsub) {
-			exec_unsub(env, cmd.seq, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_put) {
-			exec_put(env, cmd.seq, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_rem) {
-			exec_rem(env, cmd.seq, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_quit) {
-			exec_quit(env, cmd.seq);
-			quit = true;
-		}
+		mdir_cnx_read(&env->cnx);
 		pth_mutex_release(&env->wfd);
-		mdir_cmd_dtor(&cmd);
 		on_error break;
-	} while (! quit);
+	} while (! env->quit);
 	return NULL;
 }
 

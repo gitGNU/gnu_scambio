@@ -28,6 +28,7 @@
 #include "varbuf.h"
 #include "scambio/header.h"
 #include "scambio/mdir.h"
+#include "scambio/cnx.h"
 #include "sub.h"
 #include "auth.h"
 
@@ -45,27 +46,15 @@ void exec_end(void)
 }
 
 /*
- * Answers
- */
-
-static void answer(struct cnx_env *env, long long seq, char const *cmd_name, int status, char const *cmpl)
-{
-	char reply[512];
-	size_t len = snprintf(reply, sizeof(reply), "%lld %s %d %s\n", seq, cmd_name, status, cmpl);
-	Write(env->fd, reply, len);
-}
-
-/*
  * Subscriptions
  */
 
-void exec_sub(struct cnx_env *env, long long seq, char const *dir, mdir_version version)
+void exec_sub(struct mdir_cmd *cmd, void *user_data)
 {
+	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
+	char const *const dir = cmd->args[0].string;
+	mdir_version const version = mdir_str2version(cmd->args[1].string);
 	debug("doing SUB for '%s', last version %"PRIversion, dir, version);
-	if (! env->user) {
-		answer(env, seq, "SUB", 401, "No auth");
-		return;
-	}
 	int substatus = 0;
 	// Check if we are already registered
 	struct subscription *sub = subscription_find(env, dir);
@@ -79,7 +68,7 @@ void exec_sub(struct cnx_env *env, long long seq, char const *dir, mdir_version 
 			break;
 		}
 	} while(0);
-	answer(env, seq, "SUB", (is_error() ? 500:200)+substatus, is_error() ? error_str():"OK");
+	mdir_cnx_answer(&env->cnx, cmd, (is_error() ? 500:200)+substatus, is_error() ? error_str():"OK");
 	error_clear();	// error dealt with
 }
 
@@ -155,6 +144,7 @@ void exec_rem(struct cnx_env *env, long long seq, char const *dir)
 void exec_quit(struct cnx_env *env, long long seq)
 {
 	debug("doing QUIT");
+	env->quit = true;
 	answer(env, seq, "QUIT", 200, "OK");
 }
 

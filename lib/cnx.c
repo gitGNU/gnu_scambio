@@ -145,16 +145,13 @@ void mdir_cnx_query(struct mdir_cnx *cnx, struct query_def *qd, bool answ, void 
  * Constructors for mdir_cnx
  */
 
-static struct mdir_cnx *cnx_alloc(void)
+static void cnx_ctor_common(struct mdir_cnx *cnx)
 {
-	struct mdir_cnx *cnx = malloc(sizeof(*cnx));
-	if (! cnx) with_error(ENOMEM, "malloc(mdir_cnx)") return NULL;
 	cnx->fd = -1;
 	cnx->user = NULL;
 	cnx->next_seq = 0;
 	LIST_INIT(&cnx->query_defs);
 	mdir_syntax_ctor(&cnx->syntax);
-	return cnx;
 }
 
 static int gaierr2errno(int err)
@@ -201,6 +198,7 @@ static void auth_answ(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_dat
 
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const *host, char const *service, char const *username)
 {
+	cnx_ctor_common(cnx);
 	if_fail (cnx_connect(cnx, host, service)) return;
 	do {
 		struct query_def auth_def;
@@ -226,6 +224,7 @@ static void serve_auth(struct mdir_cmd *cmd, void *user_data)
 
 void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd, struct mdir_cmd_def *auth_def)
 {
+	cnx_ctor_common(cnx);
 	cnx->user = NULL;
 	cnx->fd = fd;
 	// Now wait for user auth and set user or return error

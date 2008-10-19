@@ -21,11 +21,13 @@
 #include <stddef.h>
 #include <pth.h>
 #include "scambio/mdir.h"
+#include "scambio/cnx.h"
 #include "auth.h"
 
 struct subscription;
 struct cnx_env {
 	struct mdir_cnx cnx;
+	bool quit;
 	LIST_HEAD(subscriptions, subscription) subscriptions;
 	pth_mutex_t wfd;	// protects fd on write (put that on mdir_cnx ?
 };
@@ -42,11 +44,6 @@ static inline struct mdird *mdir2mdird(struct mdir *mdir)
 
 void exec_begin(void);
 void exec_end(void);
-void exec_auth (struct cnx_env *, long long seq, char const *name);
-void exec_sub  (struct cnx_env *, long long seq, char const *dir, mdir_version version);
-void exec_unsub(struct cnx_env *, long long seq, char const *dir);
-void exec_put  (struct cnx_env *, long long seq, char const *dir);
-void exec_rem  (struct cnx_env *, long long seq, char const *dir);
-void exec_quit (struct cnx_env *, long long seq);
+extern mdir_cmd_cb exec_quit, exec_sub, exec_unsub, exec_put, exec_rem;
 
 #endif
