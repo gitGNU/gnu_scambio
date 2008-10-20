@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include "mdirc.h"
 #include "scambio.h"
-#include "cmd.h"
+#include "scambio/cnx.h"
 #include "scambio/header.h"
 #include "persist.h"
 #include "digest.h"
@@ -212,6 +212,7 @@ void *reader_thread(void *args)
 
 void reader_begin(void)
 {
+	// TODO: register all queries (for answer) and command PATCH
 	// FIXME: LIST_INIT should go in a command_begin()
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
 		cmd_register_keyword(&parser, command_types[t].keyword,  2, UINT_MAX, CMD_INTEGER, CMD_STRING, CMD_EOA);
