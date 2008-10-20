@@ -42,16 +42,21 @@
 
 static bool terminate_reader;
 
-void finalize_sub(struct command *cmd, int status, char const *compl)
+void finalize_sub(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
 {
-	debug("subscribing to %s : %d %s", mdir_id(&cmd->mdirc->mdir), status, compl);
-	cmd->mdirc->subscribed = true;
+	struct command *command = (struct command *)user_data;
+	assert(cnx_ == &cnx);
+	debug("subscribing to %s : %d %s", mdir_id(&command->mdirc->mdir), status, compl);
+	command->mdirc->subscribed = true;
 }
 
-void finalize_unsub(struct command *cmd, int status, char const *compl)
+void finalize_unsub(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
 {
-	debug("unsubscribing to %s : %d %s", mdir_id(&cmd->mdirc->mdir), status, compl);
-	cmd->mdirc->subscribed = false;
+	struct command *command = (struct command *)user_data;
+	assert(cnx_ == &cnx);
+	debug("unsubscribing to %s : %d %s", mdir_id(&command->mdirc->mdir), status, compl);
+	command->mdirc->subscribed = false;
+	command_del(command);
 }
 
 static void rename_temp(char const *path, char const *compl)
@@ -68,39 +73,51 @@ static void rename_temp(char const *path, char const *compl)
 	if (0 != rename(path, new_path)) error_push(errno, "rename %s -> %s", path, new_path);
 }
 
-void finalize_put(struct command *cmd, int status, char const *compl)
+void finalize_put(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
 {
-	debug("put %s : %d", cmd->filename, status);
+	struct command *command = (struct command *)user_data;
+	assert(cnx_ == &cnx);
+	debug("put %s : %d", command->filename, status);
 	if (status == 200) {
-		rename_temp(cmd->filename, compl);
+		rename_temp(command->filename, compl);
 	}
+	command_del(command);
 }
 
-void finalize_rem(struct command *cmd, int status, char const *compl)
+void finalize_rem(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
 {
-	debug("rem %s : %d", cmd->filename, status);
+	struct command *command = (struct command *)user_data;
+	assert(cnx_ == &cnx);
+	debug("rem %s : %d", command->filename, status);
 	if (status == 200) {
-		rename_temp(cmd->filename, compl);
+		rename_temp(command->filename, compl);
 	}
+	command_del(command);
 }
 
-void finalize_auth(struct command *cmd, int status, char const *compl)
+#if 0
+void finalize_auth(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
 {
-	(void)cmd;
 	(void)compl;
+	struct command *command = (struct command *)user_data;
+	assert(cnx_ == &cnx);
 	debug("auth : %d", status);
 	if (status != 200) {
 		terminate_reader = true;
 	}
+	command_del(command);
 }
+#endif
 
-void finalize_quit(struct command *cmd, int status, char const *compl)
+void finalize_quit(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
 {
-	(void)cmd;
 	(void)status;
 	(void)compl;
+	struct command *command = (struct command *)user_data;
+	assert(cnx_ == &cnx);
 	debug("quit : %d", status);
 	terminate_reader = true;
+	command_del(command);
 }
 
 struct patch {
@@ -117,7 +134,7 @@ static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version ol
 	patch->action = action;
 	patch->header = header_new();
 	on_error return;
-	header_read(patch->header, cnx.sock_fd);
+	header_read(patch->header, cnx.fd);
 	on_error {
 		header_del(patch->header);
 		return;
@@ -171,8 +188,16 @@ static struct patch *patch_new(struct mdirc *mdirc, mdir_version old_version, md
 	return patch;
 }
 
-static char const *const kw_patch = "patch";
-static char const *const kw_quit  = "quit";
+static void patch_service(struct mdir_cmd *cmd, void *user_data)
+{
+	assert(user_data == &cnx);
+	struct mdir *const mdir = mdir_lookup_by_id(cmd->args[0].string, false);
+	on_error return;
+	struct mdirc *const mdirc = mdir2mdirc(mdir);
+	(void)patch_new(mdirc, cmd->args[1].integer, cmd->args[2].integer, mdir_str2action(cmd->args[3].string));
+	on_error return;
+	try_apply(mdirc);
+}
 
 void *reader_thread(void *args)
 {
@@ -181,30 +206,8 @@ void *reader_thread(void *args)
 	terminate_reader = false;
 	do {
 		// read and parse one command
-		struct cmd cmd;
 		debug("Reading cmd on socket");
-		cmd_read(&parser, &cmd, cnx.sock_fd);
-		on_error break;
-		debug("Received keyword '%s'", cmd.keyword);
-		if (cmd.keyword == kw_patch) {
-			struct mdir *const mdir = mdir_lookup_by_id(cmd.args[0].val.string, false);
-			on_error break;
-			struct mdirc *const mdirc = mdir2mdirc(mdir);
-			(void)patch_new(mdirc, cmd.args[1].val.integer, cmd.args[2].val.integer, mdir_str2action(cmd.args[3].val.string));
-			on_error break;
-			try_apply(mdirc);
-			on_error break;
-		} else for (unsigned t=0; t<sizeof_array(command_types); t++) {
-			if (cmd.keyword == command_types[t].keyword) {
-				struct command *command = command_get_by_seqnum(t, cmd.seq);
-				if (command) {
-					command_types[t].finalize(command, cmd.args[0].val.integer, cmd.args[1].val.string);
-					command_del(command);
-				}
-				break;
-			}
-		}
-		cmd_dtor(&cmd);
+		if_fail (mdir_cnx_read(&cnx)) break;
 	} while (! terminate_reader);
 	debug("Quitting reader thread");
 	return NULL;
@@ -212,22 +215,25 @@ void *reader_thread(void *args)
 
 void reader_begin(void)
 {
-	// TODO: register all queries (for answer) and command PATCH
-	// FIXME: LIST_INIT should go in a command_begin()
+	// Register all queries (for answer)
 	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		cmd_register_keyword(&parser, command_types[t].keyword,  2, UINT_MAX, CMD_INTEGER, CMD_STRING, CMD_EOA);
+		if_fail (mdir_cnx_query_register(&cnx, command_types[t].keyword, command_types[t].finalize, &command_types[t].def)) return;
+		// FIXME: LIST_INIT should go in a command_begin()
 		LIST_INIT(&command_types[t].commands);
 	}
-	cmd_register_keyword(&parser, kw_quit, 1, 1, CMD_INTEGER, CMD_EOA);
-	cmd_register_keyword(&parser, kw_patch, 4, 4, CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
+	// Register PATCH service
+	static struct mdir_cmd_def patch_def = {
+		.keyword = kw_patch,
+		.cb = patch_service,
+		.nb_arg_min = 4,
+		.nb_arg_max = 4,
+		.nb_types = 4,
+		.types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, },
+	};
+	mdir_cnx_service_register(&cnx, &patch_def);
 }
 
 void reader_end(void)
 {
-	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		cmd_unregister_keyword(&parser, command_types[t].keyword);
-	}
-	cmd_unregister_keyword(&parser, kw_quit);
-	cmd_unregister_keyword(&parser, kw_patch);
 }
 

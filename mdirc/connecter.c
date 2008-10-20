@@ -18,7 +18,7 @@
 #include <assert.h>
 #include <pth.h>
 #include "scambio.h"
-#include "cnx.h"
+#include "scambio/cnx.h"
 #include "mdirc.h"
 
 /*
@@ -26,7 +26,7 @@
  * First the socket itself
  */
 
-struct cnx_client cnx;
+struct mdir_cnx cnx;
 
 /* Connecter try to establish the connection, and keep trying once in a while
  * untill success, then spawn reader and writer until one of them returns, when
@@ -36,11 +36,10 @@ void *connecter_thread(void *arg)
 {
 	debug("Starting connecter");
 	char *username = arg;
-	cnx_client_ctor(&cnx, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"));
-	on_error return NULL;
+	if_fail (mdir_cnx_ctor_outbound(&cnx, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) return NULL;
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
-	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, username);
+	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
 	while (reader_pthid && writer_pthid) {
 /*
 		pth_event_t ev_r = pth_event(PTH_EVENT_TID|PTH_UNTIL_TID_DEAD, reader_pthid);
@@ -69,7 +68,7 @@ void *connecter_thread(void *arg)
 	}
 	if (reader_pthid) (void)pth_cancel(reader_pthid);
 	if (writer_pthid) (void)pth_cancel(writer_pthid);
-	cnx_client_dtor(&cnx);
+	mdir_cnx_dtor(&cnx);
 	debug("Ending connecter");
 	return NULL;
 }

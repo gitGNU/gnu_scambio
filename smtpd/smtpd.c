@@ -23,32 +23,32 @@
 #include <pth.h>
 #include "scambio.h"
 #include "daemon.h"
-#include "cnx.h"
+#include "scambio/cnx.h"
 #include "varbuf.h"
-#include "cmd.h"
 #include "smtpd.h"
 #include "scambio/mdir.h"
+#include "server.h"
 
 /*
  * Data Definitions
  */
 
-static struct cnx_server server;
+static struct server server;
+static struct mdir_syntax syntax;
 static sig_atomic_t terminate = 0;
 char my_hostname[256];
 
-struct cmd_parser parser;
-char const *const kw_ehlo = "ehlo";
-char const *const kw_helo = "helo";
-char const *const kw_mail = "mail";
-char const *const kw_rcpt = "rcpt";
-char const *const kw_data = "data";
-char const *const kw_rset = "rset";
-char const *const kw_vrfy = "vrfy";
-char const *const kw_expn = "expn";
-char const *const kw_help = "help";
-char const *const kw_noop = "noop";
-char const *const kw_quit = "quit";
+char const kw_ehlo[] = "ehlo";
+char const kw_helo[] = "helo";
+char const kw_mail[] = "mail";
+char const kw_rcpt[] = "rcpt";
+char const kw_data[] = "data";
+char const kw_rset[] = "rset";
+char const kw_vrfy[] = "vrfy";
+char const kw_expn[] = "expn";
+char const kw_help[] = "help";
+char const kw_noop[] = "noop";
+char const kw_quit[] = "quit";
 
 /*
  * Init functions
@@ -71,45 +71,72 @@ static void init_log(void)
 	debug("Seting log level to %d", log_level);
 }
 
-static void cmd_end(void)
-{
-	cmd_parser_dtor(&parser);
-}
-
-static void init_cmd(void)
-{
-	debug("init cmd");
-	cmd_parser_ctor(&parser);
-	if (0 != atexit(cmd_end)) with_error(0, "atexit") return;
-	// Put most used commands at end, so that they end up at the beginning of the commands list
-	cmd_register_keyword(&parser, kw_ehlo, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_helo, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_mail, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// no support for extended mail parameters, but we accept them (and ignore them)
-	cmd_register_keyword(&parser, kw_rcpt, 1, UINT_MAX, CMD_STRING, CMD_EOA);	// same
-	cmd_register_keyword(&parser, kw_data, 0, 0, CMD_EOA);
-	cmd_register_keyword(&parser, kw_rset, 0, 0, CMD_EOA);
-	cmd_register_keyword(&parser, kw_vrfy, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_expn, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_help, 0, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_noop, 0, UINT_MAX, CMD_EOA);
-	cmd_register_keyword(&parser, kw_quit, 0, 0, CMD_EOA);
-}
-
 static void deinit_server(void)
 {
-	cnx_server_dtor(&server);
-	cnx_end();
+	server_dtor(&server);
+}
+
+static void init_syntax(void)
+{
+	mdir_syntax_ctor(&syntax);
+	// Register all services
+	static struct mdir_cmd_def services[] = {
+		{
+			.keyword = kw_ehlo, .cb = exec_helo, .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_helo, .cb = exec_helo, .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_mail, .cb = exec_mail, .nb_arg_min = 1, .nb_arg_max = UINT_MAX,
+			// no support for extended mail parameters, but we accept them (and ignore them)
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_rcpt, .cb = exec_rcpt, .nb_arg_min = 1, .nb_arg_max = UINT_MAX,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_data, .cb = exec_data, .nb_arg_min = 0, .nb_arg_max = 0,
+			.nb_types = 0, .types = {},
+		}, {
+			.keyword = kw_rset, .cb = exec_rset, .nb_arg_min = 0, .nb_arg_max = 0,
+			.nb_types = 0, .types = {},
+		}, {
+			.keyword = kw_vrfy, .cb = exec_vrfy, .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_expn, .cb = exec_expn, .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_help, .cb = exec_help, .nb_arg_min = 0, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_help, .cb = exec_help, .nb_arg_min = 0, .nb_arg_max = UINT_MAX,
+			.nb_types = 0, .types = {},
+		}, {
+			.keyword = kw_quit, .cb = exec_quit, .nb_arg_min = 0, .nb_arg_max = 0,
+			.nb_types = 0, .types = {},
+		},
+	};
+	for (unsigned d=0; d<sizeof_array(services); d++) {
+		if_fail (mdir_syntax_register(&syntax, services+d)) return;
+	}
+}
+
+static void deinit_syntax(void)
+{
+	mdir_syntax_dtor(&syntax);
 }
 
 static void init_server(void)
 {
 	debug("init server");
 	if (0 != gethostname(my_hostname, sizeof(my_hostname))) with_error(errno, "gethostbyname") return;
-	if_fail (cnx_begin()) return;
-	if_fail (cnx_server_ctor(&server, conf_get_int("SMTPD_PORT"))) return;
+	if_fail (server_ctor(&server, conf_get_int("SMTPD_PORT"))) return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
 	if_fail (exec_begin()) return;
 	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
+	if_fail (init_syntax()) return;
+	if (0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
 }
 
 static void init(void)
@@ -120,7 +147,6 @@ static void init(void)
 	if_fail (init_log()) return;
 	if_fail (mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	if_fail (init_cmd()) return;
 	if_fail (daemonize()) return;
 	if_fail (init_server()) return;
 }
@@ -132,7 +158,7 @@ static void init(void)
 static void cnx_env_del(void *env_)
 {
 	struct cnx_env *env = env_;
-	close(env->fd);
+	mdir_cnx_dtor(&env->cnx);
 	if (env->domain) free(env->domain);
 	if (env->reverse_path) free(env->reverse_path);
 	if (env->forward_path) free(env->forward_path);
@@ -144,6 +170,17 @@ static char *client_host(void)
 	return "0.0.0.0";	// TODO
 }
 
+static void cnx_env_ctor(struct cnx_env *env, int fd)
+{
+	if_fail (mdir_cnx_ctor_inbound(&env->cnx, fd, NULL)) return;
+	time_t const now = time(NULL);
+	struct tm *tm = localtime(&now);
+	snprintf(env->client_address, sizeof(env->client_address), "%s", client_host());
+	snprintf(env->reception_date, sizeof(env->reception_date), "%04d-%02d-%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
+	snprintf(env->reception_time, sizeof(env->reception_time), "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+	env->quit = false;
+}
+
 static struct cnx_env *cnx_env_new(int fd)
 {
 	struct cnx_env *env = calloc(1, sizeof(*env));
@@ -151,12 +188,10 @@ static struct cnx_env *cnx_env_new(int fd)
 		error("Cannot alloc a cnx_env");
 		return NULL;
 	}
-	env->fd = fd;
-	time_t const now = time(NULL);
-	struct tm *tm = localtime(&now);
-	snprintf(env->client_address, sizeof(env->client_address), "%s", client_host());
-	snprintf(env->reception_date, sizeof(env->reception_date), "%04d-%02d-%02d", tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
-	snprintf(env->reception_time, sizeof(env->reception_time), "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+	if_fail (cnx_env_ctor(env, fd)) {
+		free(env);
+		env = NULL;
+	}
 	return env;
 }
 
@@ -168,39 +203,9 @@ static void *serve_cnx(void *arg)
 		cnx_env_del(env);
 		return NULL;
 	}
-	bool quit = false;
 	if_fail (answer(env, 220, my_hostname)) return NULL;
-	while (! quit && !is_error()) {	// read a command and exec it
-		struct cmd cmd;
-		if_fail (cmd_read(&parser, &cmd, env->fd)) break;
-		debug("Read keyword '%s'", cmd.keyword);
-		if (cmd.keyword == kw_ehlo) {
-			exec_ehlo(env, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_helo) {
-			exec_helo(env, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_mail) {
-			exec_mail(env, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_rcpt) {
-			exec_rcpt(env, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_data) {
-			exec_data(env);
-		} else if (cmd.keyword == kw_rset) {
-			exec_rset(env);
-		} else if (cmd.keyword == kw_vrfy) {
-			exec_vrfy(env, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_expn) {
-			exec_expn(env, cmd.args[0].val.string);
-		} else if (cmd.keyword == kw_help) {
-			exec_helo(env, cmd.nb_args > 0 ? cmd.args[0].val.string:NULL);
-		} else if (cmd.keyword == kw_noop) {
-			exec_noop(env);
-		} else if (cmd.keyword == kw_quit) {
-			exec_quit(env);
-			quit = true;
-		} else {
-			// ignore ?
-		}
-		cmd_dtor(&cmd);
+	while (! env->quit && !is_error()) {	// read a command and exec it
+		if_fail (mdir_cnx_read(&env->cnx)) break;
 	}
 	return NULL;
 }
@@ -218,7 +223,7 @@ int main(void)
 	}
 	// Run server
 	while (! terminate) {
-		int fd = cnx_server_accept(&server);
+		int fd = server_accept(&server);
 		if (fd < 0) {
 			error("Cannot accept connection on fd %d, pausing for 5s", server.sock_fd);
 			(void)pth_sleep(5);

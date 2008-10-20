@@ -76,14 +76,11 @@ static void mdirc_free(struct mdir *mdir)
  * and the writer once the connection is ready.
  */
 
-struct mdir_cnx cnx;
-
 static void client_end(void)
 {
 	writer_end();
 	reader_end();
 	mdir_end();
-	mdir_cnx_dtor(&cnx);
 }
 
 static void client_begin(void)
@@ -96,16 +93,13 @@ static void client_begin(void)
 	conf_set_default_str("MDIRD_HOST", "127.0.0.1");
 	conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
 	on_error goto q0;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) goto q0;
 	writer_begin();
-	on_error goto q1;
+	on_error goto q0;
 	reader_begin();
-	on_error goto q2;
+	on_error goto q1;
 	return;
-q2:
-	writer_end();
 q1:
-	mdir_cnx_dtor(&cnx);
+	writer_end();
 q0:
 	mdir_end();
 }

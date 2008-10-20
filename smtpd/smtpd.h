@@ -20,6 +20,7 @@
 
 #include <pth.h>
 #include "scambio/queue.h"
+#include "scambio/cnx.h"
 #include "varbuf.h"
 
 #define CRLF "\r\n"
@@ -34,7 +35,8 @@ extern char my_hostname[256];
 
 struct mdir;
 struct cnx_env {
-	int fd;
+	struct mdir_cnx cnx;
+	bool quit;
 	char *domain;	// stores the last received helo information
 	char *reverse_path;
 	char *forward_path;

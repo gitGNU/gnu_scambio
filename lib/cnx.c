@@ -77,7 +77,7 @@ static void query_answer_cb(struct mdir_cmd *cmd, void *user_data)
 	struct sent_query *sq;
 	LIST_FOREACH(sq, &qd->sent_queries, def_entry) {
 		if (sq->seq == cmd->seq) {
-			qd->cb(cnx, cmd, sq->user_data);
+			qd->cb(cnx, cmd->args[0].integer, cmd->args[1].string, sq->user_data);
 			LIST_REMOVE(sq, def_entry);
 			return;
 		}
@@ -112,7 +112,7 @@ void mdir_cnx_query_register(struct mdir_cnx *cnx, char const *keyword, mdir_cnx
 	// the user tell us he may send this query, so we must register the syntax
 	// for the answer.
 	query_def_ctor(qd, cnx, keyword, cb);
-	unless_error mdir_syntax_register(&cnx->syntax, &qd->def);
+	unless_error mdir_syntax_register(cnx->syntax, &qd->def);
 }
 
 void mdir_cnx_query(struct mdir_cnx *cnx, struct query_def *qd, bool answ, void *user_data, ...)
@@ -151,7 +151,6 @@ static void cnx_ctor_common(struct mdir_cnx *cnx)
 	cnx->user = NULL;
 	cnx->next_seq = 0;
 	LIST_INIT(&cnx->query_defs);
-	mdir_syntax_ctor(&cnx->syntax);
 }
 
 static int gaierr2errno(int err)
@@ -188,12 +187,12 @@ static void cnx_connect(struct mdir_cnx *cnx, char const *host, char const *serv
 	freeaddrinfo(info_head);
 }
 
-static void auth_answ(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data)
+static void auth_answ(struct mdir_cnx *cnx, int status, char const *compl, void *user_data)
 {
 	(void)cnx;
-	assert(cmd->def->keyword == kw_auth);
+	(void)compl;
 	bool *done = (bool *)user_data;
-	if (cmd->args[0].integer == 200) *done = true;
+	if (status == 200) *done = true;
 }
 
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const *host, char const *service, char const *username)
@@ -227,16 +226,17 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd, struct mdir_cmd_def *au
 	cnx_ctor_common(cnx);
 	cnx->user = NULL;
 	cnx->fd = fd;
-	// Now wait for user auth and set user or return error
-	auth_def->keyword = kw_auth;
-	auth_def->cb = serve_auth;
-	auth_def->nb_arg_min = 1;
-	auth_def->nb_arg_max = 1;
-	auth_def->nb_types = 1;
-	auth_def->types[0] = CMD_STRING;
-	mdir_cnx_service_register(cnx, auth_def);	// and this will stay registered. Identity is allowed to change within a connection.
-	mdir_cnx_read(cnx);
-	if (! cnx->user) with_error(0, "No auth received") return;
+	if (auth_def) {	// Now wait for user auth and set user or return error
+		auth_def->keyword = kw_auth;
+		auth_def->cb = serve_auth;
+		auth_def->nb_arg_min = 1;
+		auth_def->nb_arg_max = 1;
+		auth_def->nb_types = 1;
+		auth_def->types[0] = CMD_STRING;
+		mdir_cnx_service_register(cnx, auth_def);	// and this will stay registered. Identity is allowed to change within a connection.
+		mdir_cnx_read(cnx);
+		if (! cnx->user) error_push(0, "No auth received");
+	}
 }
 
 void mdir_cnx_dtor(struct mdir_cnx *cnx)
@@ -250,7 +250,6 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx)
 	while (NULL != (qd = LIST_FIRST(&cnx->query_defs))) {
 		query_def_dtor(qd);
 	}
-	mdir_syntax_dtor(&cnx->syntax);
 }
 
 /*
@@ -265,7 +264,7 @@ void mdir_cnx_read(struct mdir_cnx *cnx)
 	// Query answers will be handled by our answer callback, which will then
 	// now that the cmd->def is not merely a mdir_cmd_def but a query_def,
 	// where it can look for the dedicated callback.
-	mdir_cmd_read(&cnx->syntax, cnx->fd, cnx);
+	mdir_cmd_read(cnx->syntax, cnx->fd, cnx);
 }
 
 void mdir_cnx_answer(struct mdir_cnx *cnx, struct mdir_cmd *cmd, int status, char const *compl)

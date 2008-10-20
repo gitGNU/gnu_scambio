@@ -272,6 +272,7 @@ void exec_noop(struct cnx_env *env)
 }
 void exec_quit(struct cnx_env *env)
 {
+	env->quit = true;
 	answer(env, SERVICE_CLOSING, "Bye");
 }
 

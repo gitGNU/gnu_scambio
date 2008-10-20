@@ -18,6 +18,8 @@
 #ifndef COMMAND_H_080923
 #define COMMAND_H_080923
 
+#include "scambio/cnx.h"
+
 // commands that were sent for which we wait an answer
 struct command {
 	LIST_ENTRY(command) mdirc_entry;	// entry in the mdirc list
@@ -28,12 +30,13 @@ struct command {
 	time_t creation;
 };
 enum command_type {
-	AUTH_CMD_TYPE, SUB_CMD_TYPE, UNSUB_CMD_TYPE, PUT_CMD_TYPE, REM_CMD_TYPE, QUIT_CMD_TYPE, NB_CMD_TYPES
+	SUB_CMD_TYPE, UNSUB_CMD_TYPE, PUT_CMD_TYPE, REM_CMD_TYPE, QUIT_CMD_TYPE, NB_CMD_TYPES
 };
 extern struct command_types {
 	char const *const keyword;
-	void (*finalize)(struct command *cmd, int status, char const *compl);
+	void (*finalize)(struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
 	LIST_HEAD(commands_by_type, command) commands;
+	struct query_def def;
 } command_types[NB_CMD_TYPES];
 
 // give relative folder (ie mdir name for PUT/REM, id for SUB/UNSUB) and absolute filename

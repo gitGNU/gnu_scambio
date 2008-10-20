@@ -58,9 +58,10 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 	enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
 	struct command *cmd = command_get_by_path(mdirc, type, param.path);
 	if (! cmd) {
+		// FIXME : grasp cnx write lock
 		(void)command_new(type, mdirc, (char const *)path, param.path);
-		on_error return;
-		header_write(header, cnx.sock_fd);
+		unless_error header_write(header, cnx.fd);
+		// FIXME : release cnx write lock
 	}
 }
 
@@ -96,14 +97,11 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 
 void *writer_thread(void *arg)
 {
-	char const *const username = arg;
+	(void)arg;
 	debug("starting writer thread");
 	terminate_writer = false;
 	struct mdir *root = mdir_lookup("/");
-	struct mdirc *rootc = mdir2mdirc(root);
-	// First log in
-	(void)command_new(AUTH_CMD_TYPE, rootc, username, "");
-	// Then traverse folders
+	// Traverse folders
 	do {
 		on_error break;
 		parse_dir_rec(NULL, root, false, "", "");

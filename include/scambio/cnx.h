@@ -40,7 +40,7 @@ extern char const kw_skip[];
  */
 struct sent_query;
 struct mdir_cnx;
-typedef void mdir_cnx_cb(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *user_data);
+typedef void mdir_cnx_cb(struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
 struct query_def {
 	LIST_ENTRY(query_def) cnx_entry;	// list head is in the definition of the query
 	LIST_HEAD(sent_queries, sent_query) sent_queries;
@@ -51,18 +51,18 @@ struct mdir_cnx {
 	int fd;
 	long long next_seq;
 	struct mdir_user *user;
-	struct mdir_syntax syntax;
+	struct mdir_syntax *syntax;
 	LIST_HEAD(query_defs, query_def) query_defs;
 };
 
-/* Connect to MDIRD_HOST:MDIRD_PORT and send auth.
+/* Connect to given host:port and send auth.
  */
-void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, char const *host, char const *service, char const *username);
+void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, char const *host, char const *service, char const *username);
 
 /* After you accepted the connection.
- * You must provide the storage for a mdir_cmd_def (used to handle the auth internally)
+ * You must provide the storage for a mdir_cmd_def if you want the auth to be handled internally.
  */
-void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd, struct mdir_cmd_def *);
+void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int fd, struct mdir_cmd_def *);
 
 /* Delete a cnx object.
  * Notice that the connection will not necessarily be closed at once,
@@ -70,22 +70,23 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, int fd, struct mdir_cmd_def *);
  */
 void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
-/* Sends a query to the peer.
- * The query must have been registered first even if you do not expect an answer.
+/* Register a query (this will add a definition for the answer to the syntex used by the cnx).
  * You must provide storage for the query_def
  */
 void mdir_cnx_query_register(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd);
-/* If !answ, no seqnum will be set (and you will receive no answer).
+/* Sends a query to the peer.
+ * The query must have been registered first even if you do not expect an answer.
+ * If !answ, no seqnum will be set (and you will receive no answer).
  * If answ, the cb will be called later when the answer is received, while in mdir_cnx_read().
  */
 void mdir_cnx_query(struct mdir_cnx *cnx, struct query_def *qd, bool answ, void *user_data, ...);
 
 /* Register an incomming command definition.
- * Will only call mdir_cmd_def_register for the cnx syntax
+ * Will only call mdir_cmd_def_register for the syntax used by the cnx.
  */
 static inline void mdir_cnx_service_register(struct mdir_cnx *cnx, struct mdir_cmd_def *def)
 {
-	mdir_syntax_register(&cnx->syntax, def);
+	mdir_syntax_register(cnx->syntax, def);
 }
 
 /* Will use a mdir_parser build from all expected query responses, and by all

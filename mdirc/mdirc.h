@@ -37,12 +37,12 @@ void reader_end(void);
 void writer_begin(void);
 void writer_end(void);
 struct command;
-void finalize_sub(struct command *cmd, int status, char const *compl);
-void finalize_unsub(struct command *cmd, int status, char const *compl);
-void finalize_put(struct command *cmd, int status, char const *compl);
-void finalize_rem(struct command *cmd, int status, char const *compl);
-void finalize_quit(struct command *cmd, int status, char const *compl);
-void finalize_auth(struct command *cmd, int status, char const *compl);
+void finalize_sub  (struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
+void finalize_unsub(struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
+void finalize_put  (struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
+void finalize_rem  (struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
+void finalize_quit (struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
+//void finalize_auth (struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
 
 struct mdirc {
 	struct mdir mdir;

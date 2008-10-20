@@ -27,7 +27,7 @@
 #include <pth.h>
 #include "scambio.h"
 #include "misc.h"
-#include "cmd.h"
+#include "scambio/cmd.h"
 #include "mdirc.h"
 #include "command.h"
 
@@ -37,12 +37,12 @@
 
 // NOTE: respect enum command_type order ! (FIXME with something like .0:{...}, .1:{...}, ... ?)
 struct command_types command_types[NB_CMD_TYPES] = {
-	{ .keyword = "auth",  .finalize = finalize_auth },
-	{ .keyword = "sub",   .finalize = finalize_sub },
-	{ .keyword = "unsub", .finalize = finalize_unsub },
-	{ .keyword = "put",   .finalize = finalize_put },
-	{ .keyword = "rem",   .finalize = finalize_rem },
-	{ .keyword = "quit",  .finalize = finalize_quit },
+//	{ .keyword = kw_auth,  .finalize = finalize_auth },
+	{ .keyword = kw_sub,   .finalize = finalize_sub },
+	{ .keyword = kw_unsub, .finalize = finalize_unsub },
+	{ .keyword = kw_put,   .finalize = finalize_put },
+	{ .keyword = kw_rem,   .finalize = finalize_rem },
+	{ .keyword = kw_quit,  .finalize = finalize_quit },
 };
 
 /*
@@ -61,18 +61,10 @@ static void command_ctor(struct command *cmd, enum command_type type, struct mdi
 	assert(type < NB_CMD_TYPES);
 	if (folder[0] == '\0') folder = "/";	// should not happen
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
-	static long long seqnum = 1;
 	cmd->mdirc = mdirc;
-	cmd->seqnum = seqnum++;
-	cmd->creation = time(NULL);
+	cmd->creation = time(NULL);	// FIXME: timeout of queries should go into mdir_cnx_read()
 	debug("cmd @%p, folder = '%s', mdir id = '%s', seqnum = %lld", cmd, folder, mdir_id(&mdirc->mdir), cmd->seqnum);
-	char buf[SEQ_BUF_LEN];
-	Write_strs(cnx.sock_fd, cmd_seq2str(buf, cmd->seqnum), " ", command_types[type].keyword, " ", folder, NULL);
-	if (type == SUB_CMD_TYPE) {
-		Write_strs(cnx.sock_fd, " ", mdir_version2str(mdir_last_version(&mdirc->mdir)), NULL);
-	}
-	Write(cnx.sock_fd, "\n", 1);
-	on_error return;
+	if_fail (mdir_cnx_query(&cnx, &command_types[type].def, true, cmd, folder, type == SUB_CMD_TYPE ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
 	LIST_INSERT_HEAD(mdirc->commands+type, cmd, mdirc_entry);
 	LIST_INSERT_HEAD(&command_types[type].commands, cmd, type_entry);
 }
