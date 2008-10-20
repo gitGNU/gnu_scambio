@@ -72,19 +72,17 @@ void exec_sub(struct mdir_cmd *cmd, void *user_data)
 	error_clear();	// error dealt with
 }
 
-void exec_unsub(struct cnx_env *env, long long seq, char const *dir)
+void exec_unsub(struct mdir_cmd *cmd, void *user_data)
 {
+	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
+	char const *const dir = cmd->args[0].string;
 	debug("doing UNSUB for '%s'", dir);
-	if (! env->user) {
-		answer(env, seq, "UNSUB", 401, "No auth");
-		return;
-	}
 	struct subscription *sub = subscription_find(env, dir);
 	if (! sub) {
-		answer(env, seq, "UNSUB", 501, "Not subscribed");
+		mdir_cnx_answer(&env->cnx, cmd, 501, "Not subscribed");
 	} else {
 		subscription_del(sub);
-		answer(env, seq, "UNSUB", 200, "OK");
+		mdir_cnx_answer(&env->cnx, cmd, 200, "OK");
 	}
 }
 
@@ -102,18 +100,16 @@ static mdir_version add_header(char const *dir, struct header *h, enum mdir_acti
 	return mdir_patch(mdir, action, h);
 }
 
-static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_env *env, long long seq, char const *dir)
+static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *user_data)
 {
-	debug("doing %s in '%s'", cmdtag, dir);
-	if (! env->user) {
-		answer(env, seq, cmdtag, 401, "No auth");
-		return;
-	}
+	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
+	char const *const dir = cmd->args[0].string;
+	debug("doing %s in '%s'", cmd->def->keyword, dir);
 	struct header *h;
 	h = header_new();
 	on_error return;
 	int status = 200;
-	header_read(h, env->fd);
+	header_read(h, env->cnx.fd);
 	mdir_version version;
 	on_error {
 		status = 502;
@@ -123,39 +119,29 @@ static void exec_putrem(char const *cmdtag, enum mdir_action action, struct cnx_
 		on_error status = 502;
 	}
 	header_del(h);
-	answer(env, seq, cmdtag, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
+	mdir_cnx_answer(&env->cnx, cmd, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
 	error_clear();
 }
 
-void exec_put(struct cnx_env *env, long long seq, char const *dir)
+void exec_put(struct mdir_cmd *cmd, void *user_data)
 {
-	exec_putrem("PUT", MDIR_ADD, env, seq, dir);
+	exec_putrem(MDIR_ADD, cmd, user_data);
 }
 
-void exec_rem(struct cnx_env *env, long long seq, char const *dir)
+void exec_rem(struct mdir_cmd *cmd, void *user_data)
 {
-	exec_putrem("REM", MDIR_REM, env, seq, dir);
+	exec_putrem(MDIR_REM, cmd, user_data);
 }
 
 /*
  * Quit
  */
 
-void exec_quit(struct cnx_env *env, long long seq)
+void exec_quit(struct mdir_cmd *cmd, void *user_data)
 {
+	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
 	debug("doing QUIT");
 	env->quit = true;
-	answer(env, seq, "QUIT", 200, "OK");
+	mdir_cnx_answer(&env->cnx, cmd, 200, "OK");
 }
 
-/*
- * Auth
- */
-
-void exec_auth(struct cnx_env *env, long long seq, char const *name)
-{
-	debug("doing AUTH");
-	env->user = user_load(name);
-	answer(env, seq, "AUTH", is_error() ? 500:200, is_error() ? error_str():"OK");
-	error_clear();
-}

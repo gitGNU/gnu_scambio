@@ -25,20 +25,20 @@
  * Data Definitions
  */
 
-struct user {
-	LIST_ENTRY(user) entry;
+struct mdir_user {
+	LIST_ENTRY(mdir_user) entry;
 	char *name;
 	struct header *header;
 };
 
-static LIST_HEAD(users, user) users;
+static LIST_HEAD(users, mdir_user) users;
 static char const *users_root;
 
 /*
  * User
  */
 
-static void user_ctor(struct user *usr, char const *name, struct header *header)
+static void user_ctor(struct mdir_user *usr, char const *name, struct header *header)
 {
 	usr->name = strdup(name);
 	if (! usr->name) with_error(errno, "strdup(%s)", name) return;
@@ -46,16 +46,16 @@ static void user_ctor(struct user *usr, char const *name, struct header *header)
 	LIST_INSERT_HEAD(&users, usr, entry);
 }
 
-static void user_dtor(struct user *usr)
+static void user_dtor(struct mdir_user *usr)
 {
 	LIST_REMOVE(usr, entry);
 	free(usr->name);
 	header_del(usr->header);
 }
 
-static struct user *user_new(char const *name, struct header *header)
+static struct mdir_user *user_new(char const *name, struct header *header)
 {
-	struct user *usr = malloc(sizeof(*usr));
+	struct mdir_user *usr = malloc(sizeof(*usr));
 	if (! usr) with_error(ENOMEM, "malloc user") return NULL;
 	if_fail (user_ctor(usr, name, header)) {
 		free(usr);
@@ -64,21 +64,21 @@ static struct user *user_new(char const *name, struct header *header)
 	return usr;
 }
 
-static void user_del(struct user *usr)
+static void user_del(struct mdir_user *usr)
 {
 	user_dtor(usr);
 	free(usr);
 }
 
-static struct user *user_refresh(struct user *usr)
+static struct mdir_user *user_refresh(struct mdir_user *usr)
 {
 	// TODO: if file changed reload
 	return usr;
 }
 
-struct user *user_load(char const *name)
+struct mdir_user *mdir_user_load(char const *name)
 {
-	struct user *usr;
+	struct mdir_user *usr;
 	LIST_FOREACH(usr, &users, entry) {
 		if (0 == strcmp(name, usr->name)) return user_refresh(usr);
 	}
@@ -107,7 +107,7 @@ void auth_begin(void)
 
 void auth_end(void)
 {
-	struct user *usr;
+	struct mdir_user *usr;
 	while (NULL != (usr = LIST_FIRST(&users))) {
 		user_del(usr);
 	}

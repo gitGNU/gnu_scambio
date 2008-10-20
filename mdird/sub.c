@@ -120,7 +120,7 @@ static void send_next_patch(struct subscription *sub)
 	debug("Send patch after %"PRIversion, sub->version);
 	struct header *h = mdir_read_next(&sub->mdird->mdir, &next_version, &action);
 	on_error return;
-	send_patch(sub->env->fd, h, &sub->mdird->mdir, action, sub->version, next_version);
+	send_patch(sub->env->cnx.fd, h, &sub->mdird->mdir, action, sub->version, next_version);
 	unless_error sub->version = next_version;	// last version known is the last we sent
 	debug("New version of subscription is %"PRIversion, sub->version);
 }

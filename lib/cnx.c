@@ -107,7 +107,7 @@ static void query_def_dtor(struct query_def *qd)
 	LIST_REMOVE(qd, cnx_entry);
 }
 
-void mdir_cnx_register_query(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd)
+void mdir_cnx_query_register(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd)
 {
 	// the user tell us he may send this query, so we must register the syntax
 	// for the answer.

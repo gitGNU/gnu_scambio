@@ -8,7 +8,7 @@ libmdir_la_SOURCES = \
 	jnl.c \
 	header.c \
 	error.c \
-	channel.c \
+	cmd.c \
 	cnx.c
 
 libmdir_la_LIBADD = ../commons/libcommons.la

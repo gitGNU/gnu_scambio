@@ -31,7 +31,7 @@
 #include "scambio/queue.h"
 #include "scambio.h"
 #include "daemon.h"
-#include "cmd.h"
+#include "scambio/cmd.h"
 #include "misc.h"
 #include "mdirc.h"
 #include "command.h"

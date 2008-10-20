@@ -22,7 +22,7 @@
 #include <strings.h>
 #include <ctype.h>
 #include "scambio.h"
-#include "cmd.h"
+#include "scambio/cmd.h"
 #include "varbuf.h"
 
 /*
@@ -133,12 +133,12 @@ void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data)
 	varbuf_ctor(&vb, 1024, true);
 	on_error return;
 	struct mdir_cmd cmd;
-	cmd->def = NULL;
+	cmd.def = NULL;
 	do {
 		if_fail (parse_line(syntax, &cmd, &vb, fd)) break;
-	} while (! cmd->def);
+	} while (! cmd.def);
 	varbuf_dtor(&vb);
-	if (cmd->def->cb) cmd->def->cb(&cmd, user_data);
+	if (cmd.def->cb) cmd.def->cb(&cmd, user_data);
 	mdir_cmd_dtor(&cmd);
 	return;
 }
