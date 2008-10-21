@@ -33,6 +33,7 @@
  */
 
 static struct server server;
+static struct mdir_syntax syntax;
 static sig_atomic_t terminate = 0;
 
 /*
@@ -85,12 +86,43 @@ static void deinit_server(void)
 	server_dtor(&server);
 }
 
+static void init_syntax(void)
+{
+	mdir_syntax_ctor(&syntax);
+	static struct mdir_cmd_def services[] = {
+		{
+			.keyword = kw_quit,  .cb = exec_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
+			.nb_types = 0,
+		}, {
+			.keyword = kw_unsub, .cb = exec_unsub, .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		}, {
+			.keyword = kw_sub,   .cb = exec_sub,   .nb_arg_min = 2, .nb_arg_max = 2,
+			.nb_types = 2, .types = { CMD_STRING, CMD_INTEGER }
+		},{
+			.keyword = kw_rem,   .cb = exec_rem,   .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		},{
+			.keyword = kw_put,   .cb = exec_put,   .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		}
+	};
+	for (unsigned s=0; s<sizeof_array(services); s++) {
+		if_fail (mdir_syntax_register(&syntax, services+s)) return;
+	}
+}
+
+static void deinit_syntax(void)
+{
+	mdir_syntax_dtor(&syntax);
+}
+
 static void init_server(void)
 {
 	debug("init server");
-	on_error return;
-	server_ctor(&server, conf_get_int("MDIRD_PORT"));
-	on_error return;
+	if_fail (init_syntax()) return;
+	if(0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
+	if_fail (server_ctor(&server, conf_get_int("MDIRD_PORT"))) return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
 	mdir_begin();
 	mdir_alloc = mdird_alloc;
@@ -133,31 +165,7 @@ static void cnx_env_del(void *env_)
 static void cnx_env_ctor(struct cnx_env *env, int fd)
 {
 	struct mdir_cmd_def auth_def;
-	if_fail (mdir_cnx_ctor_inbound(&env->cnx, fd, &auth_def)) return;
-	static struct mdir_cmd_def services[] = {
-		{
-			.keyword = kw_quit,  .cb = exec_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
-			.nb_types = 0,
-		}, {
-			.keyword = kw_unsub, .cb = exec_unsub, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING }
-		}, {
-			.keyword = kw_sub,   .cb = exec_sub,   .nb_arg_min = 2, .nb_arg_max = 2,
-			.nb_types = 2, .types = { CMD_STRING, CMD_INTEGER }
-		},{
-			.keyword = kw_rem,   .cb = exec_rem,   .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING }
-		},{
-			.keyword = kw_put,   .cb = exec_put,   .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING }
-		}
-	};
-	for (unsigned s=0; s<sizeof_array(services); s++) {
-		if_fail (mdir_cnx_service_register(&env->cnx, services+s)) {
-			mdir_cnx_dtor(&env->cnx);
-			return;
-		}
-	}
+	if_fail (mdir_cnx_ctor_inbound(&env->cnx, &syntax, fd, &auth_def)) return;
 	env->quit = false;
 	pth_mutex_init(&env->wfd);
 	LIST_INIT(&env->subscriptions);

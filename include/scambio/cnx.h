@@ -38,31 +38,35 @@ extern char const kw_skip[];
 /* Struct mdir_cnx describe a connection following mdir protocol.
  * Client and server are assymetric but similar.
  */
-struct sent_query;
-struct mdir_cnx;
-typedef void mdir_cnx_cb(struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
-struct query_def {
-	LIST_ENTRY(query_def) cnx_entry;	// list head is in the definition of the query
-	LIST_HEAD(sent_queries, sent_query) sent_queries;
-	struct mdir_cmd_def def;
-	mdir_cnx_cb *cb;
+
+/* A structure associated with each sent query.
+ * You can (should) inherit it to add your usefull infos.
+ */
+
+struct mdir_sent_query {
+	LIST_ENTRY(mdir_sent_query) cnx_entry;
+	long long seq;
 };
+
+/* TODO: - a callback to free a sent_query ?
+ *       - a callback to report a sent_query timeout ?
+ */
 struct mdir_cnx {
 	int fd;
 	long long next_seq;
 	struct mdir_user *user;
 	struct mdir_syntax *syntax;
-	LIST_HEAD(query_defs, query_def) query_defs;
+	LIST_HEAD(sent_queries, mdir_sent_query) sent_queries;
 };
 
-/* Connect to given host:port and send auth.
+/* Connect to given host:port (send auth if username is given)
  */
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, char const *host, char const *service, char const *username);
 
 /* After you accepted the connection.
- * You must provide the storage for a mdir_cmd_def if you want the auth to be handled internally.
+ * No auth is performed (user set to NULL).
  */
-void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int fd, struct mdir_cmd_def *);
+void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int fd);
 
 /* Delete a cnx object.
  * Notice that the connection will not necessarily be closed at once,
@@ -70,37 +74,36 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int
  */
 void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
-/* Register a query (this will add a definition for the answer to the syntex used by the cnx).
- * You must provide storage for the query_def
+/* Evaluates to a mdir_cmd_def for a query answer.
  */
-void mdir_cnx_query_register(struct mdir_cnx *cnx, char const *keyword, mdir_cnx_cb *cb, struct query_def *qd);
+#define MDIR_CNX_QUERY_REGISTER(KEYWORD, CALLBACK) { \
+	.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = UINT_MAX, \
+	.nb_types = 1, .types = { CMD_INTEGER } \
+}
+
 /* Sends a query to the peer.
  * The query must have been registered first even if you do not expect an answer.
- * If !answ, no seqnum will be set (and you will receive no answer).
- * If answ, the cb will be called later when the answer is received, while in mdir_cnx_read().
+ * If !sq, no seqnum will be set (and you will receive no answer).
+ * Otherwise it will be linked from the cnx for later retrieval (see mdir_cnx_query_lookup()).
  */
-void mdir_cnx_query(struct mdir_cnx *cnx, struct query_def *qd, bool answ, void *user_data, ...);
-
-/* Register an incomming command definition.
- * Will only call mdir_cmd_def_register for the syntax used by the cnx.
- */
-static inline void mdir_cnx_service_register(struct mdir_cnx *cnx, struct mdir_cmd_def *def)
-{
-	mdir_syntax_register(cnx->syntax, def);
-}
+void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...);
 
 /* Will use a mdir_parser build from all expected query responses, and by all
  * registered services.
  * It is not possible to confuse answers from commands, since commands are either
  * assymetric, or not acknowledged (the only symetrical commands, which are the
  * copy/skip data transfert commands, are not answered except for miss commands).
- * For new commands, the mdir_cmd_cb of the definition will be called, with the cnx
- * as user_data. For query answers the mdir_cnx_cb registered for the query will be
- * called.
+ * The mdir_cmd_cb of any matching definition will be called, with the cnx
+ * as user_data. For query answers, use the lookup function to retrieve your sent_query.
  */
 void mdir_cnx_read(struct mdir_cnx *cnx);
 
-/* Once in a server callback, you may want to answer a query.
+/* Once in a query callback, you want to retrieve your sent_query, if for nothing
+ * else then to delete it.
+ */
+struct mdir_sent_query *mdir_cnx_query_lookup(struct mdir_cnx *cnx, struct mdir_cmd *cmd);
+
+/* Once in a service callback, you may want to answer a query.
  * If the seqnum is 0 the answer is ignored (you may as well not call this function then).
  */
 void mdir_cnx_answer(struct mdir_cnx *, struct mdir_cmd *, int status, char const *compl);

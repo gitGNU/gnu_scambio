@@ -27,6 +27,7 @@
  */
 
 struct mdir_cnx cnx;
+static struct mdir_syntax syntax;
 
 /* Connecter try to establish the connection, and keep trying once in a while
  * untill success, then spawn reader and writer until one of them returns, when
@@ -36,7 +37,14 @@ void *connecter_thread(void *arg)
 {
 	debug("Starting connecter");
 	char *username = arg;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) return NULL;
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) return NULL;
+	// Register all queries (for answer)
+	for (unsigned t=0; t<sizeof_array(command_types); t++) {
+		if_fail (command_types[t].def = mdir_cnx_query_register(&cnx, command_types[t].keyword, command_types[t].finalize)) {
+			mdir_cnx_dtor(&cnx);
+			return NULL;
+		}
+	}
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
 	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
@@ -73,3 +81,31 @@ void *connecter_thread(void *arg)
 	return NULL;
 }
 
+/*
+ * Init
+ */
+
+void connecter_begin(void)
+{
+	if_fail (mdir_syntax_ctor(&syntax)) return;
+	// Register PATCH service
+	static struct mdir_cmd_def patch_def = {
+		.keyword = kw_patch,
+		.cb = patch_service,
+		.nb_arg_min = 4,
+		.nb_arg_max = 4,
+		.nb_types = 4,
+		.types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, },
+	};
+	mdir_syntax_register(&syntax, &patch_def);
+
+	for (unsigned t=0; t<sizeof_array(command_types); t++) {
+		// FIXME: LIST_INIT should go in a command_begin()
+		LIST_INIT(&command_types[t].commands);
+	}
+}
+
+void connecter_end(void)
+{
+	mdir_syntax_dtor(&syntax);
+}

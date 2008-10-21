@@ -215,22 +215,6 @@ void *reader_thread(void *args)
 
 void reader_begin(void)
 {
-	// Register all queries (for answer)
-	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		if_fail (mdir_cnx_query_register(&cnx, command_types[t].keyword, command_types[t].finalize, &command_types[t].def)) return;
-		// FIXME: LIST_INIT should go in a command_begin()
-		LIST_INIT(&command_types[t].commands);
-	}
-	// Register PATCH service
-	static struct mdir_cmd_def patch_def = {
-		.keyword = kw_patch,
-		.cb = patch_service,
-		.nb_arg_min = 4,
-		.nb_arg_max = 4,
-		.nb_types = 4,
-		.types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, },
-	};
-	mdir_cnx_service_register(&cnx, &patch_def);
 }
 
 void reader_end(void)

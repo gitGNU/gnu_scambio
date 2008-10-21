@@ -36,7 +36,7 @@ extern struct command_types {
 	char const *const keyword;
 	void (*finalize)(struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
 	LIST_HEAD(commands_by_type, command) commands;
-	struct query_def def;
+	struct query_def *def;
 } command_types[NB_CMD_TYPES];
 
 // give relative folder (ie mdir name for PUT/REM, id for SUB/UNSUB) and absolute filename

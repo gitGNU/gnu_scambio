@@ -36,6 +36,8 @@ void reader_begin(void);
 void reader_end(void);
 void writer_begin(void);
 void writer_end(void);
+void connecter_begin(void);
+void connecter_end(void);
 struct command;
 void finalize_sub  (struct mdir_cnx *cnx, int status, char const *compl, void *user_data);
 void finalize_unsub(struct mdir_cnx *cnx, int status, char const *compl, void *user_data);

@@ -80,6 +80,7 @@ static void client_end(void)
 {
 	writer_end();
 	reader_end();
+	connecter_end();
 	mdir_end();
 }
 
@@ -93,11 +94,12 @@ static void client_begin(void)
 	conf_set_default_str("MDIRD_HOST", "127.0.0.1");
 	conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
 	on_error goto q0;
-	writer_begin();
-	on_error goto q0;
-	reader_begin();
-	on_error goto q1;
+	if_fail (writer_begin()) goto q0;
+	if_fail (reader_begin()) goto q1;
+	if_fail (connecter_begin()) goto q2;
 	return;
+q2:
+	reader_end();
 q1:
 	writer_end();
 q0:
