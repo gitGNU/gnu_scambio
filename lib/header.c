@@ -76,7 +76,7 @@ static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char cons
 	if (! is_error()) {
 		// Trim the tail of the value
 		while (vb.used && isspace(vb.buf[vb.used-1])) varbuf_chop(&vb, 1);
-		varbuf_stringifies(&vb);
+		varbuf_stringify(&vb);
 	}
 	on_error {
 		error_save();
@@ -258,7 +258,7 @@ void header_dump(struct header const *h, struct varbuf *vb)
 	for (unsigned f=0; f<h->nb_fields; f++) {
 		field_dump(h->fields+f, vb);
 	}
-	varbuf_stringifies(vb);	// so that empty headers leads to empty lines
+	varbuf_stringify(vb);	// so that empty headers leads to empty lines
 }
 
 void header_debug(struct header *h)

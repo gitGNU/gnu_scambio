@@ -65,8 +65,10 @@ void varbuf_append_strs(struct varbuf *vb, ...)
 	char const *str;
 	while (NULL != (str = va_arg(ap, char const *))) {
 		size_t const len = strlen(str);
+		varbuf_destringify(vb);
 		if_fail (varbuf_append(vb, len, str)) break;
 	}
+	varbuf_stringify(vb);
 	va_end(ap);
 }
 
@@ -92,17 +94,24 @@ void varbuf_clean(struct varbuf *vb)
 	// TODO: realloc buf toward initial guess ?
 }
 
-void varbuf_stringifies(struct varbuf *vb)
+void varbuf_stringify(struct varbuf *vb)
 {
 	if (! vb->used || vb->buf[vb->used-1] != '\0') {	// if this is a new varbuf, start with an empty string
 		varbuf_append(vb, 1, "");
 	}
 }
 
+void varbuf_destringify(struct varbuf *vb)
+{
+	if (vb->used && vb->buf[vb->used-1] == '\0') {
+		varbuf_chop(vb, 1);
+	}
+}
+
 void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
 	debug("varbuf_read_line(vb=%p, fd=%d)", vb, fd);
-	varbuf_stringifies(vb);
+	varbuf_stringify(vb);
 	on_error return;
 	vb->used--;	// chop nul char
 	size_t prev_used = vb->used;
@@ -128,6 +137,6 @@ void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 			}
 		}
 	}
-	varbuf_stringifies(vb);
+	varbuf_stringify(vb);
 }
 

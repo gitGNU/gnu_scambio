@@ -53,6 +53,7 @@ static bool same_keyword(char const *a, char const *b)
 
 static void build_cmd(struct mdir_cmd *cmd, union mdir_cmd_arg *args)
 {
+	debug("new cmd for '%s', seqnum #%lld, %u args", cmd->def->keyword, cmd->seq, cmd->nb_args);
 	if (cmd->nb_args < cmd->def->nb_arg_min || cmd->nb_args > cmd->def->nb_arg_max) with_error(EDOM, "Bad nb args (%u)", cmd->nb_args) return;
 	for (unsigned a=0; a<cmd->nb_args; a++) {	// Copy and transcode args
 		if (a < cmd->def->nb_types && cmd->def->types[a] == CMD_INTEGER) {	// transcode
@@ -60,8 +61,11 @@ static void build_cmd(struct mdir_cmd *cmd, union mdir_cmd_arg *args)
 			long long integer = strtoll(args[a].string, &end, 0);
 			if (*end != '\0') with_error(EINVAL, "'%s' is not integer", args[a].string) return;
 			cmd->args[a].integer = integer;
+			debug("cmd arg %u -> %lld", a, cmd->args[a].integer);
 		} else {	// duplicate the string
 			cmd->args[a].string = strdup(args[a].string);
+			if (! cmd->args[a].string) with_error(ENOMEM, "Cannot dup value %u", a) return;
+			debug("cmd arg %u -> %s", a, cmd->args[a].string);
 		}
 	}
 	return;
@@ -94,12 +98,14 @@ static int read_seq(long long *seq, char const *str)
 {
 	char *end;
 	*seq = strtoll(str, &end, 0);
-	if (*end != '\0') return -EINVAL;
+	if (*end != '\0') with_error(EINVAL, "Cannot read token '%s'", str) return 0;
+	debug("seq is %lld", *seq);
 	return 0;
 }
 
 static bool is_seq(char const *str)
 {
+	debug("token : %s", str);
 	return isdigit(str[0]);
 }
 
@@ -138,9 +144,11 @@ void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data)
 	do {
 		if_fail (parse_line(syntax, &cmd, &vb, fd)) break;
 	} while (! cmd.def);
-	varbuf_dtor(&vb);
-	if (cmd.def->cb) cmd.def->cb(&cmd, user_data);
-	mdir_cmd_dtor(&cmd);
+	varbuf_dtor(&vb);	// TODO: keep this vb until after the cb(), then we could ue the original strings in it instead of strduping
+	unless_error {
+		if (cmd.def->cb) cmd.def->cb(&cmd, user_data);
+		mdir_cmd_dtor(&cmd);
+	}
 	return;
 }
 

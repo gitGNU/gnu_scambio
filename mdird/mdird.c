@@ -98,7 +98,7 @@ static void init_syntax(void)
 			.nb_types = 1, .types = { CMD_STRING }
 		}, {
 			.keyword = kw_sub,   .cb = exec_sub,   .nb_arg_min = 2, .nb_arg_max = 2,
-			.nb_types = 2, .types = { CMD_STRING, CMD_INTEGER }
+			.nb_types = 2, .types = { CMD_STRING, CMD_STRING }
 		}, {
 			.keyword = kw_rem,   .cb = exec_rem,   .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_STRING }
@@ -192,9 +192,7 @@ static void *serve_cnx(void *arg)
 		return NULL;
 	}
 	do {	// read a command and exec it
-		pth_mutex_acquire(&env->wfd, FALSE, NULL);
 		mdir_cnx_read(&env->cnx);
-		pth_mutex_release(&env->wfd);
 		on_error break;
 	} while (! env->quit);
 	return NULL;

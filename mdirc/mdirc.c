@@ -35,6 +35,7 @@
 #include "misc.h"
 #include "mdirc.h"
 #include "command.h"
+#include "auth.h"
 
 /*
  * mdirc allocator
@@ -77,6 +78,7 @@ static void client_end(void)
 	writer_end();
 	reader_end();
 	connecter_end();
+	auth_end();
 	mdir_end();
 }
 
@@ -93,7 +95,10 @@ static void client_begin(void)
 	if_fail (writer_begin()) goto q0;
 	if_fail (reader_begin()) goto q1;
 	if_fail (connecter_begin()) goto q2;
+	if_fail (auth_begin()) goto q3;
 	return;
+q3:
+	connecter_end();
 q2:
 	reader_end();
 q1:
@@ -137,6 +142,7 @@ int main(int nb_args, char **args)
 	if_fail(init()) goto q0;
 	while (1) {
 		connecter_thread("Alice");
+		pth_sleep(10);
 	}
 	ret = EXIT_SUCCESS;
 q0:

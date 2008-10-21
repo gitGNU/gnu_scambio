@@ -46,6 +46,17 @@ void exec_end(void)
 }
 
 /*
+ * Answer (protected)
+ */
+
+static void answer(struct cnx_env *env, struct mdir_cmd *cmd, int status, char const *compl)
+{
+	pth_mutex_acquire(&env->wfd, FALSE, NULL);
+	mdir_cnx_answer(&env->cnx, cmd, status, compl);
+	pth_mutex_release(&env->wfd);
+}
+
+/*
  * Subscriptions
  */
 
@@ -68,7 +79,7 @@ void exec_sub(struct mdir_cmd *cmd, void *user_data)
 			break;
 		}
 	} while(0);
-	mdir_cnx_answer(&env->cnx, cmd, (is_error() ? 500:200)+substatus, is_error() ? error_str():"OK");
+	answer(env, cmd, (is_error() ? 500:200)+substatus, is_error() ? error_str():"OK");
 	error_clear();	// error dealt with
 }
 
@@ -79,10 +90,10 @@ void exec_unsub(struct mdir_cmd *cmd, void *user_data)
 	debug("doing UNSUB for '%s'", dir);
 	struct subscription *sub = subscription_find(env, dir);
 	if (! sub) {
-		mdir_cnx_answer(&env->cnx, cmd, 501, "Not subscribed");
+		answer(env, cmd, 501, "Not subscribed");
 	} else {
 		subscription_del(sub);
-		mdir_cnx_answer(&env->cnx, cmd, 200, "OK");
+		answer(env, cmd, 200, "OK");
 	}
 }
 
@@ -119,7 +130,7 @@ static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *use
 		on_error status = 502;
 	}
 	header_del(h);
-	mdir_cnx_answer(&env->cnx, cmd, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
+	answer(env, cmd, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
 	error_clear();
 }
 
@@ -142,10 +153,10 @@ void exec_auth(struct mdir_cmd *cmd, void *user_data)
 	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
 	debug("doing AUTH");
 	if_fail (env->cnx.user = mdir_user_load(cmd->args[0].string)) {
-		mdir_cnx_answer(&env->cnx, cmd, 500, error_str());
+		answer(env, cmd, 500, error_str());
 		error_clear();
 	} else {
-		mdir_cnx_answer(&env->cnx, cmd, 200, "OK");
+		answer(env, cmd, 200, "OK");
 	}
 }
 
@@ -158,6 +169,6 @@ void exec_quit(struct mdir_cmd *cmd, void *user_data)
 	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
 	debug("doing QUIT");
 	env->quit = true;
-	mdir_cnx_answer(&env->cnx, cmd, 200, "OK");
+	answer(env, cmd, 200, "OK");
 }
 

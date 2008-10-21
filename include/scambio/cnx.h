@@ -86,7 +86,11 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
  * If !sq, no seqnum will be set (and you will receive no answer).
  * Otherwise it will be linked from the cnx for later retrieval (see mdir_cnx_query_retrieve()).
  */
-void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...);
+void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
+#ifdef __GNUC__
+	__attribute__ ((sentinel))
+#endif
+;
 
 /* Will use a mdir_parser build from all expected query responses, and by all
  * registered services.
@@ -104,7 +108,7 @@ void mdir_cnx_read(struct mdir_cnx *cnx);
 struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd);
 
 /* Once in a service callback, you may want to answer a query.
- * If the seqnum is 0 the answer is ignored (you may as well not call this function then).
+ * If the seqnum is set it will be prepended.
  */
 void mdir_cnx_answer(struct mdir_cnx *, struct mdir_cmd *, int status, char const *compl);
 

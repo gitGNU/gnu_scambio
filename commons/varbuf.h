@@ -70,6 +70,7 @@ void varbuf_chop(struct varbuf *, size_t size);
 // returns ENOENT on EOF
 void varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
 void varbuf_clean(struct varbuf *);
-void varbuf_stringifies(struct varbuf *vb);
+void varbuf_stringify(struct varbuf *vb);
+void varbuf_destringify(struct varbuf *vb);
 
 #endif
