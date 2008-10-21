@@ -39,27 +39,8 @@
  * Uses MDIR_FILES_DIR to locate file cache
  */
 
-void chn_begin(void);
+void chn_begin(bool client);
 void chn_end(void);
-
-#if 0
-static char const *const kw_auth  = "auth";	// create a persistent file
-static char const *const kw_creat = "creat";	// create a persistent file
-static char const *const kw_chan  = "chan";	// create a RT channel
-static char const *const kw_write = "write";	// write onto a file/channel (all are forwarded to readers, file are also writtento in the file store)
-static char const *const kw_read  = "read";	// read a file/channel
-static char const *const kw_copy  = "copy";	// transfert datas (parameters are offset, length, EOF flag)
-static char const *const kw_skip  = "skip";	// same as copy, but without the datas
-static char const *const kw_miss  = "miss";	// report a gap in the transfered stream, or that the end of file is missing (parameter = next expected offset)
-
-	cmd_register_keyword(&parser, kw_creat, 0, 0, CMD_EOA);
-	cmd_register_keyword(&parser, kw_chan,  0, 0, CMD_EOA);
-	cmd_register_keyword(&parser, kw_write, 1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_read,  1, 1, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_copy,  2, 3, CMD_INTEGER, CMD_INTEGER, CMD_STRING, CMD_EOA);
-	cmd_register_keyword(&parser, kw_skip,  2, 2, CMD_INTEGER, CMD_INTEGER, CMD_EOA);
-	cmd_register_keyword(&parser, kw_miss,  2, 2, CMD_INTEGER, CMD_INTEGER, CMD_EOA);
-#endif
 
 /* High level API (for clients only) */
 
@@ -123,7 +104,7 @@ struct chn_rtx;
  *   read or the write. for the write, its not a problem since UDP wont do that and any way we could
  *   not retransmitter neither then. For the read, well, dont do blocking reads :)
  */
-struct chn_wtx *chn_wtx_new(struct mdir_cnx *, char const *name);
+struct chn_wtx *chn_wtx_new(struct mdir_cnx *, char const *name, long long id);
 
 /* Send the data according to the MTU (ie, given block may be split again).
  * This first sent the required retransmissions, then free the old box, then send the given box by packet
@@ -142,7 +123,7 @@ void chn_wtx_del(struct chn_wtx *tx);
  * with a new writer thread that will ask for retransmissions of missed packets.
  * The reader thread is now the caller.
  */
-struct chn_rtx *chn_rtx_new(struct mdir_cnx *, char const *name);
+struct chn_rtx *chn_rtx_new(struct mdir_cnx *, char const *name, long long id);
 
 /* Return the next data block received (not necessarily in sequence).
  * This is allocated in a box so that you can rewrite it to another channel if you wish,
@@ -158,7 +139,7 @@ struct chn_box *chn_rtx_read(struct chn_rtx *tx, off_t *offset, size_t *length, 
 bool chn_rtx_complete(struct chn_rtx *tx);
 
 /* But if the other peer changed its mind, you may never receive it.
- * This one tell you if there are still hope to receive the missing data.
+ * This one tell you if there are still hope to receive anything.
  */
 bool chn_rtx_should_wait(struct chn_rtx *tx);
 

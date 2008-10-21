@@ -36,6 +36,9 @@
  */
 
 static char const *mdir_files;
+static struct mdir_syntax syntax;
+static bool client;
+static mdir_cmd_cb finalize_creat;
 
 /*
  * Init
@@ -43,12 +46,161 @@ static char const *mdir_files;
 
 void chn_end(void)
 {
+	mdir_syntax_dtor(&syntax);
 }
 
-void chn_begin(void)
+void chn_begin(bool client_)
 {
+	client = client_;
 	if_fail(conf_set_default_str("MDIR_FILES_DIR", "/tmp/mdir/files")) return;
 	mdir_files = conf_get_str("MDIR_FILES_DIR");
+	if_fail (mdir_syntax_ctor(&syntax)) return;
+	static struct mdir_cmd_def def_client[] = {
+		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
+		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
+		MDIR_CNX_QUERY_REGISTER(kw_read,  finalize_txstart),
+	};
+	static struct mdir_cmd_def def_server[] = {
+		{
+			.keyword = kw_creat, .cb = NULL,            .nb_arg_min = 0, .nb_arg_max = 0,
+			.nb_types = 0, .types = {},
+		}, {
+			.keyword = kw_write, .cb = NULL,            .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		}, {
+			.keyword = kw_read,  .cb = NULL,            .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
+		},
+	};
+	static struct mdir_cmd_def def_common[] = {
+		{
+			.keyword = kw_copy,  .cb = NULL,            .nb_arg_min = 3, .nb_arg_max = 4,
+			.nb_types = 3, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER, CMD_STRING },	// seqnum of the read/write, offset, length, [eof]
+		}, {
+			.keyword = kw_skip,  .cb = NULL,            .nb_arg_min = 3, .nb_arg_max = 3,
+			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	// seqnum of the read/write, offset, length
+		}, {
+			.keyword = kw_miss,  .cb = NULL,            .nb_arg_min = 3, .nb_arg_max = 3,
+			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	// seqnum of the read/write, offset, length
+		},
+	};
+	for (unsigned d=0; d<sizeof_array(def_common); d++) {
+		if_fail (mdir_syntax_register(&syntax, def_common+d)) {
+			mdir_syntax_dtor(&syntax);
+			return;
+		}
+	}
+	if (client) for (unsigned d=0; d<sizeof_array(def_client); d++) {
+		if_fail (mdir_syntax_register(&syntax, def_client+d)) {
+			mdir_syntax_dtor(&syntax);
+			return;
+		}
+	} else for (unsigned d=0; d<sizeof_array(def_server); d++) {
+		if_fail (mdir_syntax_register(&syntax, def_server+d)) {
+			mdir_syntax_dtor(&syntax);
+			return;
+		}
+	}
+}
+
+/*
+ * Low level API
+ */
+
+/*
+ * Boxes
+ */
+
+extern inline struct chn_box *chn_box_alloc(size_t bytes);
+extern inline void chn_box_free(struct chn_box *box);
+extern inline void chn_box_ref(struct chn_box *box);
+extern inline void chn_box_unref(struct chn_box *box);
+extern inline void *chn_box_unbox(struct chn_box *box);
+
+/*
+ * WTX
+ */
+
+struct chn_wtx {
+	struct mdir_cnx *cnx;
+	char const *name;	// strduped
+	long long id;
+	// for the client only :
+	struct mdir_sent_query start_sq;	// the query that started the TX
+	bool completed;	// when we receive the answer from the server
+};
+
+static void chn_wtx_ctor(struct chn_wtx *wtx, struct mdir_cnx *cnx, char const *name, long long id)
+{
+	wtx->cnx = cnx;
+	wtx->name = strdup(name);
+	if (! wtx->name) with_error(ENOMEM, "Cannot strdup name") return;
+	if (client) {	// the client send a query first (_AFTER_ the TX is complete it will receive an answer from the server)
+		wtx->tx_mode = false;
+		if_fail (mdir_cnx_query(cnx, kw_write, &wtx->write_sq, name, NULL)) {
+			free(wtx->name);
+			return;
+		}
+		wtx->id = wtx->write_sq.seq;
+	} else {
+		wtx->tx_mode = true;
+		wtx->id = id;	// from received command
+	}
+	// TODO: start reader thread
+}
+
+static void chn_wtx_dtor(struct chn_wtx *wtx)
+{
+	free(wtx->name);
+	if (! wtx->tx_mode) mdir_cnx_query_cancel(wtx->cnx, &wtx->write_sq);
+}
+
+struct chn_wtx *chn_wtx_new(struct mdir_cnx *cnx, char const *name, long long id)
+{
+	struct chn_wtx *wtx = malloc(sizeof(*wtx));
+	if (! wtx) with_error(ENOMEM, "malloc(wtx)") return NULL;
+	if_fail (chn_wtx_ctor(wtx, cnx, name, id)) {
+		free(wtx);
+		wtx = NULL;
+	}
+	return wtx;
+}
+
+void chn_wtx_del(struct chn_wtx *wtx)
+{
+	chn_wtx_dtor(wtx);
+	free(wtx);
+}
+
+void chn_wtx_write(struct chn_wtx *tx, off_t offset, size_t length, struct chn_box *box, bool eof)
+{
+}
+
+/*
+ * RTX
+ */
+
+struct chn_rtx {
+};
+
+struct chn_rtx *chn_rtx_new(struct mdir_cnx *, char const *name)
+{
+}
+
+void chn_rtx_del(struct chn_rtx *tx)
+{
+}
+
+struct chn_box *chn_rtx_read(struct chn_rtx *tx, off_t *offset, size_t *length, bool *eof)
+{
+}
+
+bool chn_rtx_complete(struct chn_rtx *tx)
+{
+}
+
+bool chn_rtx_should_wait(struct chn_rtx *tx)
+{
 }
 
 /*
@@ -74,7 +226,7 @@ static void fetch_file_with_cnx(struct mdir_cnx *cnx, char const *name, int fd)
 		chn_box_unref(box);
 		on_error break;
 		if (eof) eof_received = true;
-	} while (!chn_rtx_complete(tx) && chn_rtx_should_wait(tx));
+	} while (chn_rtx_should_wait(tx));
 	if (! chn_rtx_complete(tx)) error_push(0, "Transfert incomplete");
 	chn_rtx_del(tx);
 }
@@ -96,7 +248,7 @@ int chn_get_file(char *localfile, size_t len, char const *name, char const *host
 	fd = open(localfile, O_RDWR|O_CREAT);
 	if (fd < 0) with_error(errno, "Cannot create(%s)", localfile) return actual_len;
 	struct mdir_cnx cnx;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, host, service, username)) return actual_len;
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, host, service, username)) return actual_len;
 	fetch_file_with_cnx(&cnx, name, fd);
 	on_error {
 		// delete the file if the transfert failed for some reason
@@ -114,13 +266,15 @@ struct creat_param {
 	char *name;
 	size_t len;
 	bool done;
+	struct mdir_sent_query sq;
 };
 
-static void finalize_creat(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *data)
+static void finalize_creat(struct mdir_cmd *cmd, void *user_data)
 {
-	(void)cnx;
+	struct mdir_cnx *cnx = user_data;
 	assert(cmd->def->keyword == kw_creat);
-	struct creat_param *param = (struct creat_param *)data;
+	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
+	struct creat_param *param = DOWNCAST(sq, sq, creat_param);
 	assert(! param->done);
 	if (cmd->args[0].integer != 200) return;
 	snprintf(param->name, param->len, "%s", cmd->args[1].string);
@@ -129,13 +283,12 @@ static void finalize_creat(struct mdir_cnx *cnx, struct mdir_cmd *cmd, void *dat
 
 void chn_create(char *name, size_t len, bool rt, char const *host, char const *service, char const *username)
 {
+	assert(client);
 	struct mdir_cnx cnx;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, host, service, username)) return;
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, host, service, username)) return;
 	do {
-		struct query_def creat_def;
-		if_fail (mdir_cnx_query_register(&cnx, kw_creat, finalize_creat, &creat_def)) break;
-		struct creat_param param = { .name = name, .len = len, .done = false };
-		if_fail (mdir_cnx_query(&cnx, &creat_def, true, &param, rt ? "*":NULL, NULL)) break;
+		struct creat_param param = { .name = name, .len = len, .done = false, };
+		if_fail (mdir_cnx_query(&cnx, kw_creat, &param.sq, rt ? "*":NULL, NULL)) break;
 		if_fail (mdir_cnx_read(&cnx)) break;	// wait until all queries are answered or timeouted
 		if (! param.done) with_error(0, "Cannot create new file") break;
 	} while (0);
@@ -174,7 +327,7 @@ static void send_file_with_cnx(struct mdir_cnx *cnx, char const *name, int fd)
 void chn_send_file(char const *name, int fd, char const *host, char const *service, char const *username)
 {
 	struct mdir_cnx cnx;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, host, service, username)) return;
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, host, service, username)) return;
 	send_file_with_cnx(&cnx, name, fd);
 	mdir_cnx_dtor(&cnx);
 }

@@ -30,10 +30,11 @@ extern char const kw_unsub[];
 extern char const kw_quit[];
 extern char const kw_patch[];
 extern char const kw_creat[];
-extern char const kw_down[];
-extern char const kw_up[];
+extern char const kw_write[];
+extern char const kw_read[];
 extern char const kw_copy[];
 extern char const kw_skip[];
+extern char const kw_miss[];
 
 /* Struct mdir_cnx describe a connection following mdir protocol.
  * Client and server are assymetric but similar.
@@ -106,6 +107,11 @@ void mdir_cnx_read(struct mdir_cnx *cnx);
  * else then to delete it (the internal sent_query will be destructed).
  */
 struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd);
+
+/* You may want to cancel a query, ie you won't receive the answer (and you can free the sent_query).
+ * Do not cancel a query which sent_query you already retrieved !
+ */
+void mdir_cnx_query_cancel(struct mdir_cnx *cnx, struct mdir_sent_query *sq);
 
 /* Once in a service callback, you may want to answer a query.
  * If the seqnum is set it will be prepended.

@@ -21,10 +21,11 @@ char const kw_unsub[] = "unsub";
 char const kw_quit[]  = "quit";
 char const kw_patch[] = "patch";
 char const kw_creat[] = "creat";
-char const kw_down[]  = "dwn";
-char const kw_up[]    = "up";
+char const kw_write[] = "write";
+char const kw_read[]  = "read";
 char const kw_copy[]  = "copy";
 char const kw_skip[]  = "skip";
+char const kw_miss[]  = "miss";
 
 /*
  * Constructors for mdir_sent_query
@@ -56,6 +57,12 @@ struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdi
 		}
 	}
 	with_error(0, "Unexpected answer for seq# %lld", cmd->seq) return NULL;
+}
+
+void mdir_cnx_query_cancel(struct mdir_cnx *cnx, struct mdir_sent_query *sq)
+{
+	(void)cnx;
+	mdir_sent_query_dtor(sq);
 }
 
 void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
