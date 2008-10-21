@@ -42,20 +42,27 @@
 
 static bool terminate_reader;
 
-void finalize_sub(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
+void finalize_sub(struct mdir_cmd *cmd, void *user_data)
 {
-	struct command *command = (struct command *)user_data;
-	assert(cnx_ == &cnx);
-	debug("subscribing to %s : %d %s", mdir_id(&command->mdirc->mdir), status, compl);
-	command->mdirc->subscribed = true;
+	struct mdir_cnx *const cnx = user_data;
+	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *const command = DOWNCAST(sq, sq, command);
+	int status = cmd->args[0].integer;
+	debug("subscribing to %s : %d", mdir_id(&command->mdirc->mdir), status);
+	if (status == 200) command->mdirc->subscribed = true;
+	command_del(command);
 }
 
-void finalize_unsub(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
+void finalize_unsub(struct mdir_cmd *cmd, void *user_data)
 {
-	struct command *command = (struct command *)user_data;
-	assert(cnx_ == &cnx);
-	debug("unsubscribing to %s : %d %s", mdir_id(&command->mdirc->mdir), status, compl);
-	command->mdirc->subscribed = false;
+	struct mdir_cnx *const cnx = user_data;
+	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *const command = DOWNCAST(sq, sq, command);
+	int status = cmd->args[0].integer;
+	debug("unsubscribing to %s : %d", mdir_id(&command->mdirc->mdir), status);
+	if (status == 200) command->mdirc->subscribed = false;
 	command_del(command);
 }
 
@@ -73,10 +80,14 @@ static void rename_temp(char const *path, char const *compl)
 	if (0 != rename(path, new_path)) error_push(errno, "rename %s -> %s", path, new_path);
 }
 
-void finalize_put(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
+void finalize_put(struct mdir_cmd *cmd, void *user_data)
 {
-	struct command *command = (struct command *)user_data;
-	assert(cnx_ == &cnx);
+	struct mdir_cnx *const cnx = user_data;
+	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *const command = DOWNCAST(sq, sq, command);
+	int status = cmd->args[0].integer;
+	char const *compl = cmd->args[1].string;
 	debug("put %s : %d", command->filename, status);
 	if (status == 200) {
 		rename_temp(command->filename, compl);
@@ -84,10 +95,14 @@ void finalize_put(struct mdir_cnx *cnx_, int status, char const *compl, void *us
 	command_del(command);
 }
 
-void finalize_rem(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
+void finalize_rem(struct mdir_cmd *cmd, void *user_data)
 {
-	struct command *command = (struct command *)user_data;
-	assert(cnx_ == &cnx);
+	struct mdir_cnx *const cnx = user_data;
+	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *const command = DOWNCAST(sq, sq, command);
+	int status = cmd->args[0].integer;
+	char const *compl = cmd->args[1].string;
 	debug("rem %s : %d", command->filename, status);
 	if (status == 200) {
 		rename_temp(command->filename, compl);
@@ -95,26 +110,27 @@ void finalize_rem(struct mdir_cnx *cnx_, int status, char const *compl, void *us
 	command_del(command);
 }
 
-#if 0
-void finalize_auth(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
+void finalize_auth(struct mdir_cmd *cmd, void *user_data)
 {
-	(void)compl;
-	struct command *command = (struct command *)user_data;
-	assert(cnx_ == &cnx);
+	struct mdir_cnx *const cnx = user_data;
+	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *const command = DOWNCAST(sq, sq, command);
+	int status = cmd->args[0].integer;
 	debug("auth : %d", status);
 	if (status != 200) {
 		terminate_reader = true;
 	}
 	command_del(command);
 }
-#endif
 
-void finalize_quit(struct mdir_cnx *cnx_, int status, char const *compl, void *user_data)
+void finalize_quit(struct mdir_cmd *cmd, void *user_data)
 {
-	(void)status;
-	(void)compl;
-	struct command *command = (struct command *)user_data;
-	assert(cnx_ == &cnx);
+	struct mdir_cnx *const cnx = user_data;
+	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *const command = DOWNCAST(sq, sq, command);
+	int status = cmd->args[0].integer;
 	debug("quit : %d", status);
 	terminate_reader = true;
 	command_del(command);
@@ -188,7 +204,7 @@ static struct patch *patch_new(struct mdirc *mdirc, mdir_version old_version, md
 	return patch;
 }
 
-static void patch_service(struct mdir_cmd *cmd, void *user_data)
+void patch_service(struct mdir_cmd *cmd, void *user_data)
 {
 	assert(user_data == &cnx);
 	struct mdir *const mdir = mdir_lookup_by_id(cmd->args[0].string, false);

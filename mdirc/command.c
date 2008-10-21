@@ -32,20 +32,6 @@
 #include "command.h"
 
 /*
- * Data Definitions
- */
-
-// NOTE: respect enum command_type order ! (FIXME with something like .0:{...}, .1:{...}, ... ?)
-struct command_types command_types[NB_CMD_TYPES] = {
-//	{ .keyword = kw_auth,  .finalize = finalize_auth },
-	{ .keyword = kw_sub,   .finalize = finalize_sub },
-	{ .keyword = kw_unsub, .finalize = finalize_unsub },
-	{ .keyword = kw_put,   .finalize = finalize_put },
-	{ .keyword = kw_rem,   .finalize = finalize_rem },
-	{ .keyword = kw_quit,  .finalize = finalize_quit },
-};
-
-/*
  * Public Functions
  */
 
@@ -56,24 +42,23 @@ bool command_timeouted(struct command *cmd)
 	return time(NULL) - cmd->creation > CMD_TIMEOUT;
 }
 
-static void command_ctor(struct command *cmd, enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
+static void command_ctor(struct command *cmd, char const *kw, struct mdirc *mdirc, char const *folder, char const *filename)
 {
-	assert(type < NB_CMD_TYPES);
 	if (folder[0] == '\0') folder = "/";	// should not happen
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	cmd->mdirc = mdirc;
 	cmd->creation = time(NULL);	// FIXME: timeout of queries should go into mdir_cnx_read()
-	debug("cmd @%p, folder = '%s', mdir id = '%s', seqnum = %lld", cmd, folder, mdir_id(&mdirc->mdir), cmd->seqnum);
-	if_fail (mdir_cnx_query(&cnx, &command_types[type].def, true, cmd, folder, type == SUB_CMD_TYPE ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
-	LIST_INSERT_HEAD(mdirc->commands+type, cmd, mdirc_entry);
-	LIST_INSERT_HEAD(&command_types[type].commands, cmd, type_entry);
+	cmd->kw = kw;
+	debug("cmd @%p, folder = '%s', mdir id = '%s'", cmd, folder, mdir_id(&mdirc->mdir));
+	if_fail (mdir_cnx_query(&cnx, kw, &cmd->sq, folder, kw == kw_sub ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
+	LIST_INSERT_HEAD(&mdirc->commands, cmd, mdirc_entry);
 }
 
-struct command *command_new(enum command_type type, struct mdirc *mdirc, char const *folder, char const *filename)
+struct command *command_new(char const *kw, struct mdirc *mdirc, char const *folder, char const *filename)
 {
 	struct command *cmd = malloc(sizeof(*cmd));
 	if (! cmd) with_error(ENOMEM, "malloc cmd") return NULL;
-	command_ctor(cmd, type, mdirc, folder, filename);
+	command_ctor(cmd, kw, mdirc, folder, filename);
 	on_error {
 		free(cmd);
 		cmd = NULL;
@@ -84,10 +69,10 @@ struct command *command_new(enum command_type type, struct mdirc *mdirc, char co
 void command_del(struct command *cmd)
 {
 	LIST_REMOVE(cmd, mdirc_entry);
-	LIST_REMOVE(cmd, type_entry);
 	free(cmd);
 }
 
+#if 0
 struct command *command_get_by_seqnum(unsigned type, long long seqnum)
 {
 	assert(type < sizeof_array(command_types));
@@ -99,16 +84,15 @@ struct command *command_get_by_seqnum(unsigned type, long long seqnum)
 	warning("No command was sent with seqnum %lld", seqnum);
 	return NULL;
 }
-
-struct command *command_get_by_path(struct mdirc *mdirc, unsigned type, char const *path)
+#endif
+struct command *command_get_by_path(struct mdirc *mdirc, char const *kw, char const *path)
 {
-	assert(type < sizeof_array(command_types));
 	struct command *cmd;
-	LIST_FOREACH(cmd, &mdirc->commands[type], mdirc_entry) {
+	LIST_FOREACH(cmd, &mdirc->commands, mdirc_entry) {
 		debug("lookup cmd @%p, path = '%s'", cmd, cmd->filename);
-		if (0 == strcmp(cmd->filename, path)) return cmd;
+		if (cmd->kw == kw && 0 == strcmp(cmd->filename, path)) return cmd;
 	}
-	debug("No command was sent for this path (%s)", path);
+	debug("No command was sent for this path (%s) and keyword (%s)", path, kw);
 	return NULL;
 }
 

@@ -46,10 +46,8 @@ static struct mdir *mdirc_alloc(void)
 {
 	struct mdirc *mdirc = malloc(sizeof(*mdirc));
 	if (! mdirc) with_error(ENOMEM, "malloc mdirc") return NULL;
-	for (unsigned l=0; l<sizeof_array(mdirc->commands); l++) {
-		LIST_INIT(mdirc->commands+l);
-	}
 	mdirc->subscribed = false;
+	LIST_INIT(&mdirc->commands);
 	LIST_INIT(&mdirc->patches);
 	(void)pth_rwlock_init(&mdirc->command_lock);
 	return &mdirc->mdir;
@@ -59,10 +57,8 @@ static void mdirc_free(struct mdir *mdir)
 {
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	struct command *cmd;
-	for (unsigned l=0; l<sizeof_array(mdirc->commands); l++) {
-		while (NULL != (cmd = LIST_FIRST(mdirc->commands+l))) {
-			command_del(cmd);
-		}
+	while (NULL != (cmd = LIST_FIRST(&mdirc->commands))) {
+		command_del(cmd);
 	}
 	free(mdirc);
 }

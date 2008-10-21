@@ -85,6 +85,12 @@ static inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_
 	LIST_INSERT_HEAD(&syntax->defs, def, entry);
 }
 
+static inline void mdir_syntax_unregister(struct mdir_syntax *syntax, struct mdir_cmd_def *def)
+{
+	(void)syntax;
+	LIST_REMOVE(def, entry);
+}
+
 /* Read a line from fd, and parse it according to syntax.
  * The registered callback will be called.
  */

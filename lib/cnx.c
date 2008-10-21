@@ -27,16 +27,16 @@ char const kw_copy[]  = "copy";
 char const kw_skip[]  = "skip";
 
 /*
- * Constructors for sent_query
+ * Constructors for mdir_sent_query
  */
 
-static void mdir_sent_query_ctor(struct sent_query *sq, struct mdir_cnx *cnx, long long seq)
+static void mdir_sent_query_ctor(struct mdir_sent_query *sq, struct mdir_cnx *cnx, long long seq)
 {
 	sq->seq = seq;
 	LIST_INSERT_HEAD(&cnx->sent_queries, sq, cnx_entry);
 }
 
-static void mdir_sent_query_dtor(struct sent_query *sq)
+static void mdir_sent_query_dtor(struct mdir_sent_query *sq)
 {
 	LIST_REMOVE(sq, cnx_entry);
 }
@@ -45,16 +45,17 @@ static void mdir_sent_query_dtor(struct sent_query *sq)
  * Register/Send a query
  */
 
-struct mdir_sent_query *mdir_cnx_query_lookup(struct mdir_cnx *cnx, struct mdir_cmd *cmd)
+struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd)
 {
-	// look for the sent_query
+	// look for the mdir_sent_query
 	struct mdir_sent_query *sq;
 	LIST_FOREACH(sq, &cnx->sent_queries, cnx_entry) {
 		if (sq->seq == cmd->seq) {
+			mdir_sent_query_dtor(sq);
 			return sq;
 		}
 	}
-	error_push(0, "Unexpected answer for seq# %lld", cmd->seq);
+	with_error(0, "Unexpected answer for seq# %lld", cmd->seq) return NULL;
 }
 
 void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
@@ -69,7 +70,7 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
 		}
 		if_fail (varbuf_append_strs(&vb, kw, NULL)) break;
 		va_list ap;
-		va_start(ap, user_data);
+		va_start(ap, sq);
 		char const *param;
 		while (NULL != (param = va_arg(ap, char const *))) {
 			if_fail (varbuf_append_strs(&vb, " ", param, NULL)) break;
@@ -131,32 +132,32 @@ static void cnx_connect(struct mdir_cnx *cnx, char const *host, char const *serv
 }
 
 struct auth_sent_query {
-	struct sent_query sq;
+	struct mdir_sent_query sq;
 	bool done;
 };
 
 static void auth_answ(struct mdir_cmd *cmd, void *user_data)
 {
 	struct mdir_cnx *cnx = user_data;
-	struct mdir_sent_query *sq = mdir_cnx_query_lookup(cnx, cmd);
+	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
 	struct auth_sent_query *my_sq = DOWNCAST(sq, sq, auth_sent_query);
-	if (cmd.args[0].integer == 200) my_sq->done = true;
+	if (cmd->args[0].integer == 200) my_sq->done = true;
 }
 
-void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, char const *host, char const *service)
+void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, char const *host, char const *service, char const *username)
 {
 	cnx_ctor_common(cnx, syntax);
 	if_fail (cnx_connect(cnx, host, service)) return;
 	cnx->user = NULL;
 	if (username) do {
 		struct mdir_cmd_def auth_def = MDIR_CNX_QUERY_REGISTER(kw_auth, auth_answ);
-		if_fail (mdir_cmd_register(&cnx->syntax, &auth_def)) break;
+		if_fail (mdir_syntax_register(cnx->syntax, &auth_def)) break;
 		struct auth_sent_query my_sq = { .done = false, };
 		if_fail (mdir_cnx_query(cnx, kw_auth, &my_sq.sq, username)) break;
 		if_fail (mdir_cnx_read(cnx)) break;
-		if_fail (mdir_cmd_unregister(&cnx->syntax, &auth_def)) break;
-		if (! done) with_error (0, "no answer to auth") break;
+		if_fail (mdir_syntax_unregister(cnx->syntax, &auth_def)) break;
+		if (! my_sq.done) with_error (0, "no answer to auth") break;
 		cnx->user = mdir_user_load(username);
 	} while (0);
 	on_error {

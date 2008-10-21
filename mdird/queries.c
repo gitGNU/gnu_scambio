@@ -134,6 +134,22 @@ void exec_rem(struct mdir_cmd *cmd, void *user_data)
 }
 
 /*
+ * Auth
+ */
+
+void exec_auth(struct mdir_cmd *cmd, void *user_data)
+{
+	struct cnx_env *const env = DOWNCAST(user_data, cnx, cnx_env);
+	debug("doing AUTH");
+	if_fail (env->cnx.user = mdir_user_load(cmd->args[0].string)) {
+		mdir_cnx_answer(&env->cnx, cmd, 500, error_str());
+		error_clear();
+	} else {
+		mdir_cnx_answer(&env->cnx, cmd, 200, "OK");
+	}
+}
+
+/*
  * Quit
  */
 

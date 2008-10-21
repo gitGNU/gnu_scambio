@@ -44,6 +44,6 @@ static inline struct mdird *mdir2mdird(struct mdir *mdir)
 
 void exec_begin(void);
 void exec_end(void);
-extern mdir_cmd_cb exec_quit, exec_sub, exec_unsub, exec_put, exec_rem;
+extern mdir_cmd_cb exec_quit, exec_sub, exec_unsub, exec_put, exec_rem, exec_auth;
 
 #endif

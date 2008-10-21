@@ -99,11 +99,14 @@ static void init_syntax(void)
 		}, {
 			.keyword = kw_sub,   .cb = exec_sub,   .nb_arg_min = 2, .nb_arg_max = 2,
 			.nb_types = 2, .types = { CMD_STRING, CMD_INTEGER }
-		},{
+		}, {
 			.keyword = kw_rem,   .cb = exec_rem,   .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_STRING }
-		},{
+		}, {
 			.keyword = kw_put,   .cb = exec_put,   .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }
+		}, {
+			.keyword = kw_auth,  .cb = exec_auth,  .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_STRING }
 		}
 	};
@@ -164,8 +167,7 @@ static void cnx_env_del(void *env_)
 
 static void cnx_env_ctor(struct cnx_env *env, int fd)
 {
-	struct mdir_cmd_def auth_def;
-	if_fail (mdir_cnx_ctor_inbound(&env->cnx, &syntax, fd, &auth_def)) return;
+	if_fail (mdir_cnx_ctor_inbound(&env->cnx, &syntax, fd)) return;
 	env->quit = false;
 	pth_mutex_init(&env->wfd);
 	LIST_INIT(&env->subscriptions);

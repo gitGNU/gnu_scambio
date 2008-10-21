@@ -38,13 +38,6 @@ void *connecter_thread(void *arg)
 	debug("Starting connecter");
 	char *username = arg;
 	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) return NULL;
-	// Register all queries (for answer)
-	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		if_fail (command_types[t].def = mdir_cnx_query_register(&cnx, command_types[t].keyword, command_types[t].finalize)) {
-			mdir_cnx_dtor(&cnx);
-			return NULL;
-		}
-	}
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
 	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
@@ -88,20 +81,22 @@ void *connecter_thread(void *arg)
 void connecter_begin(void)
 {
 	if_fail (mdir_syntax_ctor(&syntax)) return;
-	// Register PATCH service
-	static struct mdir_cmd_def patch_def = {
-		.keyword = kw_patch,
-		.cb = patch_service,
-		.nb_arg_min = 4,
-		.nb_arg_max = 4,
-		.nb_types = 4,
-		.types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, },
-	};
-	mdir_syntax_register(&syntax, &patch_def);
+	// Register all queries (for answer)
+	static struct mdir_cmd_def defs[] = {
+		MDIR_CNX_QUERY_REGISTER(kw_sub,   finalize_sub),
+		MDIR_CNX_QUERY_REGISTER(kw_unsub, finalize_unsub),
+		MDIR_CNX_QUERY_REGISTER(kw_put,   finalize_put),
+		MDIR_CNX_QUERY_REGISTER(kw_rem,   finalize_rem),
+		MDIR_CNX_QUERY_REGISTER(kw_quit,  finalize_quit),
+		MDIR_CNX_QUERY_REGISTER(kw_auth,  finalize_auth),
+		{
+			.keyword = kw_patch, .cb = patch_service, .nb_arg_min = 4, .nb_arg_max = 4,
+			.nb_types = 4, .types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, },
 
-	for (unsigned t=0; t<sizeof_array(command_types); t++) {
-		// FIXME: LIST_INIT should go in a command_begin()
-		LIST_INIT(&command_types[t].commands);
+		},
+	};
+	for (unsigned t=0; t<sizeof_array(defs); t++) {
+		if_fail (mdir_syntax_register(&syntax, defs+t)) return;
 	}
 }
 

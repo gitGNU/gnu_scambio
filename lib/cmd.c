@@ -38,6 +38,7 @@
 extern inline void mdir_syntax_ctor(struct mdir_syntax *syntax);
 extern inline void mdir_syntax_dtor(struct mdir_syntax *syntax);
 extern inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_cmd_def *def);
+extern inline void mdir_syntax_unregister(struct mdir_syntax *syntax, struct mdir_cmd_def *def);
 extern inline void mdir_cmd_dtor(struct mdir_cmd *cmd);
 extern inline char const *mdir_cmd_seq2str(char buf[SEQ_BUF_LEN], long long seq);
 

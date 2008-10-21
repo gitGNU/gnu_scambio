@@ -66,28 +66,6 @@ void exec_end(void) {
 }
 
 /*
- * Answers
- */
-
-static void answer_gen(struct cnx_env *env, int status, char const *cmpl, char sep)
-{
-	char line[100];
-	size_t len = snprintf(line, sizeof(line), "%03d%c%s"CRLF, status, sep, cmpl);
-	assert(len < sizeof(line));
-	Write(env->fd, line, len);
-}
-#if 0
-static void answer_cont(struct cnx_env *env, int status, char *cmpl)
-{
-	answer_gen(env, status, cmpl, '-');
-}
-#endif
-void answer(struct cnx_env *env, int status, char *cmpl)
-{
-	answer_gen(env, status, cmpl, ' ');
-}
-
-/*
  * HELO
  */
 
@@ -125,55 +103,54 @@ static void set_forward_path(struct cnx_env *env, char const *forward_path)
 	if (env->forward_path) free(env->forward_path);
 	env->forward_path = strdup(forward_path);
 }
-static void greatings(struct cnx_env *env)
+void exec_helo(struct mdir_cmd *cmd, void *user_data)
 {
-	answer(env, OK, my_hostname);
-}
-void exec_ehlo(struct cnx_env *env, char const *domain)
-{
-	set_domain(env, domain);
-	greatings(env);
-}
-void exec_helo(struct cnx_env *env, char const *domain)
-{
-	set_domain(env, domain);
-	greatings(env);
+	struct mdir_cnx *const cnx = user_data;
+	struct cnx_env *env = DOWNCAST(cnx, cnx, cnx_env);
+	set_domain(env, cmd->args[0].string);
+	mdir_cnx_answer(cnx, cmd, OK, my_hostname);
 }
 
 /*
  * MAIL/RCPT
  */
 
-void exec_mail(struct cnx_env *env, char const *from)
+void exec_mail(struct mdir_cmd *cmd, void *user_data)
 {
+	struct mdir_cnx *const cnx = user_data;
+	struct cnx_env *env = DOWNCAST(cnx, cnx, cnx_env);
+	char const *const from = cmd->args[0].string;
 #	define FROM_LEN 5
 	// RFC: In any event, a client MUST issue HELO or EHLO before starting a mail transaction.
 	if (! env->domain) {
-		answer(env, BAD_SEQUENCE, "What about presenting yourself first ?");
+		mdir_cnx_answer(cnx, cmd, BAD_SEQUENCE, "What about presenting yourself first ?");
 	} else if (0 != strncasecmp("FROM:", from, FROM_LEN)) {
-		answer(env, SYNTAX_ERR, "I remember RFC mentioning 'MAIL FROM:...'");
+		mdir_cnx_answer(cnx, cmd, SYNTAX_ERR, "I remember RFC mentioning 'MAIL FROM:...'");
 	} else {
 		set_reverse_path(env, from + FROM_LEN);
-		answer(env, OK, "Ok");
+		mdir_cnx_answer(&env->cnx, cmd, OK, "Ok");
 	}
 }
 
-void exec_rcpt(struct cnx_env *env, char const *to)
+void exec_rcpt(struct mdir_cmd *cmd, void *user_data)
 {
+	struct mdir_cnx *const cnx = user_data;
+	struct cnx_env *env = DOWNCAST(cnx, cnx, cnx_env);
+	char const *const to = cmd->args[0].string;
 #	define TO_LEN 3
 	if (! env->reverse_path) {
-		answer(env, BAD_SEQUENCE, "No MAIL command ?");
+		mdir_cnx_answer(cnx, cmd, BAD_SEQUENCE, "No MAIL command ?");
 	} else if (0 != strncasecmp("TO:", to, TO_LEN)) {
-		answer(env, SYNTAX_ERR, "It should be 'RCPT TO:...', shouldn't it ?");
+		mdir_cnx_answer(cnx, cmd, SYNTAX_ERR, "It should be 'RCPT TO:...', shouldn't it ?");
 	} else {
 		char const *name = to + TO_LEN;
 		while (*name != '\0' && *name == ' ') name++;	// some client may insert blank spaces here, although it's forbidden
 		set_forward_path(env, name);
 		on_error {
-			answer(env, MBOX_UNAVAIL_2, "Bad guess");	// TODO: take action against this client ?
+			mdir_cnx_answer(cnx, cmd, MBOX_UNAVAIL_2, "Bad guess");	// TODO: take action against this client ?
 			error_clear();
 		} else {
-			answer(env, OK, "Ok");
+			mdir_cnx_answer(cnx, cmd, OK, "Ok");
 		}
 	}
 }
@@ -217,7 +194,7 @@ static void submit_patch(struct cnx_env *env)
 static void process_mail(struct cnx_env *env)
 {
 	// First parse the data into a mail tree
-	struct msg_tree *msg_tree = msg_tree_read(env->fd);
+	struct msg_tree *msg_tree = msg_tree_read(env->cnx.fd);
 	on_error return;
 	// Extract the values that will be used for all meta-data blocs from top-level header
 	env->subject = header_search(msg_tree->header, "subject");
@@ -228,16 +205,18 @@ static void process_mail(struct cnx_env *env)
 	msg_tree_del(msg_tree);
 }
 
-void exec_data(struct cnx_env *env)
+void exec_data(struct mdir_cmd *cmd, void *user_data)
 {
+	struct mdir_cnx *const cnx = user_data;
+	struct cnx_env *env = DOWNCAST(cnx, cnx, cnx_env);
 	if (! env->forward_path) {
-		answer(env, BAD_SEQUENCE, "What recipient, again ?");
+		mdir_cnx_answer(cnx, cmd, BAD_SEQUENCE, "What recipient, again ?");
 	} else {
-		if_fail (answer(env, START_MAIL, "Go ahaid, end with a single dot")) return;
+		if_fail (mdir_cnx_answer(cnx, cmd, START_MAIL, "Go ahaid, end with a single dot")) return;
 		if_succeed (process_mail(env)) {
-			answer(env, OK, "Ok");
+			mdir_cnx_answer(cnx, cmd, OK, "Ok");
 		} else {
-			answer(env, LOCAL_ERROR, "Something bad happened at some point");
+			mdir_cnx_answer(cnx, cmd, LOCAL_ERROR, "Something bad happened at some point");
 		}
 	}
 }
@@ -246,33 +225,43 @@ void exec_data(struct cnx_env *env)
  * Other commands
  */
 
-void exec_rset(struct cnx_env *env)
+void exec_rset(struct mdir_cmd *cmd, void *user_data)
 {
+	struct mdir_cnx *const cnx = user_data;
+	struct cnx_env *env = DOWNCAST(cnx, cnx, cnx_env);
 	reset_state(env);
-	answer(env, OK, "Ok");
+	mdir_cnx_answer(cnx, cmd, OK, "Ok");
 }
-void exec_vrfy(struct cnx_env *env, char const *user)
+
+void exec_vrfy(struct mdir_cmd *cmd, void *user_data)
 {
-	(void)user;
-	answer(env, LOCAL_ERROR, "Not implemented yet");
+	struct mdir_cnx *const cnx = user_data;
+	mdir_cnx_answer(cnx, cmd, LOCAL_ERROR, "Not implemented yet");
 }
-void exec_expn(struct cnx_env *env, char const *list)
+
+void exec_expn(struct mdir_cmd *cmd, void *user_data)
 {
-	(void)list;
-	answer(env, LOCAL_ERROR, "Not implemented yet");
+	struct mdir_cnx *const cnx = user_data;
+	mdir_cnx_answer(cnx, cmd, LOCAL_ERROR, "Not implemented yet");
 }
-void exec_help(struct cnx_env *env, char const *command)
+
+void exec_help(struct mdir_cmd *cmd, void *user_data)
 {
-	(void)command;
-	answer(env, LOCAL_ERROR, "Not implemented yet");
+	struct mdir_cnx *const cnx = user_data;
+	mdir_cnx_answer(cnx, cmd, LOCAL_ERROR, "Not implemented yet");
 }
-void exec_noop(struct cnx_env *env)
+
+void exec_noop(struct mdir_cmd *cmd, void *user_data)
 {
-	answer(env, OK, "Ok");
+	struct mdir_cnx *const cnx = user_data;
+	mdir_cnx_answer(cnx, cmd, OK, "Ok");
 }
-void exec_quit(struct cnx_env *env)
+
+void exec_quit(struct mdir_cmd *cmd, void *user_data)
 {
+	struct mdir_cnx *const cnx = user_data;
+	struct cnx_env *env = DOWNCAST(cnx, cnx, cnx_env);
 	env->quit = true;
-	answer(env, SERVICE_CLOSING, "Bye");
+	mdir_cnx_answer(cnx, cmd, SERVICE_CLOSING, "Bye");
 }
 

@@ -52,18 +52,7 @@ struct cnx_env {
 
 void exec_begin(void);
 void exec_end(void);
-void answer(struct cnx_env *env, int status, char *cmpl);
-void exec_ehlo(struct cnx_env *, char const *domain);
-void exec_helo(struct cnx_env *, char const *domain);
-void exec_mail(struct cnx_env *, char const *from);
-void exec_rcpt(struct cnx_env *, char const *to);
-void exec_data(struct cnx_env *);
-void exec_rset(struct cnx_env *);
-void exec_vrfy(struct cnx_env *, char const *user);
-void exec_expn(struct cnx_env *, char const *list);
-void exec_help(struct cnx_env *, char const *command);
-void exec_noop(struct cnx_env *);
-void exec_quit(struct cnx_env *);
+mdir_cmd_cb exec_helo, exec_mail, exec_rcpt, exec_data, exec_rset, exec_vrfy, exec_expn, exec_help, exec_noop, exec_quit;
 
 // From parse.c
 

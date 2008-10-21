@@ -55,11 +55,11 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked
 	// but may already have been sent nonetheless.
-	enum command_type type = action == MDIR_ADD ? PUT_CMD_TYPE:REM_CMD_TYPE;
-	struct command *cmd = command_get_by_path(mdirc, type, param.path);
+	char const *kw = action == MDIR_ADD ? kw_put:kw_rem;
+	struct command *cmd = command_get_by_path(mdirc, kw, param.path);
 	if (! cmd) {
 		// FIXME : grasp cnx write lock
-		(void)command_new(type, mdirc, (char const *)path, param.path);
+		(void)command_new(kw, mdirc, (char const *)path, param.path);
 		unless_error header_write(header, cnx.fd);
 		// FIXME : release cnx write lock
 	}
@@ -78,11 +78,11 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 		// This is not enough to be synched : we must ensure that we have received the patch yet
 		// (this is not fatal to subscribe twice to a dirId, but better avoid it)
 		debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
-		struct command *cmd = command_get_by_path(mdirc, SUB_CMD_TYPE, "");
+		struct command *cmd = command_get_by_path(mdirc, kw_sub, "");
 		if (cmd) {
 			debug("already subscribing to %s", mdir_id(&mdirc->mdir));
 		} else {
-			(void)command_new(SUB_CMD_TYPE, mdirc, mdir_id(&mdirc->mdir), "");
+			(void)command_new(kw_sub, mdirc, mdir_id(&mdirc->mdir), "");
 		}
 		on_error return;
 	}

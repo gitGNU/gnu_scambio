@@ -28,6 +28,7 @@
 #include "smtpd.h"
 #include "scambio/mdir.h"
 #include "server.h"
+#include "misc.h"
 
 /*
  * Data Definitions
@@ -172,7 +173,7 @@ static char *client_host(void)
 
 static void cnx_env_ctor(struct cnx_env *env, int fd)
 {
-	if_fail (mdir_cnx_ctor_inbound(&env->cnx, fd, NULL)) return;
+	if_fail (mdir_cnx_ctor_inbound(&env->cnx, &syntax, fd)) return;
 	time_t const now = time(NULL);
 	struct tm *tm = localtime(&now);
 	snprintf(env->client_address, sizeof(env->client_address), "%s", client_host());
@@ -203,8 +204,8 @@ static void *serve_cnx(void *arg)
 		cnx_env_del(env);
 		return NULL;
 	}
-	if_fail (answer(env, 220, my_hostname)) return NULL;
-	while (! env->quit && !is_error()) {	// read a command and exec it
+	if_fail (Write_strs(env->cnx.fd, "220 ", my_hostname, "\n", NULL)) return NULL;
+	while (!env->quit && !is_error()) {	// read a command and exec it
 		if_fail (mdir_cnx_read(&env->cnx)) break;
 	}
 	return NULL;

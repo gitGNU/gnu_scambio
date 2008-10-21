@@ -84,7 +84,7 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
 /* Sends a query to the peer.
  * The query must have been registered first even if you do not expect an answer.
  * If !sq, no seqnum will be set (and you will receive no answer).
- * Otherwise it will be linked from the cnx for later retrieval (see mdir_cnx_query_lookup()).
+ * Otherwise it will be linked from the cnx for later retrieval (see mdir_cnx_query_retrieve()).
  */
 void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...);
 
@@ -94,14 +94,14 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
  * assymetric, or not acknowledged (the only symetrical commands, which are the
  * copy/skip data transfert commands, are not answered except for miss commands).
  * The mdir_cmd_cb of any matching definition will be called, with the cnx
- * as user_data. For query answers, use the lookup function to retrieve your sent_query.
+ * as user_data. For query answers, use the retrieve function to retrieve your sent_query.
  */
 void mdir_cnx_read(struct mdir_cnx *cnx);
 
 /* Once in a query callback, you want to retrieve your sent_query, if for nothing
- * else then to delete it.
+ * else then to delete it (the internal sent_query will be destructed).
  */
-struct mdir_sent_query *mdir_cnx_query_lookup(struct mdir_cnx *cnx, struct mdir_cmd *cmd);
+struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd);
 
 /* Once in a service callback, you may want to answer a query.
  * If the seqnum is 0 the answer is ignored (you may as well not call this function then).
