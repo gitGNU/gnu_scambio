@@ -144,9 +144,9 @@ static void init(void)
 	if (! pth_init()) with_error(0, "pth_init") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
-	init_conf(); on_error return;
-	init_log();  on_error return;
-	daemonize(); on_error return;
+	if_fail (init_conf()) return;
+	if_fail (init_log()) return;
+	if_fail (daemonize()) return;
 	init_server();
 }
 
@@ -193,8 +193,7 @@ static void *serve_cnx(void *arg)
 	}
 	do {	// read a command and exec it
 		mdir_cnx_read(&env->cnx);
-		on_error break;
-	} while (! env->quit);
+	} while (! is_error() && ! env->quit);
 	return NULL;
 }
 
@@ -204,14 +203,12 @@ static void *serve_cnx(void *arg)
 
 int main(void)
 {
-	init();
-	on_error return EXIT_FAILURE;
+	if_fail (init()) return EXIT_FAILURE;
 	// Run server
 	while (! terminate) {
 		int fd = server_accept(&server);
 		if (fd < 0) {
-			error("Cannot accept connection on fd %d, pausing for 5s", server.sock_fd);
-			(void)pth_sleep(5);
+			error("Cannot accept connection on fd %d", server.sock_fd);
 			continue;
 		}
 		struct cnx_env *env = cnx_env_new(fd);	// will be destroyed by sub-thread
