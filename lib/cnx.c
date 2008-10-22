@@ -96,8 +96,9 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
  * Constructors for mdir_cnx
  */
 
-static void cnx_ctor_common(struct mdir_cnx *cnx, struct mdir_syntax *syntax)
+static void cnx_ctor_common(struct mdir_cnx *cnx, struct mdir_syntax *syntax, bool client)
 {
+	cnx->client = client;
 	cnx->fd = -1;
 	cnx->user = NULL;
 	cnx->next_seq = 0;
@@ -155,7 +156,7 @@ static void auth_answ(struct mdir_cmd *cmd, void *user_data)
 
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, char const *host, char const *service, char const *username)
 {
-	cnx_ctor_common(cnx, syntax);
+	cnx_ctor_common(cnx, syntax, true);
 	if_fail (cnx_connect(cnx, host, service)) return;
 	cnx->user = NULL;
 	if (username) do {
@@ -176,7 +177,7 @@ void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, ch
 
 void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int fd)
 {
-	cnx_ctor_common(cnx, syntax);
+	cnx_ctor_common(cnx, syntax, false);
 	cnx->user = NULL;
 	cnx->fd = fd;
 }

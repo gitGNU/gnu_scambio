@@ -58,6 +58,7 @@ struct mdir_cnx {
 	struct mdir_user *user;
 	struct mdir_syntax *syntax;
 	LIST_HEAD(sent_queries, mdir_sent_query) sent_queries;
+	bool client;
 };
 
 /* Connect to given host:port (send auth if username is given)
@@ -83,7 +84,7 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
 }
 
 /* Sends a query to the peer.
- * The query must have been registered first even if you do not expect an answer.
+ * The query must have been registered first if you do expect an answer.
  * If !sq, no seqnum will be set (and you will receive no answer).
  * Otherwise it will be linked from the cnx for later retrieval (see mdir_cnx_query_retrieve()).
  */
