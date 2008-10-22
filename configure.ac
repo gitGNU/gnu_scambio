@@ -40,6 +40,7 @@ AC_CONFIG_FILES([
 	lib/Makefile
 	mdird/Makefile
 	mdirc/Makefile
+	filed/Makefile
 	smtpd/Makefile
 	merelib/Makefile
 	meremail/Makefile

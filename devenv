@@ -2,6 +2,7 @@ export MALLOC_CHECK_=2
 export MDIRD_LOG_DIR=/tmp
 export MDIRD_LOG_LEVEL=5
 export MDIRD_PORT=21435
+export SCAMBIO_FILED_PORT=21436
 export MDIRD_HOST=localhost
 export MERELIB_LOG_DIR=/tmp
 export MERELIB_LOG_LEVEL=5
@@ -33,6 +34,15 @@ function run_server {
 	mkdir -p $MDIR_ROOT_DIR/root
 	auth_users
 	build/mdird/mdird
+}
+
+function run_filed {
+	export SCAMBIO_FILED_LOG_DIR=/tmp
+	export SCAMBIO_FILED_LOG_LEVEL=5
+	export SCAMBIO_FILES_DIR=/tmp/filed/files
+	rm -f /tmp/filed.log
+	mkdir -p $SCAMBIO_FILE_ROOT_DIR
+	build/filed/filed
 }
 
 function send_content {
