@@ -1,3 +1,20 @@
+/* Copyright 2008 Cedric Cellier.
+ *
+ * This file is part of Scambio.
+ *
+ * Scambio is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Scambio is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
@@ -184,6 +201,7 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int
 
 void mdir_cnx_dtor(struct mdir_cnx *cnx)
 {
+	debug("destruct cnx");
 	if (cnx->fd != -1) {
 		(void)close(cnx->fd);
 		cnx->fd = -1;

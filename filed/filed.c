@@ -1,3 +1,20 @@
+/* Copyright 2008 Cedric Cellier.
+ *
+ * This file is part of Scambio.
+ *
+ * Scambio is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Scambio is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <pth.h>
@@ -6,6 +23,8 @@
 #include "scambio/cnx.h"
 #include "daemon.h"
 #include "server.h"
+#include "stream.h"
+#include "filed.h"
 
 /*
  * Data Definitions
@@ -24,10 +43,10 @@ static void init_server(void)
 	if_fail (mdir_syntax_ctor(&syntax)) return;
 	static struct mdir_cmd_def defs[] = {
 		{
-			.keyword = kw_creat, .cb = NULL,            .nb_arg_min = 0, .nb_arg_max = 0,
-			.nb_types = 0, .types = {},
+			.keyword = kw_creat, .cb = serve_creat,     .nb_arg_min = 0, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING },
 		}, {
-			.keyword = kw_write, .cb = NULL,            .nb_arg_min = 1, .nb_arg_max = 1,
+			.keyword = kw_write, .cb = serve_write,     .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_STRING },
 		}, {
 			.keyword = kw_read,  .cb = NULL,            .nb_arg_min = 1, .nb_arg_max = 1,
@@ -36,6 +55,7 @@ static void init_server(void)
 			.keyword = kw_quit,  .cb = NULL,            .nb_arg_min = 0, .nb_arg_max = 0,
 			.nb_types = 0, .types = {},
 		},
+		CHN_COMMON_DEFS,
 	};
 	for (unsigned d=0; d<sizeof_array(defs); d++) {
 		if_fail (mdir_syntax_register(&syntax, defs+d)) return;
@@ -73,6 +93,8 @@ static void init(void)
 	if_fail (init_conf()) return;
 	if_fail (init_log()) return;
 	if_fail (daemonize()) return;
+	if_fail (stream_begin()) return;
+	if (0 != atexit(stream_end)) return;
 	if_fail (init_server()) return;
 	if (0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
 }
@@ -83,7 +105,7 @@ static void init(void)
 
 static void cnx_env_ctor(struct cnx_env *env, int fd)
 {
-	if_fail (chn_cnx_ctor_inbound(&env->cnx, &syntax, fd)) return;
+	if_fail (chn_cnx_ctor_inbound(&env->cnx, &syntax, fd, incoming)) return;
 	env->quit = false;
 }
 
@@ -100,17 +122,20 @@ static struct cnx_env *cnx_env_new(int fd)
 
 static void cnx_env_dtor(struct cnx_env *env)
 {
+	debug("destruct chn_cnx");
 	chn_cnx_dtor(&env->cnx);
 }
 
-static void cnx_env_del(struct cnx_env *env)
+static void cnx_env_del(void *env_)
 {
+	struct cnx_env *env = env_;
 	cnx_env_dtor(env);
 	free(env);
 }
 
 static void *serve_cnx(void *arg)
 {
+	debug("New connection");
 	struct cnx_env *env = arg;
 	if (! pth_cleanup_push(cnx_env_del, env)) with_error(0, "Cannot add cleanup function") {
 		cnx_env_del(env);
@@ -118,42 +143,34 @@ static void *serve_cnx(void *arg)
 	}
 	do {
 		pth_yield(NULL);
-		/* write what's needed, while the chn_cnx reader thread handle reading
-		 * the fd and execing our callbacks.
-		 * The reader callbacks never answer queries (so must not call mdir_cnx_answer)
-		 * except for the create one (which is trivial and makes no pause).
-		 * We are concerned only by feeding/fetching the transferts, ie reading from
-		 * localfile or live streams and writing into the tx, or the other way round
-		 * (reading from a tx and writing onto a file or stream), untill the tx is over
-		 * and we the writer reply to the initial tx query.
-		 * The fact that, when writing/reading a file, the writer for this cnx is paused
-		 * should not be a problem (the other threads still go on).
-		 * We use the abstraction of a stream, which have a name (the name used as ressource
-		 * locator), to which we can append data or read from a cursor. Each stream may have
-		 * at most one writer, but can have many readers. A reader may be the writer thread
-		 * of this connection or another one.
+		/* The channel reader thread have callbacks that will receive incomming
+		 * datas and write it to the stream it's associated to (ie will perform
+		 * physical writes onto other TXs and/or file :
 		 *
-		 * A run goes like this :
+		 * - The service for the read command (download) will just lookup/create
+		 * the corresponding stream, and associate it's output to the TX. It does
+		 * not answer the query.
+		 * 
+		 * - The service for the write command (upload) will do the same, but
+		 * associate this TX to this stream's input. Doesn't answer neither.
 		 *
-		 * - for all our ongoing, associated tx (a associated tx is a tx + a link to the stream)
-		 *   - if it's completed, send the final answer, deassociat to the stream and delete it
-		 *   - if we're receiver,
-		 *     - try to read something and add this into the sorted by offset sequence of boxes received so far
-		 *     - handle completed part of this sequence to the associated stream
-		 *     - if we should have received a fragment long ago, ask for it and renew this timeout date
-		 *   - if we're transmiter,
-		 *     - read from the associated stream and write to the tx.
-		 * - for all our ongoing, not yet associated tx, find/create the associated stream.
-		 * - relieve the CPU untill ... something happen (a tx receive something or is created,
-		 *   or a stream outputing to one of our tx have something to offer. We can do this by
-		 *   signaling ? Or we could use one thread by file backed stream, to read file and write
-		 *   a ref of the box to every associated tx so that we writer thread can block on reading
-		 *   the fd (or a condition on the chn_cnx). Also, stream we write to may be threads
-		 *   that wait untill some of there input is there (condition) and write it. Thus we
-		 *   do not need a writer thread anymore ! but streams must have both a reader and a writer
-		 *   thread in general. Not sure how to design it.
+		 * - The services for copy/skip will send the data to the stream, up to
+		 * their associated TXs/file.
+		 *
+		 * - The service for miss is handled by the chn_retransmit() facility.
+		 *
+		 * When a stream is created for a file, a new thread is created that will
+		 * read it and write data to all it's associated reading TX, untill there
+		 * is no more and the thread is killed and the stream closed.  This is
+		 * not the stream but the sending TX that are responsible for keeping
+		 * copies (actualy just references) of the sent data boxes for
+		 * retransmissions, because several TX may have different needs in this
+		 * respect (different QoS, different locations on the file, etc...). And
+		 * it's simplier.
 		 */
-	} while (! env->quit);
+		if_fail (mdir_cnx_read(&env->cnx.cnx)) break;
+	} while (! env->quit);	// FIXME: or if the reader quits for some reason
+	error_clear();
 	return NULL;
 }
 
@@ -161,7 +178,7 @@ static void *serve_cnx(void *arg)
  * Main
  */
 
-int main(int nb_args, char **args)
+int main(void)
 {
 	if_fail (init()) return EXIT_FAILURE;
 	// Run server

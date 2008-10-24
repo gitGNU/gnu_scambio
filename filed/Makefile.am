@@ -5,7 +5,9 @@ AM_YFLAGS = -d
 bin_PROGRAMS = filed
 
 filed_SOURCES = \
-	filed.c
+	filed.c \
+	stream.c \
+	services.c
 
 filed_LDADD = ../lib/libmdir.la ../commons/libcommons.la
 

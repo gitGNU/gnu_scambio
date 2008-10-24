@@ -57,22 +57,11 @@ void chn_begin(void)
 	if_fail(conf_set_default_str("SCAMBIO_FILES_DIR", "/tmp/mdir/files")) return;
 	mdir_files = conf_get_str("SCAMBIO_FILES_DIR");
 	if_fail (mdir_syntax_ctor(&client_syntax)) return;
-#	define COMMON_DEFS \
-		{ \
-			.keyword = kw_copy,  .cb = NULL,            .nb_arg_min = 3, .nb_arg_max = 4, \
-			.nb_types = 3, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER, CMD_STRING },	/* seqnum of the read/write, offset, length, [eof] */ \
-		}, { \
-			.keyword = kw_skip,  .cb = NULL,            .nb_arg_min = 3, .nb_arg_max = 3, \
-			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length */ \
-		}, { \
-			.keyword = kw_miss,  .cb = NULL,            .nb_arg_min = 3, .nb_arg_max = 3, \
-			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length */ \
-		}
 	static struct mdir_cmd_def def_client[] = {
 		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
 		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
 		MDIR_CNX_QUERY_REGISTER(kw_read,  finalize_txstart),
-		COMMON_DEFS,
+		CHN_COMMON_DEFS,
 	};
 	for (unsigned d=0; d<sizeof_array(def_client); d++) {
 		if_fail (mdir_syntax_register(&client_syntax, def_client+d)) goto q1;
@@ -96,28 +85,11 @@ extern inline void *chn_box_unbox(struct chn_box *box);
 
 // TX
 
-struct fragment;
-
-struct chn_tx {
-	struct chn_cnx *cnx;	// backlink
-	LIST_ENTRY(chn_tx) entry;
-	char *name;	// strduped
-	struct mdir_sent_query start_sq;	// the query that started the TX (client only)
-	int status;	// when we receive the answer from the server or when we received all data from client, we write the status here
-	bool sender;	// if false, then this tx is a receiver
-	off_t end_offset;
-	// Fragments and misses are ordered by offset
-	TAILQ_HEAD(fragments_queue, fragment) out_frags;	// Fragments that goes out (ie for sender) 
-	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for received)
-};
-
 static long long tx_id(struct chn_tx *tx) { return tx->start_sq.seq; }
 
 static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, char const *name, long long id)
 {
 	tx->cnx = cnx;
-	tx->name = strdup(name);
-	if (! tx->name) with_error(ENOMEM, "Cannot strdup name") return;
 	tx->sender = sender;
 	tx->status = 0;
 	tx->end_offset = 0;
@@ -125,48 +97,29 @@ static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, cha
 	TAILQ_INIT(&tx->out_frags);
 	if (cnx->cnx.client) {	// the client send a query first (_AFTER_ the TX is complete it will receive an answer from the server)
 		if_fail (mdir_cnx_query(&cnx->cnx, sender ? kw_write:kw_read, &tx->start_sq, name, NULL)) {
-			free(tx->name);
 			return;
 		}
 	} else {
 		tx->start_sq.seq = id;	// fake
 	}
-	LIST_INSERT_HEAD(&cnx->txs, tx, entry);
+	LIST_INSERT_HEAD(&cnx->txs, tx, cnx_entry);
 }
 
 static void fragment_del(struct fragment *f, struct fragments_queue *q);
-static void chn_tx_dtor(struct chn_tx *tx)
+void chn_tx_dtor(struct chn_tx *tx)
 {
-	free(tx->name);
 	if (tx->cnx->cnx.client && ! tx->status) mdir_cnx_query_cancel(&tx->cnx->cnx, &tx->start_sq);
-	LIST_REMOVE(tx, entry);
+	LIST_REMOVE(tx, cnx_entry);
 	struct fragment *f;
 	while (NULL != (f = TAILQ_FIRST(&tx->in_frags)))  fragment_del(f, &tx->in_frags);
 	while (NULL != (f = TAILQ_FIRST(&tx->out_frags))) fragment_del(f, &tx->out_frags);
-}
-
-struct chn_tx *chn_tx_new(struct chn_cnx *cnx, bool sender, char const *name, long long id)
-{
-	struct chn_tx *tx = malloc(sizeof(*tx));
-	if (! tx) with_error(ENOMEM, "malloc(tx)") return NULL;
-	if_fail (chn_tx_ctor(tx, cnx, sender, name, id)) {
-		free(tx);
-		tx = NULL;
-	}
-	return tx;
-}
-
-void chn_tx_del(struct chn_tx *tx)
-{
-	chn_tx_dtor(tx);
-	free(tx);
 }
 
 // Fragments (and misses)
 
 // misses are fragment with no ts, no box and no eof flag
 struct fragment {
-	TAILQ_ENTRY(fragment) entry;
+	TAILQ_ENTRY(fragment) tx_entry;
 	uint_least64_t ts;	// time of reception/emmission
 	struct chn_box *box;
 	off_t offset;
@@ -188,7 +141,7 @@ static void out_frag_ctor(struct fragment *f, struct chn_tx *tx, uint_least64_t 
 	f->eof = eof;
 	f->ts = ts;
 	f->box = box ? chn_box_ref(box) : NULL;	// if no box, this is a skip
-	TAILQ_INSERT_TAIL(&tx->out_frags, f, entry);
+	TAILQ_INSERT_TAIL(&tx->out_frags, f, tx_entry);
 }
 
 static struct fragment *out_frag_new(struct chn_tx *tx, uint_least64_t ts, size_t size, struct chn_box *box, bool eof)
@@ -205,18 +158,18 @@ static struct fragment *out_frag_new(struct chn_tx *tx, uint_least64_t ts, size_
 static void insert_by_offset(struct fragments_queue *q, struct fragment *f)
 {
 	if (TAILQ_EMPTY(q)) {
-		TAILQ_INSERT_HEAD(q, f, entry);
+		TAILQ_INSERT_HEAD(q, f, tx_entry);
 		return;
 	}
 	struct fragment *ff;
-	TAILQ_FOREACH(ff, q, entry) {
+	TAILQ_FOREACH(ff, q, tx_entry) {
 		if (f->offset < ff->offset) {
 			if (f->offset + (off_t)f->size > ff->offset) warning("fragments overlap");
-			TAILQ_INSERT_BEFORE(ff, f, entry);
+			TAILQ_INSERT_BEFORE(ff, f, tx_entry);
 			return;
 		}
 	}
-	TAILQ_INSERT_TAIL(q, f, entry);
+	TAILQ_INSERT_TAIL(q, f, tx_entry);
 }
 
 static void in_frag_ctor(struct fragment *f, struct chn_tx *tx, off_t offset, size_t size, struct chn_box *box, bool eof)
@@ -245,7 +198,7 @@ static void fragment_dtor(struct fragment *f, struct fragments_queue *q)
 		chn_box_unref(f->box);
 		f->box = NULL;
 	}
-	TAILQ_REMOVE(q, f, entry);
+	TAILQ_REMOVE(q, f, tx_entry);
 }
 
 static void fragment_del(struct fragment *f, struct fragments_queue *q)
@@ -256,9 +209,9 @@ static void fragment_del(struct fragment *f, struct fragments_queue *q)
 
 // Sender
 
-struct chn_tx *chn_tx_new_sender(struct chn_cnx *cnx, char const *name, long long id)
+void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *cnx, char const *name, long long id)
 {
-	return chn_tx_new(cnx, true, name, id);
+	return chn_tx_ctor(tx, cnx, true, name, id);
 }
 
 static size_t send_chunk(struct chn_tx *tx, struct fragment *f, off_t offset)
@@ -288,7 +241,7 @@ static void retransmit_missed(struct chn_tx *tx)
 		// warning : a miss from offset X does not imply that all fragments before that
 		// were received ; we may miss a miss !
 		// look for this chunk
-		TAILQ_FOREACH(f, &tx->out_frags, entry) {
+		TAILQ_FOREACH(f, &tx->out_frags, tx_entry) {
 			if (
 				miss->offset + (off_t)miss->size <= f->offset ||
 				miss->offset >= f->offset + (off_t)f->size
@@ -317,6 +270,7 @@ static void timeout_fragments(struct fragments_queue *q, uint_least64_t now, uin
 
 void chn_tx_write(struct chn_tx *tx, size_t length, struct chn_box *box, bool eof)
 {
+	debug("length= %zu, eof= %c", length, eof ? 'y':'n');
 	assert(tx->sender == true);
 	uint_least64_t now;
 	struct fragment *new_frag;
@@ -337,13 +291,16 @@ void chn_tx_write(struct chn_tx *tx, size_t length, struct chn_box *box, bool eo
 
 // Receiver
 
-struct chn_tx *chn_tx_new_receiver(struct chn_cnx *cnx, char const *name, long long id)
+void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *cnx, char const *name, long long id)
 {
-	return chn_tx_new(cnx, false, name, id);
+	return chn_tx_ctor(tx, cnx, false, name, id);
 }
 
 struct chn_box *chn_tx_read(struct chn_tx *tx, off_t *offset, size_t *length, bool *eof)
 {
+	(void)offset;
+	(void)length;
+	(void)eof;
 	assert(tx->sender == false);
 	return NULL;
 }
@@ -365,6 +322,9 @@ static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 	tx->status = cmd->args[0].integer;
 }
 
+/*
+// FIXME: il y a deux lecteurs !
+// Il vaudrait mieux laisser le client faire son thread, son environement, etc.
 static void *reader(void *arg)
 {
 	struct chn_cnx *cnx = arg;
@@ -375,17 +335,17 @@ static void *reader(void *arg)
 	}
 	return NULL;
 }
-
+*/
 // Chn_cnx
 
 static void chn_cnx_ctor(struct chn_cnx *cnx)
 {
 	LIST_INIT(&cnx->txs);
-	cnx->reader = pth_spawn(PTH_ATTR_DEFAULT, reader, cnx);
+/*	cnx->reader = pth_spawn(PTH_ATTR_DEFAULT, reader, cnx);
 	if (! cnx->reader) {
 		mdir_cnx_dtor(&cnx->cnx);
 		error_push(0, "Cannot spawn chn reader thread");
-	}
+	}*/
 }
 
 void chn_cnx_ctor_outbound(struct chn_cnx *cnx, char const *host, char const *service, char const *username)
@@ -394,22 +354,25 @@ void chn_cnx_ctor_outbound(struct chn_cnx *cnx, char const *host, char const *se
 	chn_cnx_ctor(cnx);
 }
 
-void chn_cnx_ctor_inbound(struct chn_cnx *cnx, struct mdir_syntax *syntax, int fd)
+void chn_cnx_ctor_inbound(struct chn_cnx *cnx, struct mdir_syntax *syntax, int fd, chn_incoming_cb *cb)
 {
 	if_fail (mdir_cnx_ctor_inbound(&cnx->cnx, syntax, fd)) return;
 	chn_cnx_ctor(cnx);
+	cnx->incoming_cb = cb;
 }
 
 void chn_cnx_dtor(struct chn_cnx *cnx)
 {
-	if (cnx->reader) {
+/*	if (cnx->reader) {
 		(void)pth_cancel(cnx->reader);
 		cnx->reader = NULL;
-	}
+	}*/
+	/*
 	struct chn_tx *tx;
 	while (NULL != (tx = LIST_FIRST(&cnx->txs))) {
 		chn_tx_del(tx);
 	}
+	*/
 	mdir_cnx_dtor(&cnx->cnx);
 }
 
@@ -423,22 +386,22 @@ void chn_cnx_dtor(struct chn_cnx *cnx)
 
 static void fetch_file_with_cnx(struct chn_cnx *cnx, char const *name, int fd)
 {
-	struct chn_tx *tx;
-	if_fail (tx = chn_tx_new(cnx, false, name, 0)) return;
+	struct chn_tx tx;
+	if_fail (chn_tx_ctor(&tx, cnx, false, name, 0)) return;
 	bool eof_received = false;
 	do {
 		struct chn_box *box;
 		off_t offset;
 		size_t length;
 		bool eof;
-		if_fail (box = chn_tx_read(tx, &offset, &length, &eof)) break;
+		if_fail (box = chn_tx_read(&tx, &offset, &length, &eof)) break;
 		WriteTo(fd, offset, box->data, length);
 		chn_box_unref(box);
 		on_error break;
 		if (eof) eof_received = true;
-	} while (! chn_tx_status(tx));
-	if (200 != chn_tx_status(tx)) error_push(0, "Transfert incomplete");
-	chn_tx_del(tx);
+	} while (! chn_tx_status(&tx));
+	if (200 != chn_tx_status(&tx)) error_push(0, "Transfert incomplete");
+	chn_tx_dtor(&tx);
 }
 
 int chn_get_file(struct chn_cnx *cnx, char *localfile, size_t len, char const *name)
@@ -515,8 +478,8 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 {
 	off_t offset = 0, max_offset;
 	if_fail (max_offset = filesize(fd)) return;
-	struct chn_tx *tx;
-	if_fail (tx = chn_tx_new(cnx, true, name, 0)) return;
+	struct chn_tx tx;
+	if_fail (chn_tx_ctor(&tx, cnx, true, name, 0)) return;
 #	define READ_FILE_BLOCK 65500
 	do {
 		struct chn_box *box;
@@ -528,11 +491,94 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 		}
 		if_fail (box = chn_box_alloc(len)) break;
 		ReadFrom(box->data, fd, offset, len);
-		unless_error chn_tx_write(tx, len, box, eof);
+		unless_error chn_tx_write(&tx, len, box, eof);
 		offset += len;
 		on_error break;
 	} while (offset < max_offset);
 #	undef READ_FILE_BLOCK
-	chn_tx_del(tx);
+	chn_tx_dtor(&tx);
 }
 
+/*
+ * Transfert commands handlers
+ */
+
+static struct chn_tx *find_rtx(struct chn_cnx *cnx, long long id)
+{
+	struct chn_tx *tx;
+	LIST_FOREACH(tx, &cnx->txs, cnx_entry) {
+		if (tx->sender) continue;	// we are looking for a receiver
+		if (tx->start_sq.seq == id) return tx;
+	}
+	return NULL;
+}
+
+void chn_serve_copy(struct mdir_cmd *cmd, void *cnx_)
+{
+	struct chn_cnx *cnx = DOWNCAST(cnx_, cnx, chn_cnx);
+	long long id  = cmd->args[0].integer;
+	off_t offset  = cmd->args[1].integer;
+	size_t size = cmd->args[2].integer;
+	bool eof = cmd->nb_args == 4;
+	debug("id=%lld, offset=%u, size=%zu, eof=%s", id, (unsigned)offset, size, eof ? "y":"n");
+	struct chn_tx *tx = find_rtx(cnx, id);
+	if (! tx) {
+		mdir_cnx_answer(&cnx->cnx, cmd, 500, "No such tx id");
+		return;
+	}
+	struct chn_box *box = chn_box_alloc(size);
+	if (! box) {
+		mdir_cnx_answer(&cnx->cnx, cmd, 501, "Cannot malloc(data)");
+		return;
+	}
+	// Read available datas from fd
+	if_fail (Read(box->data, cnx->cnx.fd, size)) {
+		error_clear();
+		chn_box_free(box);
+		mdir_cnx_answer(&cnx->cnx, cmd, 501, "Cannot read data");
+		return;
+	}
+	// Give it to our callback (filed will propagates it onto streams, client will write it to a file or do whatever he want with this).
+	if (cnx->incoming_cb) {
+		if_fail (cnx->incoming_cb(cnx, tx, offset, size, box, eof)) {
+			mdir_cnx_answer(&cnx->cnx, cmd, 501, error_str());
+			error_clear();
+			tx->status = 501;
+			chn_box_unref(box);
+			return;
+		}
+	}
+	chn_box_unref(box);
+	box = NULL;
+	// Register that we received this fragment, and ask for missed one.
+	// TODO
+	mdir_cnx_answer(&cnx->cnx, cmd, 200, "OK");
+}
+
+void chn_serve_skip(struct mdir_cmd *cmd, void *cnx_)
+{
+	struct chn_cnx *cnx = DOWNCAST(cnx_, cnx, chn_cnx);
+	long long id  = cmd->args[0].integer;
+	off_t offset  = cmd->args[1].integer;
+	size_t size = cmd->args[2].integer;
+	bool eof = cmd->nb_args == 4;
+	// TODO
+	(void)cnx;
+	(void)offset;
+	(void)size;
+	(void)eof;
+	(void)id;
+}
+
+void chn_serve_miss(struct mdir_cmd *cmd, void *cnx_)
+{
+	struct chn_cnx *cnx = DOWNCAST(cnx_, cnx, chn_cnx);
+	long long id  = cmd->args[0].integer;
+	off_t offset  = cmd->args[1].integer;
+	size_t size = cmd->args[2].integer;
+	// TODO
+	(void)cnx;
+	(void)offset;
+	(void)size;
+	(void)id;
+}

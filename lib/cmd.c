@@ -136,6 +136,7 @@ static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct 
 
 void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data)
 {
+	debug("reading command on %d", fd);
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
 	on_error return;
@@ -147,6 +148,7 @@ void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data)
 	varbuf_dtor(&vb);	// TODO: keep this vb until after the cb(), then we could ue the original strings in it instead of strduping
 	unless_error {
 		if (cmd.def->cb) cmd.def->cb(&cmd, user_data);
+		else debug("No handler for command '%s'", cmd.def->keyword);
 		mdir_cmd_dtor(&cmd);
 	}
 	return;

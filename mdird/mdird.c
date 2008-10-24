@@ -161,6 +161,7 @@ static void cnx_env_del(void *env_)
 	while (NULL != (sub = LIST_FIRST(&env->subscriptions))) {
 		subscription_del(sub);
 	}
+	error_clear();
 	mdir_cnx_dtor(&env->cnx);
 	free(env);
 }
@@ -194,6 +195,7 @@ static void *serve_cnx(void *arg)
 	do {	// read a command and exec it
 		mdir_cnx_read(&env->cnx);
 	} while (! is_error() && ! env->quit);
+	error_clear();
 	return NULL;
 }
 

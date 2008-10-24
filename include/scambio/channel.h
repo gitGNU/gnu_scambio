@@ -32,12 +32,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include <pth.h>
 #include <scambio/cnx.h>
 
 /*
  * Init
- *
- * Uses MDIR_FILES_DIR to locate file cache
  */
 
 void chn_begin(void);
@@ -47,14 +46,35 @@ void chn_end(void);
 
 /* A chn_cnx is merely a mdir_cnx with a list of handled chn_txs, and a dedicated reading thread.
  */
+struct chn_cnx;
+struct chn_tx;
+struct chn_box;
+typedef void chn_incoming_cb(struct chn_cnx *, struct chn_tx *, off_t, size_t, struct chn_box *, bool);
 struct chn_cnx {
 	struct mdir_cnx cnx;
-	pth_t reader;
+//	pth_t reader;
 	LIST_HEAD(chn_txs, chn_tx) txs;
+	chn_incoming_cb *incoming_cb;
 };
 
 void chn_cnx_ctor_outbound(struct chn_cnx *cnx, char const *host, char const *service, char const *username);
-void chn_cnx_ctor_inbound(struct chn_cnx *cnx, struct mdir_syntax *syntax, int fd);
+// Use our handlers for copy/skip/miss :
+void chn_serve_copy(struct mdir_cmd *cmd, void *cnx_);
+void chn_serve_skip(struct mdir_cmd *cmd, void *cnx_);
+void chn_serve_miss(struct mdir_cmd *cmd, void *cnx_);
+#define CHN_COMMON_DEFS \
+	{ \
+		.keyword = kw_copy,  .cb = chn_serve_copy, .nb_arg_min = 3, .nb_arg_max = 4, \
+		.nb_types = 3, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER, CMD_STRING },	/* seqnum of the read/write, offset, length, [eof] */ \
+	}, { \
+		.keyword = kw_skip,  .cb = chn_serve_skip, .nb_arg_min = 3, .nb_arg_max = 4, \
+		.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length, [eof] */ \
+	}, { \
+		.keyword = kw_miss,  .cb = chn_serve_miss, .nb_arg_min = 3, .nb_arg_max = 3, \
+		.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length */ \
+	}
+
+void chn_cnx_ctor_inbound(struct chn_cnx *cnx, struct mdir_syntax *syntax, int fd, chn_incoming_cb *);
 void chn_cnx_dtor(struct chn_cnx *cnx);
 
 /* Will return the name of a file containing the full content.
@@ -117,16 +137,29 @@ static inline void *chn_box_unbox(struct chn_box *box) { return box->data; }
  * Notes for the receiving peer :
  *
  */
-struct chn_tx;
+struct fragment;
+struct chn_tx {
+	struct chn_cnx *cnx;	// backlink
+	LIST_ENTRY(chn_tx) cnx_entry;
+	struct mdir_sent_query start_sq;	// the query that started the TX (client only)
+	int status;	// when we receive the answer from the server or when we received all data from client, we write the status here
+	bool sender;	// if false, then this tx is a receiver
+	off_t end_offset;
+	// Fragments and misses are ordered by offset
+	TAILQ_HEAD(fragments_queue, fragment) out_frags;	// Fragments that goes out (ie for sender) 
+	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for received)
+};
 
 /* For clients, start by sending the write command. Then start the reader thread (ie. add
  * the chn_tx to the pool of tx known of the reader thread).
+ * Name is usefull for the client, id for the server.
  */
-struct chn_tx *chn_tx_new_sender(struct chn_cnx *, char const *name, long long id);
+void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *, char const *name, long long id);
 
 /* Send the read command (check that the cnx is authentified), and init a new chn_tx.
+ * Name is usefull for the client, id for the server.
  */
-struct chn_tx *chn_tx_new_receiver(struct chn_cnx *, char const *name, long long id);
+void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *, char const *name, long long id);
 
 /* Send the data according to the MTU (ie, given block may be split again).
  * This first sent the required retransmissions, then send the given box by packet of
@@ -134,6 +167,8 @@ struct chn_tx *chn_tx_new_receiver(struct chn_cnx *, char const *name, long long
  * If the eof flag is set, there will be no more writes. Waits for the server answer (ie wait for
  * the reader thread to exit), while retransmitting segments and freeing boxes as required, and
  * yielding CPU to the reader.
+ * FIXME: handle misses and TX close in the reader thread, so this returns at once even when eof.
+ *        this is mandatory for streams not to block on some reader at eof.
  * Set box to NULL to skip data.
  */
 void chn_tx_write(struct chn_tx *tx, size_t length, struct chn_box *box, bool eof);
@@ -154,6 +189,6 @@ int chn_tx_status(struct chn_tx *tx);
 
 /* Once you are done with the transfert, free it
  */
-void chn_tx_del(struct chn_tx *tx);
+void chn_tx_dtor(struct chn_tx *tx);
 
 #endif

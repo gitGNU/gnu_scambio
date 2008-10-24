@@ -99,7 +99,7 @@ void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data);
 #include <stdlib.h>
 static inline void mdir_cmd_dtor(struct mdir_cmd *cmd)
 {
-	for (unsigned a=0; a<cmd->def->nb_types; a++) {	// Copy and transcode args
+	for (unsigned a=0; a<cmd->nb_args; a++) {	// Copy and transcode args
 		if (a >= cmd->def->nb_arg_max || cmd->def->types[a] == CMD_STRING) free(cmd->args[a].string);
 	}
 }

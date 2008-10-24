@@ -41,7 +41,7 @@ function run_filed {
 	export SCAMBIO_FILED_LOG_LEVEL=5
 	export SCAMBIO_FILES_DIR=/tmp/filed/files
 	rm -f /tmp/filed.log
-	mkdir -p $SCAMBIO_FILE_ROOT_DIR
+	mkdir -p $SCAMBIO_FILES_DIR
 	build/filed/filed
 }
 
