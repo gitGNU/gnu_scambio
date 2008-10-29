@@ -66,7 +66,7 @@ void ReadFrom(void *buf, int fd, off_t offset, size_t len)
 		if (ret < 0) {
 			if (errno != EINTR) with_error(errno, "Cannot pth_pread") return;
 			continue;
-		}
+		} else if (ret == 0) with_error(0, "EOF") return;
 		done += ret;
 	}
 	assert(done == len);
