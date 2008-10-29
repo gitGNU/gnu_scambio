@@ -37,6 +37,7 @@ struct stream {
 	int fd;	// may be -1 if not mapped to a file
 	time_t last_used;	// usefull for RT streams
 	char name[PATH_MAX];
+	pth_t pth;	// thread that push file onto reading TXs
 };
 
 void stream_begin(void);
@@ -63,7 +64,8 @@ void stream_add_reader(struct stream *stream, struct my_tx *tx);
 struct my_tx {
 	struct chn_tx tx;
 	struct stream *stream;	// the associated stream
-	LIST_ENTRY(my_tx) reader_entry;	// if stream is set and this stream is a sender, then it's one of this stream reader.
+	LIST_ENTRY(my_tx) reader_entry;	// if stream is set and this stream is a sender, then it's one of this stream readers.
+	off_t push_offset;	// if reading a file stream, stores the offset of the last byte to write
 };
 
 #endif

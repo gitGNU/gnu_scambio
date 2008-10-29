@@ -141,25 +141,23 @@ struct fragment;
 struct chn_tx {
 	struct chn_cnx *cnx;	// backlink
 	LIST_ENTRY(chn_tx) cnx_entry;
-	struct mdir_sent_query start_sq;	// the query that started the TX (client only)
+	long long id;
 	int status;	// when we receive the answer from the server or when we received all data from client, we write the status here
 	bool sender;	// if false, then this tx is a receiver
 	off_t end_offset;
 	// Fragments and misses are ordered by offset
 	TAILQ_HEAD(fragments_queue, fragment) out_frags;	// Fragments that goes out (ie for sender) 
-	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for received)
+	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for receiver)
+	pth_t pth;	// a thread to check for missed data
 };
 
-/* For clients, start by sending the write command. Then start the reader thread (ie. add
- * the chn_tx to the pool of tx known of the reader thread).
- * Name is usefull for the client, id for the server.
+/* Start a new tx for sending data (once the read/write command have been acked)
  */
-void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *, char const *name, long long id);
+void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *, long long id);
 
-/* Send the read command (check that the cnx is authentified), and init a new chn_tx.
- * Name is usefull for the client, id for the server.
+/* Start a new tx for receiving (once the read/write command have been acked).
  */
-void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *, char const *name, long long id);
+void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *, long long id);
 
 /* Send the data according to the MTU (ie, given block may be split again).
  * This first sent the required retransmissions, then send the given box by packet of

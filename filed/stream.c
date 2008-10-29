@@ -41,6 +41,34 @@ unsigned files_root_len;
  * Create/Delete
  */
 
+static void *stream_push(void *arg)
+{
+	struct stream *stream = arg;
+	struct my_tx *mtx;
+	while (1) {
+		while (LIST_EMPTY(&stream->readers)) pth_usleep(10000);
+		LIST_FOREACH(mtx, &stream->readers, reader_entry) {
+#			define STREAM_READ_BLOCK 10000
+			bool eof = false;
+			off_t totsize = filesize(stream->fd);
+			size_t size = STREAM_READ_BLOCK;
+			if ((off_t)size + mtx->push_offset >= totsize) {
+				size = totsize - mtx->push_offset;
+				eof = true;
+			}
+			if (! size) continue;
+			struct chn_box *box;
+			if_fail (chn_box_alloc(size)) return NULL;
+			if_fail (ReadFrom(box->data, stream->fd, mtx->push_offset, size)) return NULL;
+			chn_tx_write(&mtx->tx, size, box, eof);
+			chn_box_unref(box);
+			on_error return NULL;
+		}
+		pth_yield(NULL);
+	};
+	return NULL;
+}
+
 static void stream_ctor(struct stream *stream, char const *name, bool rt)
 {
 	LIST_INIT(&stream->readers);
@@ -50,11 +78,17 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 	stream->last_used = time(NULL);
 	if (rt) {
 		stream->fd = -1;
+		stream->pth = NULL;
 	} else {
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", files_root, name);
 		stream->fd = open(path, O_RDWR);
 		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
+		stream->pth = pth_spawn(PTH_ATTR_DEFAULT, stream_push, stream);
+		if (! stream->pth) {
+			(void)close(stream->fd);
+			with_error(0, "pth_spawn(stream_push)") return;
+		}
 	}
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
@@ -76,6 +110,10 @@ static void stream_dtor(struct stream *stream)
 	assert(LIST_EMPTY(&stream->readers));
 	assert(! stream->writer);
 	assert(stream->count <= 0);
+	if (stream->pth) {
+		pth_cancel(stream->pth);
+		stream->pth = NULL;
+	}
 	if (stream->fd != -1) {
 		(void)close(stream->fd);
 		stream->fd = -1;
@@ -141,6 +179,7 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
 	stream->last_used = time(NULL);
 	if (stream->fd != -1) {	// append to file
 		if_fail (WriteTo(stream->fd, offset, box->data, size)) return;
+		if (eof && 0 != ftruncate(stream->fd, offset + size)) with_error(errno, "truncate stream") return;
 	}
 	struct my_tx *tx;
 	LIST_FOREACH(tx, &stream->readers, reader_entry) {

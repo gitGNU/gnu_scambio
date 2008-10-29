@@ -104,7 +104,7 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
 		if_fail (varbuf_append_strs(&vb, "\n", NULL)) break;
 		debug("Will write '%s'", vb.buf);
 		if_fail (Write(cnx->fd, vb.buf, vb.used-1)) break;	// do not output the final '\0'
-		if_fail (mdir_sent_query_ctor(sq, cnx, seq)) break;
+		if (sq) if_fail (mdir_sent_query_ctor(sq, cnx, seq)) break;
 	} while (0);
 	varbuf_dtor(&vb);
 }

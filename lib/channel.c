@@ -38,8 +38,9 @@
 
 static char const *mdir_files;
 static struct mdir_syntax client_syntax;
-static mdir_cmd_cb finalize_creat, finalize_txstart;
+//static mdir_cmd_cb finalize_creat, finalize_txstart;
 
+#define RETRANSM_TIMEOUT 400000	// .4s
 #define OUT_FRAGS_TIMEOUT 1000000	// timeout fragments after 1 second
 #define CHUNK_SIZE 1400
 
@@ -58,9 +59,11 @@ void chn_begin(void)
 	mdir_files = conf_get_str("SCAMBIO_FILES_DIR");
 	if_fail (mdir_syntax_ctor(&client_syntax)) return;
 	static struct mdir_cmd_def def_client[] = {
+#if 0
 		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
 		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
 		MDIR_CNX_QUERY_REGISTER(kw_read,  finalize_txstart),
+#endif
 		CHN_COMMON_DEFS,
 	};
 	for (unsigned d=0; d<sizeof_array(def_client); d++) {
@@ -85,34 +88,30 @@ extern inline void *chn_box_unbox(struct chn_box *box);
 
 // TX
 
-static long long tx_id(struct chn_tx *tx) { return tx->start_sq.seq; }
-
-static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, char const *name, long long id)
+static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, long long id)
 {
 	tx->cnx = cnx;
 	tx->sender = sender;
 	tx->status = 0;
 	tx->end_offset = 0;
+	tx->id = id;
+	tx->pth = NULL;
 	TAILQ_INIT(&tx->in_frags);
 	TAILQ_INIT(&tx->out_frags);
-	if (cnx->cnx.client) {	// the client send a query first (_AFTER_ the TX is complete it will receive an answer from the server)
-		if_fail (mdir_cnx_query(&cnx->cnx, sender ? kw_write:kw_read, &tx->start_sq, name, NULL)) {
-			return;
-		}
-	} else {
-		tx->start_sq.seq = id;	// fake
-	}
 	LIST_INSERT_HEAD(&cnx->txs, tx, cnx_entry);
 }
 
 static void fragment_del(struct fragment *f, struct fragments_queue *q);
 void chn_tx_dtor(struct chn_tx *tx)
 {
-	if (tx->cnx->cnx.client && ! tx->status) mdir_cnx_query_cancel(&tx->cnx->cnx, &tx->start_sq);
 	LIST_REMOVE(tx, cnx_entry);
 	struct fragment *f;
 	while (NULL != (f = TAILQ_FIRST(&tx->in_frags)))  fragment_del(f, &tx->in_frags);
 	while (NULL != (f = TAILQ_FIRST(&tx->out_frags))) fragment_del(f, &tx->out_frags);
+	if (tx->pth) {
+		pth_cancel(tx->pth);
+		tx->pth = NULL;
+	}
 }
 
 // Fragments (and misses)
@@ -121,11 +120,12 @@ void chn_tx_dtor(struct chn_tx *tx)
 struct fragment {
 	TAILQ_ENTRY(fragment) tx_entry;
 	uint_least64_t ts;	// time of reception/emmission
-	struct chn_box *box;
-	off_t offset;
-	size_t size;
+	struct chn_box *box;	// used only for emmitted fragments
+	off_t start, end;
 	bool eof;
 };
+
+static size_t fragment_size(struct fragment *f) { return f->end - f->start; }
 
 static uint_least64_t get_ts(void)
 {
@@ -136,8 +136,9 @@ static uint_least64_t get_ts(void)
 
 static void out_frag_ctor(struct fragment *f, struct chn_tx *tx, uint_least64_t ts, size_t size, struct chn_box *box, bool eof)
 {
-	f->offset = (tx->end_offset += size);
-	f->size = size;
+	f->start = tx->end_offset;
+	tx->end_offset += size;
+	f->end = tx->end_offset;
 	f->eof = eof;
 	f->ts = ts;
 	f->box = box ? chn_box_ref(box) : NULL;	// if no box, this is a skip
@@ -163,8 +164,8 @@ static void insert_by_offset(struct fragments_queue *q, struct fragment *f)
 	}
 	struct fragment *ff;
 	TAILQ_FOREACH(ff, q, tx_entry) {
-		if (f->offset < ff->offset) {
-			if (f->offset + (off_t)f->size > ff->offset) warning("fragments overlap");
+		if (f->start < ff->start) {
+			if (f->end > ff->start) warning("fragments overlap");
 			TAILQ_INSERT_BEFORE(ff, f, tx_entry);
 			return;
 		}
@@ -172,20 +173,21 @@ static void insert_by_offset(struct fragments_queue *q, struct fragment *f)
 	TAILQ_INSERT_TAIL(q, f, tx_entry);
 }
 
-static void in_frag_ctor(struct fragment *f, struct chn_tx *tx, off_t offset, size_t size, struct chn_box *box, bool eof)
+static void in_frag_ctor(struct fragment *f, struct chn_tx *tx, uint_least64_t ts, off_t offset, size_t size, bool eof)
 {
-	f->offset = offset;
-	f->size = size;
+	f->ts = ts;
+	f->start = offset;
+	f->end = offset + size;
 	f->eof = eof;
-	f->box = box ? chn_box_ref(box) : NULL;
+	f->box = NULL;
 	insert_by_offset(&tx->in_frags, f);
 }
 
-static struct fragment *in_frag_new(struct chn_tx *tx, off_t offset, size_t size, struct chn_box *box, bool eof)
+static struct fragment *in_frag_new(struct chn_tx *tx, uint_least64_t ts, off_t offset, size_t size, bool eof)
 {
 	struct fragment *f = malloc(sizeof(*f));
 	if (! f) with_error(ENOMEM, "malloc(fragment)") return NULL;
-	if_fail (in_frag_ctor(f, tx, offset, size, box, eof)) {
+	if_fail (in_frag_ctor(f, tx, ts, offset, size, eof)) {
 		free(f);
 		f = NULL;
 	}
@@ -209,18 +211,18 @@ static void fragment_del(struct fragment *f, struct fragments_queue *q)
 
 // Sender
 
-void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *cnx, char const *name, long long id)
+void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *cnx, long long id)
 {
-	return chn_tx_ctor(tx, cnx, true, name, id);
+	return chn_tx_ctor(tx, cnx, true, id);
 }
 
 static size_t send_chunk(struct chn_tx *tx, struct fragment *f, off_t offset)
 {
-	size_t sent = (f->offset + f->size) - offset;
+	size_t sent = f->end - offset;
 	if (sent > CHUNK_SIZE) sent = CHUNK_SIZE;
 	char params[256];
-	(void)snprintf(params, sizeof(params), "%lld %u %u%s",
-		tx_id(tx), (unsigned)offset, (unsigned)f->size, f->eof ? " *":"");
+	(void)snprintf(params, sizeof(params), "%lld %u %zu%s",
+		tx->id, (unsigned)offset, fragment_size(f), f->eof ? " *":"");
 	if_fail (mdir_cnx_query(&tx->cnx->cnx, f->box ? kw_copy:kw_skip, NULL, params, NULL)) return 0;
 	if (f->box) Write(tx->cnx->cnx.fd, f->box->data, sent);
 	return sent;
@@ -228,7 +230,7 @@ static size_t send_chunk(struct chn_tx *tx, struct fragment *f, off_t offset)
 
 static void send_all_chunks(struct chn_tx *tx, struct fragment *f)
 {
-	off_t offset = f->offset, end_offset = f->offset + f->size;
+	off_t offset = f->start, end_offset = f->end;
 	do {
 		offset += send_chunk(tx, f, offset);
 	} while (! is_error() && offset < end_offset);
@@ -242,17 +244,14 @@ static void retransmit_missed(struct chn_tx *tx)
 		// were received ; we may miss a miss !
 		// look for this chunk
 		TAILQ_FOREACH(f, &tx->out_frags, tx_entry) {
-			if (
-				miss->offset + (off_t)miss->size <= f->offset ||
-				miss->offset >= f->offset + (off_t)f->size
-			) continue;
+			if (miss->end <= f->start || miss->start >= f->end) continue;
 			// Send the first chunk from miss->offset
 			size_t sent;
-			if_fail (sent = send_chunk(tx, f, miss->offset)) return;
-			if (sent >= miss->size) {	// the miss is covered, delete it
+			if_fail (sent = send_chunk(tx, f, miss->start)) return;
+			if (sent >= fragment_size(miss)) {	// the miss is covered, delete it
 				fragment_del(miss, &tx->in_frags);
 			} else {
-				miss->offset += sent;	// Lets go again
+				miss->start += sent;	// Lets go again
 			}
 			break;
 		}
@@ -291,9 +290,13 @@ void chn_tx_write(struct chn_tx *tx, size_t length, struct chn_box *box, bool eo
 
 // Receiver
 
-void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *cnx, char const *name, long long id)
+static void *tx_checker(void *arg);
+
+void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *cnx, long long id)
 {
-	return chn_tx_ctor(tx, cnx, false, name, id);
+	if_fail (chn_tx_ctor(tx, cnx, false, id)) return;
+	// In addition, a receiving TX much check for missed datas
+	tx->pth = pth_spawn(PTH_ATTR_DEFAULT, tx_checker, tx);
 }
 
 struct chn_box *chn_tx_read(struct chn_tx *tx, off_t *offset, size_t *length, bool *eof)
@@ -311,7 +314,7 @@ int chn_tx_status(struct chn_tx *tx)
 }
 
 // Chn_cnx and its reader thread.
-
+#if 0
 static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 {
 	struct mdir_cnx *cnx = user_data;
@@ -321,31 +324,12 @@ static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 	if (tx->status) with_error(0, "Unexpected closing of TX for %s", cmd->def->keyword) return;
 	tx->status = cmd->args[0].integer;
 }
-
-/*
-// FIXME: il y a deux lecteurs !
-// Il vaudrait mieux laisser le client faire son thread, son environement, etc.
-static void *reader(void *arg)
-{
-	struct chn_cnx *cnx = arg;
-	// Reads any TX commands and read/write final answer.
-	// Not designed to read the initial write/read command to a server (which precedes the spawn)
-	while (1) {
-		if_fail (mdir_cnx_read(&cnx->cnx)) break;
-	}
-	return NULL;
-}
-*/
+#endif
 // Chn_cnx
 
 static void chn_cnx_ctor(struct chn_cnx *cnx)
 {
 	LIST_INIT(&cnx->txs);
-/*	cnx->reader = pth_spawn(PTH_ATTR_DEFAULT, reader, cnx);
-	if (! cnx->reader) {
-		mdir_cnx_dtor(&cnx->cnx);
-		error_push(0, "Cannot spawn chn reader thread");
-	}*/
 }
 
 void chn_cnx_ctor_outbound(struct chn_cnx *cnx, char const *host, char const *service, char const *username)
@@ -383,7 +367,7 @@ void chn_cnx_dtor(struct chn_cnx *cnx)
 /*
  * Get a file from cache (download it first if necessary)
  */
-
+#if 0
 static void fetch_file_with_cnx(struct chn_cnx *cnx, char const *name, int fd)
 {
 	struct chn_tx tx;
@@ -498,7 +482,7 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 #	undef READ_FILE_BLOCK
 	chn_tx_dtor(&tx);
 }
-
+#endif
 /*
  * Transfert commands handlers
  */
@@ -508,9 +492,44 @@ static struct chn_tx *find_rtx(struct chn_cnx *cnx, long long id)
 	struct chn_tx *tx;
 	LIST_FOREACH(tx, &cnx->txs, cnx_entry) {
 		if (tx->sender) continue;	// we are looking for a receiver
-		if (tx->start_sq.seq == id) return tx;
+		if (tx->id == id) return tx;
 	}
 	return NULL;
+}
+
+static void ask_retransmit(struct chn_tx *tx, off_t offset, size_t size)
+{
+	char cmd[256];
+	int len = snprintf(cmd, sizeof(cmd), "%s %llu %u %zu\n", kw_miss, tx->id, (unsigned)offset, size);
+	Write(tx->cnx->cnx.fd, cmd, len);
+}
+
+static bool was_long_ago(uint_least64_t ts, uint_least64_t now)
+{
+	return ts + RETRANSM_TIMEOUT < now;
+}
+
+static void check_in_frags(struct chn_tx *tx, uint_least64_t now)
+{
+	struct fragment *f, *tmp, *last_frag = NULL;
+	off_t last_end = 0;
+	TAILQ_FOREACH_SAFE(f, &tx->in_frags, tx_entry, tmp) {
+		if (f->start > last_end && was_long_ago(f->ts, now)) {
+			if_fail (ask_retransmit(tx, last_end, f->start - last_end)) return;
+			f->ts = now;
+		} else if (last_frag) {	// merge those two fragments
+			if (f->end > last_frag->end) last_frag->end = f->end;
+			fragment_del(f, &tx->in_frags);
+			last_end = last_frag->end;
+			continue;
+		}
+		last_end = f->end;
+		last_frag = f;
+	}
+	if (last_frag && ! last_frag->eof && was_long_ago(last_frag->ts, now)) {
+		if_fail (ask_retransmit(tx, last_frag->end, 1)) return;
+		last_frag->ts = now;
+	}
 }
 
 void chn_serve_copy(struct mdir_cmd *cmd, void *cnx_)
@@ -538,7 +557,7 @@ void chn_serve_copy(struct mdir_cmd *cmd, void *cnx_)
 		mdir_cnx_answer(&cnx->cnx, cmd, 501, "Cannot read data");
 		return;
 	}
-	// Give it to our callback (filed will propagates it onto streams, client will write it to a file or do whatever he want with this).
+	// Give it to our callback (filed will propagates it onto streams, client will write it to a file or do whatever he wants with this).
 	if (cnx->incoming_cb) {
 		if_fail (cnx->incoming_cb(cnx, tx, offset, size, box, eof)) {
 			mdir_cnx_answer(&cnx->cnx, cmd, 501, error_str());
@@ -550,9 +569,20 @@ void chn_serve_copy(struct mdir_cmd *cmd, void *cnx_)
 	}
 	chn_box_unref(box);
 	box = NULL;
-	// Register that we received this fragment, and ask for missed one.
-	// TODO
 	mdir_cnx_answer(&cnx->cnx, cmd, 200, "OK");
+	// Register that we received this fragment.
+	uint_least64_t ts;
+	if_fail (ts = get_ts()) return;
+	if_fail ((void)in_frag_new(tx, ts, offset, size, eof)) return;
+	if_fail (check_in_frags(tx, ts)) return;
+	// Check weither the TX is over
+	struct fragment *first, *last;
+	first = TAILQ_FIRST(&tx->in_frags);
+	last = TAILQ_LAST(&tx->in_frags, fragments_queue);
+	if (first == last && last->eof && first->start == 0) {
+		tx->status = 200;
+		// Shall we destroy this TX then ?
+	}
 }
 
 void chn_serve_skip(struct mdir_cmd *cmd, void *cnx_)
@@ -582,3 +612,16 @@ void chn_serve_miss(struct mdir_cmd *cmd, void *cnx_)
 	(void)size;
 	(void)id;
 }
+
+static void *tx_checker(void *arg)
+{
+	struct chn_tx *tx = arg;
+	uint_least64_t now;
+	while (1) {
+		if_fail (now = get_ts()) return NULL;
+		if_fail (check_in_frags(tx, now)) return NULL;
+		pth_usleep(RETRANSM_TIMEOUT);
+	}
+	return NULL;
+}
+

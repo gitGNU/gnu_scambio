@@ -31,8 +31,9 @@
 static void tx_ctor(struct my_tx *mtx, struct chn_cnx *cnx, struct stream *stream, long long id, bool reader)
 {
 	mtx->stream = stream;
+	mtx->push_offset = 0;
 	if (reader) {	// If I read the stream, Im a sender
-		if_fail (chn_tx_ctor_sender(&mtx->tx, cnx, NULL, id)) return;
+		if_fail (chn_tx_ctor_sender(&mtx->tx, cnx, id)) return;
 		if_fail (stream_add_reader(stream, mtx)) {
 			error_save();
 			chn_tx_dtor(&mtx->tx);
@@ -40,7 +41,7 @@ static void tx_ctor(struct my_tx *mtx, struct chn_cnx *cnx, struct stream *strea
 			return;
 		}
 	} else {
-		if_fail (chn_tx_ctor_receiver(&mtx->tx, cnx, NULL, id)) return;
+		if_fail (chn_tx_ctor_receiver(&mtx->tx, cnx, id)) return;
 	}
 }
 
@@ -105,27 +106,43 @@ void incoming(struct chn_cnx *cnx, struct chn_tx *tx, off_t offset, size_t size,
 	stream_write(mtx->stream, offset, size, box, eof);
 }
 
-void serve_write(struct mdir_cmd *cmd, void *user_data)
+void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 {
 	struct mdir_cnx *cnx = user_data;
 	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
 	char const *name = cmd->args[0].string;
 	struct stream *stream;
+	struct my_tx *tx;
 	
 	if (cmd->seq == -1) {
 		mdir_cnx_answer(cnx, cmd, 500, "Missing seqnum");
 		return;
 	}
 	if_fail (stream = stream_lookup(name)) {
-		error_clear();
+		error_clear();	// FIXME: error_str() cant work after error_clear()
 		mdir_cnx_answer(cnx, cmd, 500, error_str());
 		return;
 	}
-	if_fail ((void)tx_new(ccnx, stream, cmd->seq, false)) {
+	if_fail (tx = tx_new(ccnx, stream, cmd->seq, reader)) {
 		error_clear();
 		stream_unref(stream);
 		mdir_cnx_answer(cnx, cmd, 500, error_str());
 		return;
 	}
+	mdir_cnx_answer(cnx, cmd, 200, "Ok");
+}
+
+void serve_write(struct mdir_cmd *cmd, void *user_data)
+{
+	serve_read_write(cmd, user_data, false);
+}
+
+/*
+ * Read
+ */
+
+void serve_read(struct mdir_cmd *cmd, void *user_data)
+{
+	serve_read_write(cmd, user_data, true);
 }
 
