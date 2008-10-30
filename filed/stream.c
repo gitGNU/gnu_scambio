@@ -46,7 +46,7 @@ static void *stream_push(void *arg)
 	struct stream *stream = arg;
 	struct my_tx *mtx;
 	while (1) {
-		while (LIST_EMPTY(&stream->readers)) pth_usleep(10000);
+		while (LIST_EMPTY(&stream->readers)) pth_usleep(10000);	// FIXME
 		LIST_FOREACH(mtx, &stream->readers, reader_entry) {
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
