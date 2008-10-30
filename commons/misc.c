@@ -59,7 +59,7 @@ void Write_strs(int fd, ...)
 
 void ReadFrom(void *buf, int fd, off_t offset, size_t len)
 {
-	debug("ReadFrom(%p, %d, %zu)", buf, fd, len);
+	debug("ReadFrom(%p, %d, from=%u, len=%zu)", buf, fd, (unsigned)offset, len);
 	size_t done = 0;
 	while (done < len) {
 		ssize_t ret = pth_pread(fd, buf + done, len - done, offset + done);

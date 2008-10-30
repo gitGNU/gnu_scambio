@@ -112,6 +112,7 @@ struct chn_box {
 static inline struct chn_box *chn_box_alloc(size_t bytes)
 {
 	struct chn_box *box = malloc(bytes + sizeof(*box));
+	debug("new box @%p", box);
 	if (box) box->count = 1;
 	return box;
 }
