@@ -146,3 +146,15 @@ void serve_read(struct mdir_cmd *cmd, void *user_data)
 	serve_read_write(cmd, user_data, true);
 }
 
+/*
+ * Quit
+ */
+
+void serve_quit(struct mdir_cmd *cmd, void *user_data)
+{
+	struct mdir_cnx *cnx = user_data;
+	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
+	struct cnx_env *env = DOWNCAST(ccnx, cnx, cnx_env);
+	env->quit = true;
+	mdir_cnx_answer(cnx, cmd, 200, "Ok");
+}

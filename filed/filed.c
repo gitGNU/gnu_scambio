@@ -52,7 +52,7 @@ static void init_server(void)
 			.keyword = kw_read,  .cb = serve_read,  .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_STRING },
 		}, {
-			.keyword = kw_quit,  .cb = NULL,        .nb_arg_min = 0, .nb_arg_max = 0,
+			.keyword = kw_quit,  .cb = serve_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
 			.nb_types = 0, .types = {},
 		},
 		CHN_COMMON_DEFS,
