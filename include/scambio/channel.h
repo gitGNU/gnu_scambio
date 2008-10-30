@@ -149,6 +149,7 @@ struct chn_tx {
 	TAILQ_HEAD(fragments_queue, fragment) out_frags;	// Fragments that goes out (ie for sender) 
 	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for receiver)
 	pth_t pth;	// a thread to check for missed data
+	uint_least64_t ts;	// reset at creation or when we ask for first fragment
 };
 
 /* Start a new tx for sending data (once the read/write command have been acked)

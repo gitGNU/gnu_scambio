@@ -40,7 +40,7 @@ static char const *mdir_files;
 static struct mdir_syntax client_syntax;
 //static mdir_cmd_cb finalize_creat, finalize_txstart;
 
-#define RETRANSM_TIMEOUT 400000	// .4s
+#define RETRANSM_TIMEOUT 2000000//400000	// .4s
 #define OUT_FRAGS_TIMEOUT 1000000	// timeout fragments after 1 second
 #define CHUNK_SIZE 1400
 
@@ -88,6 +88,13 @@ extern inline void *chn_box_unbox(struct chn_box *box);
 
 // TX
 
+static uint_least64_t get_ts(void)
+{
+	struct timeval tv;
+	if (0 != gettimeofday(&tv, NULL)) with_error(errno, "gettimeofday") return 0;
+	return (uint_least64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
 static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, long long id)
 {
 	tx->cnx = cnx;
@@ -96,6 +103,7 @@ static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, lon
 	tx->end_offset = 0;
 	tx->id = id;
 	tx->pth = NULL;
+	if_fail (tx->ts = get_ts()) return;
 	TAILQ_INIT(&tx->in_frags);
 	TAILQ_INIT(&tx->out_frags);
 	LIST_INSERT_HEAD(&cnx->txs, tx, cnx_entry);
@@ -126,13 +134,6 @@ struct fragment {
 };
 
 static size_t fragment_size(struct fragment *f) { return f->end - f->start; }
-
-static uint_least64_t get_ts(void)
-{
-	struct timeval tv;
-	if (0 != gettimeofday(&tv, NULL)) with_error(errno, "gettimeofday") return 0;
-	return (uint_least64_t)tv.tv_sec * 1000000 + tv.tv_usec;
-}
 
 static void out_frag_ctor(struct fragment *f, struct chn_tx *tx, uint_least64_t ts, size_t size, struct chn_box *box, bool eof)
 {
@@ -526,9 +527,16 @@ static void check_in_frags(struct chn_tx *tx, uint_least64_t now)
 		last_end = f->end;
 		last_frag = f;
 	}
-	if (last_frag && ! last_frag->eof && was_long_ago(last_frag->ts, now)) {
-		if_fail (ask_retransmit(tx, last_frag->end, 1)) return;
-		last_frag->ts = now;
+	if (last_frag) {
+		if (! last_frag->eof && was_long_ago(last_frag->ts, now)) {
+			if_fail (ask_retransmit(tx, last_frag->end, 1)) return;
+			last_frag->ts = now;
+		}
+	} else {	// not received anything yet
+		if (was_long_ago(tx->ts, now)) {
+			if_fail (ask_retransmit(tx, 0, 1)) return;
+			tx->ts = now;
+		}
 	}
 }
 
