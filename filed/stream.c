@@ -47,6 +47,7 @@ static void *stream_push(void *arg)
 	struct my_tx *mtx;
 	while (1) {
 		while (LIST_EMPTY(&stream->readers)) pth_usleep(10000);	// FIXME
+		debug("for each reader...");
 		LIST_FOREACH(mtx, &stream->readers, reader_entry) {
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
@@ -56,16 +57,17 @@ static void *stream_push(void *arg)
 				size = totsize - mtx->push_offset;
 				eof = true;
 			}
+			debug("write %zu bytes / %u", size, (unsigned)totsize);
 			if (! size) continue;
 			struct chn_box *box;
-			if_fail (chn_box_alloc(size)) return NULL;
+			if_fail (box = chn_box_alloc(size)) return NULL;
 			if_fail (ReadFrom(box->data, stream->fd, mtx->push_offset, size)) return NULL;
 			chn_tx_write(&mtx->tx, size, box, eof);
 			chn_box_unref(box);
 			on_error return NULL;
 		}
 		pth_yield(NULL);
-	};
+	}
 	return NULL;
 }
 
@@ -84,6 +86,7 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 		snprintf(path, sizeof(path), "%s/%s", files_root, name);
 		stream->fd = open(path, O_RDWR);
 		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
+		// FIXME: in stream_add_reader if stream->fd != -1 ?
 		stream->pth = pth_spawn(PTH_ATTR_DEFAULT, stream_push, stream);
 		if (! stream->pth) {
 			(void)close(stream->fd);
@@ -194,9 +197,10 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
 
 void stream_add_reader(struct stream *stream, struct my_tx *tx)
 {
+	debug("stream@%p, reader@%p", stream, tx);
 	stream->last_used = time(NULL);
 	if (LIST_EMPTY(&stream->readers)) {
-		// start a reader thread (add its pth_tid to the struct stream)
+		// we should start a reader thread (add its pth_tid to the struct stream)
 	}
 	LIST_INSERT_HEAD(&stream->readers, tx, reader_entry);
 }
