@@ -59,11 +59,9 @@ void chn_begin(void)
 	mdir_files = conf_get_str("SCAMBIO_FILES_DIR");
 	if_fail (mdir_syntax_ctor(&client_syntax)) return;
 	static struct mdir_cmd_def def_client[] = {
-#if 0
-		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
-		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
-		MDIR_CNX_QUERY_REGISTER(kw_read,  finalize_txstart),
-#endif
+//		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
+//		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
+//		MDIR_CNX_QUERY_REGISTER(kw_read,  finalize_txstart),
 		CHN_COMMON_DEFS,
 	};
 	for (unsigned d=0; d<sizeof_array(def_client); d++) {
@@ -316,14 +314,24 @@ int chn_tx_status(struct chn_tx *tx)
 
 // Chn_cnx and its reader thread.
 #if 0
+struct txstart_param {
+	struct mdir_sent_query sq;
+	struct chn_tx *tx;
+};
+
 static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 {
 	struct mdir_cnx *cnx = user_data;
 	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
-	struct chn_tx *tx = DOWNCAST(sq, start_sq, chn_tx);
+	struct txstart_param *param = DOWNCAST(sq, sq, txstart_param);
+	struct chn_tx *const tx = param->tx;
 	if (tx->status) with_error(0, "Unexpected closing of TX for %s", cmd->def->keyword) return;
-	tx->status = cmd->args[0].integer;
+	int const status = cmd->args[0].integer;
+	if (200 != status) {
+		debug("%s received status %d", cmd->def->keyword, status);
+		tx->status = status;	// will terminate the TX
+	}
 }
 #endif
 // Chn_cnx
@@ -352,12 +360,10 @@ void chn_cnx_dtor(struct chn_cnx *cnx)
 		(void)pth_cancel(cnx->reader);
 		cnx->reader = NULL;
 	}*/
-	/*
-	struct chn_tx *tx;
+	/*struct chn_tx *tx;
 	while (NULL != (tx = LIST_FIRST(&cnx->txs))) {
 		chn_tx_del(tx);
-	}
-	*/
+	}*/
 	mdir_cnx_dtor(&cnx->cnx);
 }
 
@@ -371,8 +377,14 @@ void chn_cnx_dtor(struct chn_cnx *cnx)
 #if 0
 static void fetch_file_with_cnx(struct chn_cnx *cnx, char const *name, int fd)
 {
-	struct chn_tx tx;
-	if_fail (chn_tx_ctor(&tx, cnx, false, name, 0)) return;
+	struct txstart_param param;
+	if_fail (chn_tx_ctor(&param.tx, cnx, false, name, 0)) return;
+	if_fail (mdir_cnx_query(&cnx->cnx, kw_read, &param.sq, name, NULL)) {
+		error_save();
+		chn_tx_dtor(&param.tx);
+		error_restore();
+		return;
+	}
 	bool eof_received = false;
 	do {
 		struct chn_box *box;
@@ -412,11 +424,12 @@ int chn_get_file(struct chn_cnx *cnx, char *localfile, size_t len, char const *n
 	}
 	return actual_len;
 }
+#endif
 
 /*
  * Request a new file name
  */
-
+#if 0
 struct creat_query {
 	char *name;
 	size_t len;
@@ -449,16 +462,17 @@ void chn_create(struct chn_cnx *cnx, char *name, size_t len, bool rt)
 	};
 	if_fail (mdir_cnx_query(&cnx->cnx, kw_creat, &query.sq, rt ? "*":NULL, NULL)) return;
 	// Wait (TODO: add an event to timeout, and retry some times before giving up)
+	// Or better yet : have mdir_cnx_query handle timeouts and retries
 	(void)pth_mutex_acquire(&query.condmut, FALSE, NULL);
 	(void)pth_cond_await(&query.cond, &query.condmut, NULL);
 	(void)pth_mutex_release(&query.condmut);
 	if (! query.status) with_error(0, "No answer to create request") return;
 }
-
+#endif
 /*
  * Send a local file to a channel
  */
-
+#if 0
 void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 {
 	off_t offset = 0, max_offset;

@@ -52,7 +52,7 @@ struct chn_box;
 typedef void chn_incoming_cb(struct chn_cnx *, struct chn_tx *, off_t, size_t, struct chn_box *, bool);
 struct chn_cnx {
 	struct mdir_cnx cnx;
-//	pth_t reader;
+	//pth_t reader;
 	LIST_HEAD(chn_txs, chn_tx) txs;
 	chn_incoming_cb *incoming_cb;
 };
@@ -84,7 +84,7 @@ void chn_cnx_dtor(struct chn_cnx *cnx);
  * and before a subsequent open. Its touched to lower the risks.
  * Returns the actual length of the filename.
  */
-int chn_get_file(struct chn_cnx *cnx, char *localfile, size_t len, char const *name);
+int chn_get_file(char *localfile, size_t len, char const *name);
 
 /* Request a new channel, optionnaly for realtime.
  * Will wait untill creation or timeout.

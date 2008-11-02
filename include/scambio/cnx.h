@@ -41,7 +41,7 @@ extern char const kw_miss[];
  */
 
 /* A structure associated with each sent query.
- * You can (should) inherit it to add your usefull infos.
+ * You can inherit it to add your usefull infos.
  */
 
 struct mdir_sent_query {
