@@ -37,6 +37,7 @@ struct stream {
 	struct chn_tx *writer;	// may be NULL
 	int count;	// each reader/writer count as 1
 	int fd;	// may be -1 if not mapped to a file
+	int backstore;	// for those streams for which the content is given by another fd to both send and create the cache file
 	time_t last_used;	// usefull for RT streams
 	char name[PATH_MAX];
 	pth_t pth;	// thread that push file onto reading TXs
@@ -46,6 +47,7 @@ void stream_begin(void);
 void stream_end(void);
 struct stream *stream_lookup(char const *name);	// will find an existing stream or load a new file backed stream.
 struct stream *stream_new_rt(char const *name);	// will create a new RT stream.
+struct stream *stream_new_from_fd(char const *name, int fd);	// create a new non-RT stream, using fd as content, for reading
 void stream_del(struct stream *stream);
 static inline struct stream *stream_ref(struct stream *stream)
 {

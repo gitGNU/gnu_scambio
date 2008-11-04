@@ -70,9 +70,9 @@ void chn_cnx_del(struct chn_cnx *cnx);
  * If the cache lacks the file, it's downloaded first.
  * TODO: The file might be removed by the cache cleaner after this call
  * and before a subsequent open. Its touched to lower the risks.
- * Returns the actual length of the filename.
+ * localfile must be at least MAX_PATH chars long.
  */
-int chn_get_file(char *localfile, size_t len, char const *name);
+void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name);
 
 /* Request a new channel, optionnaly for realtime.
  * Will wait untill creation or timeout.

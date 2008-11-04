@@ -315,6 +315,13 @@ static void command_del(struct command *command, struct chn_cnx *cnx)
 	free(command);
 }
 
+static void command_wait(struct command *command)
+{
+	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
+	(void)pth_cond_await(&command->cond, &command->condmut, NULL);
+	(void)pth_mutex_release(&command->condmut);
+}
+
 // Sender
 
 void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *cnx, long long id, struct stream *stream)
@@ -445,6 +452,7 @@ int chn_tx_status(struct chn_tx *tx)
 
 static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 {
+	debug("finalizing for %s", cmd->def->keyword);
 	struct mdir_cnx *cnx = user_data;
 	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
@@ -565,119 +573,6 @@ void chn_cnx_del(struct chn_cnx *cnx)
 	free(cnx);
 }
 
-/*
- * Get a file from cache (download it first if necessary)
- */
-#if 0
-static void fetch_file_with_cnx(struct chn_cnx *cnx, char const *name, int fd)
-{
-	struct txstart_param param;
-	if_fail (chn_tx_ctor(&param.tx, cnx, false, name, 0)) return;
-	if_fail (mdir_cnx_query(&cnx->cnx, kw_read, &param.sq, name, NULL)) {
-		error_save();
-		chn_tx_dtor(&param.tx);
-		error_restore();
-		return;
-	}
-	bool eof_received = false;
-	do {
-		struct chn_box *box;
-		off_t offset;
-		size_t length;
-		bool eof;
-		if_fail (box = chn_tx_read(&tx, &offset, &length, &eof)) break;
-		WriteTo(fd, offset, box->data, length);
-		chn_box_unref(box);
-		on_error break;
-		if (eof) eof_received = true;
-	} while (! chn_tx_status(&tx));
-	if (200 != chn_tx_status(&tx)) error_push(0, "Transfert incomplete");
-	chn_tx_dtor(&tx);
-}
-
-int chn_get_file(struct chn_cnx *cnx, char *localfile, size_t len, char const *name)
-{
-	assert(localfile && name);
-	// Look into the file cache
-	int actual_len = snprintf(localfile, len, "%s/%s", mdir_files, name);
-	if (actual_len >= (int)len) with_error(0, "buffer too short (need %d)", actual_len) return actual_len;
-	int fd = open(localfile, O_RDONLY);
-	if (fd < 0) {
-		// TODO: Touch it
-		(void)close(fd);
-		return actual_len;
-	}
-	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return actual_len;
-	// So lets fetch it
-	fd = open(localfile, O_RDWR|O_CREAT);
-	if (fd < 0) with_error(errno, "Cannot create(%s)", localfile) return actual_len;
-	fetch_file_with_cnx(cnx, name, fd);
-	on_error {
-		// delete the file if the transfert failed for some reason
-		if (0 != unlink(localfile)) error_push(errno, "Failed to download %s, but cannot unlink it", localfile);
-	}
-	return actual_len;
-}
-#endif
-
-/*
- * Request a new file name
- */
-
-static void finalize_creat(struct mdir_cmd *cmd, void *user_data)
-{
-	struct mdir_cnx *cnx = user_data;
-	assert(cmd->def->keyword == kw_creat);
-	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
-	on_error return;
-	struct command *command = DOWNCAST(sq, sq, command);
-	if (200 == cmd->args[0].integer) {
-		snprintf(command->resource, PATH_MAX, "%s", cmd->args[1].string);
-	}
-	(void)pth_cond_notify(&command->cond, TRUE);
-}
-
-void chn_create(struct chn_cnx *cnx, char *name, bool rt)
-{
-	assert(! server);
-	struct command *command;
-	if_fail (command = command_new(cnx, kw_creat, name, NULL, rt)) return;
-	name[0] = '\0';
-	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
-	(void)pth_cond_await(&command->cond, &command->condmut, NULL);
-	(void)pth_mutex_release(&command->condmut);
-	if (name[0] == '\0') with_error(0, "No answer to create request") return;
-}
-
-/*
- * Send a local file to a channel
- */
-#if 0
-void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
-{
-	off_t offset = 0, max_offset;
-	if_fail (max_offset = filesize(fd)) return;
-	struct chn_tx tx;
-	if_fail (chn_tx_ctor(&tx, cnx, true, name, 0)) return;
-#	define READ_FILE_BLOCK 65500
-	do {
-		struct chn_box *box;
-		bool eof = true;
-		size_t len = max_offset - offset;
-		if (len > READ_FILE_BLOCK) {
-			len = READ_FILE_BLOCK;
-			eof = false;
-		}
-		if_fail (box = chn_box_alloc(len)) break;
-		ReadFrom(box->data, fd, offset, len);
-		unless_error chn_tx_write(&tx, len, box, eof);
-		offset += len;
-		on_error break;
-	} while (offset < max_offset);
-#	undef READ_FILE_BLOCK
-	chn_tx_dtor(&tx);
-}
-#endif
 /*
  * Transfert commands handlers
  */
@@ -907,3 +802,94 @@ static void *tx_checker(void *arg)
 	return NULL;
 }
 
+/*
+ * Get a file from cache (download it first if necessary)
+ */
+
+static void fetch_file_with_cnx(struct chn_cnx *cnx, char *name, struct stream *stream)
+{
+	assert(cnx && name && stream);
+	assert(! server);
+	struct command *command;
+	if_fail (command = command_new(cnx, kw_read, name, stream, false)) return;
+	command_wait(command);
+	if (command->status != 200) error_push(0, "Cannot get file '%s'", name);
+	command_del(command, cnx);
+}
+
+void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
+{
+	assert(localfile && name);
+	// Look into the file cache
+	snprintf(localfile, PATH_MAX, "%s/%s", mdir_files, name);
+	int fd = open(localfile, O_RDONLY);
+	if (fd >= 0) {
+		// TODO: Touch it
+		(void)close(fd);
+		return;
+	}
+	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return;
+	// So lets fetch it
+	if (! cnx) with_error(0, "Cannot fetch and not local") return;
+	fd = creat(localfile, 0640);
+	if (fd < 0) with_error(errno, "Cannot creat(%s)", localfile) return;
+	(void)close(fd);
+	struct stream *stream = stream_lookup(name);
+	on_error return;
+	fetch_file_with_cnx(cnx, (char *)name, stream);
+	stream_unref(stream);
+	on_error {
+		// delete the file if the transfert failed for some reason
+		if (0 != unlink(localfile)) error_push(errno, "Failed to download %s, but cannot unlink it", localfile);
+	}
+}
+
+/*
+ * Send a local file to a channel (and copy it into cache while we are at it)
+ */
+
+void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
+{
+	assert(cnx && name && fd >= 0);
+	assert(! server);
+	struct stream *stream = stream_lookup(name);
+	if (stream) {
+		stream_unref(stream);
+		with_error(0, "Resource '%s' already exists", name) return;
+	}
+	if_fail (stream = stream_new_from_fd(name, fd)) return;
+	struct command *command;
+	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return;
+	stream_unref(stream);
+	command_wait(command);
+	if (command->status != 200) error_push(0, "Cannot send file '%s'", name);
+	command_del(command, cnx);
+}
+
+/*
+ * Request a new file name
+ */
+
+static void finalize_creat(struct mdir_cmd *cmd, void *user_data)
+{
+	struct mdir_cnx *cnx = user_data;
+	assert(cmd->def->keyword == kw_creat);
+	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct command *command = DOWNCAST(sq, sq, command);
+	command->status = cmd->args[0].integer;
+	if (200 == command->status) {
+		snprintf(command->resource, PATH_MAX, "%s", cmd->args[1].string);
+	}
+	(void)pth_cond_notify(&command->cond, TRUE);
+}
+
+void chn_create(struct chn_cnx *cnx, char *name, bool rt)
+{
+	assert(! server);
+	struct command *command;
+	if_fail (command = command_new(cnx, kw_creat, name, NULL, rt)) return;
+	command_wait(command);
+	if (command->status != 200) error_push(0, "No answer to create request");
+	command_del(command, cnx);
+}

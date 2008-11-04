@@ -51,7 +51,8 @@ static void *stream_push(void *arg)
 		LIST_FOREACH(tx, &stream->readers, reader_entry) {
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
-			off_t totsize = filesize(stream->fd);
+			int content_fd = stream->backstore == -1 ? stream->fd : stream->backstore;
+			off_t totsize = filesize(content_fd);
 			size_t size = STREAM_READ_BLOCK;
 			if ((off_t)size + tx->end_offset >= totsize) {
 				size = totsize - tx->end_offset;
@@ -61,7 +62,11 @@ static void *stream_push(void *arg)
 			if (! size) continue;
 			struct chn_box *box;
 			if_fail (box = chn_box_alloc(size)) return NULL;
-			if_fail (ReadFrom(box->data, stream->fd, tx->end_offset, size)) return NULL;
+			if_fail (ReadFrom(box->data, content_fd, tx->end_offset, size)) return NULL;
+			// If we took data from the backstore instead of the cache file, write to the cache file as well
+			if (stream->backstore != -1) {
+				if_fail (WriteTo(stream->backstore, tx->end_offset, box->data, size)) return NULL;
+			}
 			chn_tx_write(tx, size, box, eof);
 			chn_box_unref(box);
 			on_error return NULL;
@@ -71,22 +76,33 @@ static void *stream_push(void *arg)
 	return NULL;
 }
 
-static void stream_ctor(struct stream *stream, char const *name, bool rt)
+static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd)
 {
-	debug("name=%s, rt=%c", name, rt ? 'y':'n');
+	debug("name=%s, rt=%c, fd=%d", name, rt ? 'y':'n', fd);
 	LIST_INIT(&stream->readers);
 	stream->writer = NULL;
 	stream->count = 1;	// the one who asks
 	snprintf(stream->name, sizeof(stream->name), "%s", name);
 	stream->last_used = time(NULL);
+	stream->backstore = -1;
 	if (rt) {
 		stream->fd = -1;
 		stream->pth = NULL;
 	} else {
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
-		stream->fd = open(path, O_RDWR);
-		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
+		if (fd == -1) {	// no backstore file for content : the file must be present in cache
+			stream->fd = open(path, O_RDWR);
+			if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
+		} else {	// the file must not exist, we have a backstore fd for its content
+			stream->backstore = dup(fd);
+			if (stream->backstore < 0) with_error(errno, "dup(%d)", fd) return;
+			stream->fd = creat(path, 0640);
+			if (stream->fd < 0) {
+				(void)close(stream->backstore);
+				with_error(errno, "creat(%s)", path) return;
+			}
+		}
 		// FIXME: in stream_add_reader if stream->fd != -1 ?
 		stream->pth = pth_spawn(PTH_ATTR_DEFAULT, stream_push, stream);
 		if (! stream->pth) {
@@ -97,11 +113,11 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
 
-static struct stream *stream_new(char const *name, bool rt)
+static struct stream *stream_new(char const *name, bool rt, int fd)
 {
 	struct stream *stream = malloc(sizeof(*stream));
 	if (! stream) with_error(ENOMEM, "malloc(stream)") return NULL;
-	if_fail (stream_ctor(stream, name, rt)) {
+	if_fail (stream_ctor(stream, name, rt, fd)) {
 		free(stream);
 		stream = NULL;
 	}
@@ -121,6 +137,10 @@ static void stream_dtor(struct stream *stream)
 	if (stream->fd != -1) {
 		(void)close(stream->fd);
 		stream->fd = -1;
+	}
+	if (stream->backstore != -1) {
+		(void)close(stream->backstore);
+		stream->backstore = -1;
 	}
 }
 
@@ -162,14 +182,19 @@ struct stream *stream_lookup(char const *name)
 	debug("name=%s", name);
 	struct stream *stream;
 	LIST_FOREACH(stream, &streams, entry) {
-		if (0 == strcmp(stream->name, name)) return stream;
+		if (0 == strcmp(stream->name, name)) return stream_ref(stream);
 	}
-	return stream_new(name, false);
+	return stream_new(name, false, -1);
 }
 
 struct stream *stream_new_rt(char const *name)
 {
-	return stream_new(name, true);
+	return stream_new(name, true, -1);
+}
+
+struct stream *stream_new_from_fd(char const *name, int fd)
+{
+	return stream_new(name, false, fd);
 }
 
 /*
