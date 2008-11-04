@@ -22,17 +22,4 @@
 #include "scambio/cmd.h"
 #include "scambio/channel.h"
 
-extern char const *files_root;
-extern unsigned files_root_len;
-
-struct cnx_env {
-	struct chn_cnx cnx;
-	bool quit;
-};
-
-// Services
-
-chn_incoming_cb incoming;
-mdir_cmd_cb serve_creat, serve_write, serve_read, serve_quit;
-
 #endif

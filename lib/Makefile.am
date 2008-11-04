@@ -10,7 +10,8 @@ libmdir_la_SOURCES = \
 	error.c \
 	cmd.c \
 	cnx.c \
-	channel.c
+	channel.c \
+	stream.c
 
 libmdir_la_LIBADD = ../commons/libcommons.la
 

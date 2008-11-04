@@ -35,11 +35,13 @@
 #include <pth.h>
 #include <scambio/cnx.h>
 
+#define DEFAULT_FILED_PORT 21436
+
 /*
  * Init
  */
 
-void chn_begin(void);
+void chn_begin(bool server);
 void chn_end(void);
 
 /* High level API (for clients only) */
@@ -49,33 +51,19 @@ void chn_end(void);
 struct chn_cnx;
 struct chn_tx;
 struct chn_box;
-typedef void chn_incoming_cb(struct chn_cnx *, struct chn_tx *, off_t, size_t, struct chn_box *, bool);
 struct chn_cnx {
 	struct mdir_cnx cnx;
-	//pth_t reader;
+	pth_t reader;
 	LIST_HEAD(chn_txs, chn_tx) txs;
-	chn_incoming_cb *incoming_cb;
+	bool quit;
 };
 
 void chn_cnx_ctor_outbound(struct chn_cnx *cnx, char const *host, char const *service, char const *username);
-// Use our handlers for copy/skip/miss :
-void chn_serve_copy(struct mdir_cmd *cmd, void *cnx_);
-void chn_serve_skip(struct mdir_cmd *cmd, void *cnx_);
-void chn_serve_miss(struct mdir_cmd *cmd, void *cnx_);
-#define CHN_COMMON_DEFS \
-	{ \
-		.keyword = kw_copy,  .cb = chn_serve_copy, .nb_arg_min = 3, .nb_arg_max = 4, \
-		.nb_types = 3, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER, CMD_STRING },	/* seqnum of the read/write, offset, length, [eof] */ \
-	}, { \
-		.keyword = kw_skip,  .cb = chn_serve_skip, .nb_arg_min = 3, .nb_arg_max = 4, \
-		.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length, [eof] */ \
-	}, { \
-		.keyword = kw_miss,  .cb = chn_serve_miss, .nb_arg_min = 3, .nb_arg_max = 3, \
-		.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length */ \
-	}
-
-void chn_cnx_ctor_inbound(struct chn_cnx *cnx, struct mdir_syntax *syntax, int fd, chn_incoming_cb *);
+void chn_cnx_ctor_inbound(struct chn_cnx *cnx, int fd);
 void chn_cnx_dtor(struct chn_cnx *cnx);
+struct chn_cnx *chn_cnx_new_outbound(char const *host, char const *service, char const *username);
+struct chn_cnx *chn_cnx_new_inbound(int fd);
+void chn_cnx_del(struct chn_cnx *cnx);
 
 /* Will return the name of a file containing the full content.
  * (taken from the file cache).
@@ -91,8 +79,9 @@ int chn_get_file(char *localfile, size_t len, char const *name);
  * Note : realtime channels are handled the same by both sides, except that
  * a file is kept if the channel is not realtime.
  * Thus it is not advisable to chn_get_file() a RT channel.
+ * name must be PATH_MAX chars length.
  */
-void chn_create(struct chn_cnx *cnx, char *name, size_t len, bool rt);
+void chn_create(struct chn_cnx *cnx, char *name, bool rt);
 
 /* Write a local file to a channel
  */
@@ -145,7 +134,9 @@ struct chn_tx {
 	long long id;
 	int status;	// when we receive the answer from the server or when we received all data from client, we write the status here
 	bool sender;	// if false, then this tx is a receiver
-	off_t end_offset;
+	off_t end_offset;	// if reading a file stream, stores the offset of the last byte to write
+	struct stream *stream;	// the associated stream
+	LIST_ENTRY(chn_tx) reader_entry;	// if stream is set and this stream is a sender, then it's one of this stream readers.
 	// Fragments and misses are ordered by offset
 	TAILQ_HEAD(fragments_queue, fragment) out_frags;	// Fragments that goes out (ie for sender) 
 	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for receiver)
@@ -155,11 +146,11 @@ struct chn_tx {
 
 /* Start a new tx for sending data (once the read/write command have been acked)
  */
-void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *, long long id);
+void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *, long long id, struct stream *stream);
 
 /* Start a new tx for receiving (once the read/write command have been acked).
  */
-void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *, long long id);
+void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *, long long id, struct stream *stream);
 
 /* Send the data according to the MTU (ie, given block may be split again).
  * This first sent the required retransmissions, then send the given box by packet of

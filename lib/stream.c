@@ -34,8 +34,8 @@
  */
 
 static LIST_HEAD(streams, stream) streams;	// list of all loaded streams
-char const *files_root;
-unsigned files_root_len;
+char const *chn_files_root;
+unsigned chn_files_root_len;
 
 /*
  * Create/Delete
@@ -44,25 +44,25 @@ unsigned files_root_len;
 static void *stream_push(void *arg)
 {
 	struct stream *stream = arg;
-	struct my_tx *mtx;
+	struct chn_tx *tx;
 	while (1) {
 		while (LIST_EMPTY(&stream->readers)) pth_usleep(10000);	// FIXME
 		debug("for each reader...");
-		LIST_FOREACH(mtx, &stream->readers, reader_entry) {
+		LIST_FOREACH(tx, &stream->readers, reader_entry) {
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
 			off_t totsize = filesize(stream->fd);
 			size_t size = STREAM_READ_BLOCK;
-			if ((off_t)size + mtx->push_offset >= totsize) {
-				size = totsize - mtx->push_offset;
+			if ((off_t)size + tx->end_offset >= totsize) {
+				size = totsize - tx->end_offset;
 				eof = true;
 			}
 			debug("write %zu bytes / %u", size, (unsigned)totsize);
 			if (! size) continue;
 			struct chn_box *box;
 			if_fail (box = chn_box_alloc(size)) return NULL;
-			if_fail (ReadFrom(box->data, stream->fd, mtx->push_offset, size)) return NULL;
-			chn_tx_write(&mtx->tx, size, box, eof);
+			if_fail (ReadFrom(box->data, stream->fd, tx->end_offset, size)) return NULL;
+			chn_tx_write(tx, size, box, eof);
 			chn_box_unref(box);
 			on_error return NULL;
 		}
@@ -83,7 +83,7 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 		stream->pth = NULL;
 	} else {
 		char path[PATH_MAX];
-		snprintf(path, sizeof(path), "%s/%s", files_root, name);
+		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
 		stream->fd = open(path, O_RDWR);
 		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
 		// FIXME: in stream_add_reader if stream->fd != -1 ?
@@ -140,9 +140,9 @@ void stream_begin(void)
 {
 	LIST_INIT(&streams);
 	conf_set_default_str("SCAMBIO_FILES_DIR", "/tmp/files");
-	files_root = conf_get_str("SCAMBIO_FILES_DIR");
-	files_root_len = strlen(files_root);
-	Mkdir(files_root);
+	chn_files_root = conf_get_str("SCAMBIO_FILES_DIR");
+	chn_files_root_len = strlen(chn_files_root);
+	Mkdir(chn_files_root);
 }
 
 void stream_end(void)
@@ -184,10 +184,10 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
 		if_fail (WriteTo(stream->fd, offset, box->data, size)) return;
 		if (eof && 0 != ftruncate(stream->fd, offset + size)) with_error(errno, "truncate stream") return;
 	}
-	struct my_tx *tx;
+	struct chn_tx *tx;
 	LIST_FOREACH(tx, &stream->readers, reader_entry) {
 		assert(tx->stream == stream);
-		chn_tx_write(&tx->tx, size, box, eof);
+		chn_tx_write(tx, size, box, eof);
 	}
 }
 
@@ -195,7 +195,7 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
  * Reader thread
  */
 
-void stream_add_reader(struct stream *stream, struct my_tx *tx)
+void stream_add_reader(struct stream *stream, struct chn_tx *tx)
 {
 	debug("stream@%p, reader@%p", stream, tx);
 	stream->last_used = time(NULL);

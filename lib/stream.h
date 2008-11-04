@@ -23,16 +23,18 @@
 #include "scambio/queue.h"
 #include "scambio/channel.h"
 
+extern char const *chn_files_root;
+extern unsigned chn_files_root_len;
+
 /* We use the abstraction of a stream, which have a name (the name used
- * as ressource locator) to which we can append data or read from a
+ * as resource locator) to which we can append data or read from a
  * cursor (per TX). Each stream may have at most one writer, but can have
  * many readers.
  */
-struct my_tx;
 struct stream {
 	LIST_ENTRY(stream) entry;	// in the list of all loaded streams
-	LIST_HEAD(readers, my_tx) readers;
-	struct my_tx *writer;	// may be NULL
+	LIST_HEAD(readers, chn_tx) readers;
+	struct chn_tx *writer;	// may be NULL
 	int count;	// each reader/writer count as 1
 	int fd;	// may be -1 if not mapped to a file
 	time_t last_used;	// usefull for RT streams
@@ -57,15 +59,6 @@ static inline void stream_unref(struct stream *stream)
 	}
 }
 void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_box *box, bool eof);
-void stream_add_reader(struct stream *stream, struct my_tx *tx);
-
-/* All our TX are associated to a stream
- */
-struct my_tx {
-	struct chn_tx tx;
-	struct stream *stream;	// the associated stream
-	LIST_ENTRY(my_tx) reader_entry;	// if stream is set and this stream is a sender, then it's one of this stream readers.
-	off_t push_offset;	// if reading a file stream, stores the offset of the last byte to write
-};
+void stream_add_reader(struct stream *stream, struct chn_tx *tx);
 
 #endif
