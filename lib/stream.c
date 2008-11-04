@@ -73,6 +73,7 @@ static void *stream_push(void *arg)
 
 static void stream_ctor(struct stream *stream, char const *name, bool rt)
 {
+	debug("name=%s, rt=%c", name, rt ? 'y':'n');
 	LIST_INIT(&stream->readers);
 	stream->writer = NULL;
 	stream->count = 1;	// the one who asks
@@ -158,6 +159,7 @@ void stream_end(void)
 
 struct stream *stream_lookup(char const *name)
 {
+	debug("name=%s", name);
 	struct stream *stream;
 	LIST_FOREACH(stream, &streams, entry) {
 		if (0 == strcmp(stream->name, name)) return stream;

@@ -324,6 +324,7 @@ void chn_tx_ctor_sender(struct chn_tx *tx, struct chn_cnx *cnx, long long id, st
 
 static struct chn_tx *chn_tx_new_sender(struct chn_cnx *cnx, long long id, struct stream *stream)
 {
+	debug("for id %lld", id);
 	struct chn_tx *tx = malloc(sizeof(*tx));
 	if (! tx) with_error(ENOMEM, "malloc(chn_tx)") return NULL;
 	if_fail (chn_tx_ctor_sender(tx, cnx, id, stream)) {
@@ -418,6 +419,7 @@ void chn_tx_ctor_receiver(struct chn_tx *tx, struct chn_cnx *cnx, long long id, 
 
 static struct chn_tx *chn_tx_new_receiver(struct chn_cnx *cnx, long long id, struct stream *stream)
 {
+	debug("for id %lld", id);
 	struct chn_tx *tx = malloc(sizeof(*tx));
 	if (! tx) with_error(ENOMEM, "malloc(chn_tx)") return NULL;
 	if_fail (chn_tx_ctor_receiver(tx, cnx, id, stream)) {
@@ -844,7 +846,7 @@ void serve_creat(struct mdir_cmd *cmd, void *user_data)
 	mdir_cnx_answer(cnx, cmd, 200, name);
 }
 
-static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
+static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)	// reader = serve a read
 {
 	struct mdir_cnx *cnx = user_data;
 	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
@@ -862,9 +864,9 @@ static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 		return;
 	}
 	if (reader) {
-		tx = chn_tx_new_receiver(ccnx, cmd->seq, stream);
-	} else {
 		tx = chn_tx_new_sender(ccnx, cmd->seq, stream);
+	} else {
+		tx = chn_tx_new_receiver(ccnx, cmd->seq, stream);
 	}
 	on_error {
 		error_clear();
