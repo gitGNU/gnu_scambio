@@ -35,7 +35,7 @@
  * Various inline functions
  */
 
-extern inline void mdir_syntax_ctor(struct mdir_syntax *syntax);
+extern inline void mdir_syntax_ctor(struct mdir_syntax *syntax, bool no_answer_if_no_seqnum);
 extern inline void mdir_syntax_dtor(struct mdir_syntax *syntax);
 extern inline void mdir_syntax_register(struct mdir_syntax *syntax, struct mdir_cmd_def *def);
 extern inline void mdir_syntax_unregister(struct mdir_syntax *syntax, struct mdir_cmd_def *def);

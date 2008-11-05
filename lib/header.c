@@ -380,18 +380,18 @@ void header_to_file(struct header *h, char const *filename)
 
 bool header_has_type(struct header *h, char const *type)
 {
-	char const *h_type = header_search(h, SCAMBIO_TYPE_FIELD);
+	char const *h_type = header_search(h, SC_TYPE_FIELD);
 	return h_type && 0==strcmp(h_type, type);
 }
 
 bool header_is_directory(struct header *h)
 {
-	return header_has_type(h, SCAMBIO_DIR_TYPE);
+	return header_has_type(h, SC_DIR_TYPE);
 }
 
 mdir_version header_target(struct header *h)
 {
-	char const *target = header_search(h, SCAMBIO_TARGET_FIELD);
+	char const *target = header_search(h, SC_TARGET_FIELD);
 	if (! target) with_error(0, "Header lacks a target") return 0;
 	return mdir_str2version(target);
 }

@@ -109,7 +109,7 @@ q0:
 static void init_conf(void)
 {
 	conf_set_default_str("MDIRC_LOG_DIR", "/tmp");
-	conf_set_default_int("MDIRC_LOG_LEVEL", 3);
+	conf_set_default_int("SC_LOG_LEVEL", 3);
 }
 
 static void init_log(void)
@@ -118,7 +118,7 @@ static void init_log(void)
 	on_error return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
-	log_level = conf_get_int("MDIRC_LOG_LEVEL");
+	log_level = conf_get_int("SC_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
 }
 

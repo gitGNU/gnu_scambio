@@ -48,8 +48,8 @@ static void close_cb(GtkToolButton *button, gpointer user_data)
 static void add_patch_to_store(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
 {
 	if (action != MDIR_ADD) return;
-	char const *from = header_search(header, SCAMBIO_FROM_FIELD);
-	char const *subject = header_search(header, SCAMBIO_DESCR_FIELD);
+	char const *from = header_search(header, SC_FROM_FIELD);
+	char const *subject = header_search(header, SC_DESCR_FIELD);
 	if (! from || ! subject) return;	// not an email
 	
 	(void)mdir;

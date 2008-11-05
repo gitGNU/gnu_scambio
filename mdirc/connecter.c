@@ -80,7 +80,7 @@ void *connecter_thread(void *arg)
 
 void connecter_begin(void)
 {
-	if_fail (mdir_syntax_ctor(&syntax)) return;
+	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	// Register all queries (for answer)
 	static struct mdir_cmd_def defs[] = {
 		MDIR_CNX_QUERY_REGISTER(kw_sub,   finalize_sub),

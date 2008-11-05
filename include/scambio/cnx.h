@@ -35,6 +35,7 @@ extern char const kw_read[];
 extern char const kw_copy[];
 extern char const kw_skip[];
 extern char const kw_miss[];
+extern char const kw_thx[];
 
 /* Struct mdir_cnx describe a connection following mdir protocol.
  * Client and server are assymetric but similar.
@@ -75,13 +76,6 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int
  * but may be kept for future mdir_cnx_new(). (TODO)
  */
 void mdir_cnx_dtor(struct mdir_cnx *cnx);
-
-/* Evaluates to a mdir_cmd_def for a query answer.
- */
-#define MDIR_CNX_QUERY_REGISTER(KEYWORD, CALLBACK) { \
-	.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = UINT_MAX, \
-	.nb_types = 1, .types = { CMD_INTEGER } \
-}
 
 /* Sends a query to the peer.
  * The query must have been registered first if you do expect an answer.

@@ -27,6 +27,7 @@ extern int log_level;
 int log_begin(char const *dirname, char const *filename);
 void log_end(void);
 
+#if 0
 #define log_print(fmt, ...) do if (log_file) { \
 	char buf[24]; \
 	time_t t = time(NULL); \
@@ -34,6 +35,8 @@ void log_end(void);
 	fprintf(log_file, "%s: "fmt "\n", buf, ##__VA_ARGS__); \
 	fflush(log_file); \
 } while(0)
+#endif
+void log_print(char const *fmt, ...);
 
 #define error(...)      do if (log_level > 0) log_print("ERR: " __VA_ARGS__); while(0)
 #define error1(str)     do if (log_level > 0) log_print("ERR: %s", (str)); while(0)

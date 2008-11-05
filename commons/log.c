@@ -46,7 +46,7 @@ static int open_log(void)
 
 int log_begin(char const *dirname, char const *filename)
 {
-	if (!dirname || !filename) return -EINVAL;
+	if (!dirname || !filename) return 0;
 	snprintf(file_path, sizeof(file_path), "%s/%s", dirname, filename);
 	return open_log();
 }
@@ -54,5 +54,24 @@ int log_begin(char const *dirname, char const *filename)
 void log_end(void)
 {
 	close_log();
+}
+
+void log_print(char const *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	if (log_file) {
+		char buf[24];
+		time_t t = time(NULL);
+		(void)strftime(buf, sizeof(buf), "%F %T", localtime(&t));
+		fprintf(log_file, "%s: ", buf);
+		vfprintf(log_file, fmt, ap);
+		fprintf(log_file, "\n");
+		fflush(log_file);
+	} else {
+		vprintf(fmt, ap);
+		printf("\n");
+	}
+	va_end(ap);
 }
 

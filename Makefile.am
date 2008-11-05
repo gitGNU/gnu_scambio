@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons lib mdird mdirc filed smtpd merelib meremail merecal doc
+SUBDIRS = commons lib mdird mdirc filed smtpd merelib meremail merecal tools doc
 
 .PHONY: cscope loc
 

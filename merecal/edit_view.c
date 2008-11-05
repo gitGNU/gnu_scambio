@@ -89,7 +89,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	do {
 		char date_str[4+1+2+1+2+1+2+1+2+1];
 		struct cal_date date;
-		if_fail (header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_CAL_TYPE)) break;
+		if_fail (header_add_field(h, SC_TYPE_FIELD, SC_CAL_TYPE)) break;
 		// From
 		if_fail (cal_date_ctor_from_input(&date, gtk_entry_get_text(GTK_ENTRY(e->start_entry)))) break;
 		if (! cal_date_is_set(&date)) {
@@ -97,16 +97,16 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 			break;
 		}
 		if_fail (cal_date_to_str(&date, date_str, sizeof(date_str))) break;
-		if_fail (header_add_field(h, SCAMBIO_START, date_str)) break;
+		if_fail (header_add_field(h, SC_START, date_str)) break;
 		// To
 		if_fail (cal_date_ctor_from_input(&date, gtk_entry_get_text(GTK_ENTRY(e->stop_entry)))) break;
 		if (cal_date_is_set(&date)) {
 			if_fail (cal_date_to_str(&date, date_str, sizeof(date_str))) break;
-			if_fail (header_add_field(h, SCAMBIO_STOP, date_str)) break;
+			if_fail (header_add_field(h, SC_STOP, date_str)) break;
 		}
 		char *descr = get_serial_text(e->descr_buffer);
 		on_error break;
-		if (descr) header_add_field(h, SCAMBIO_DESCR_FIELD, descr);
+		if (descr) header_add_field(h, SC_DESCR_FIELD, descr);
 		debug("sending patch");
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);
 	} while (0);

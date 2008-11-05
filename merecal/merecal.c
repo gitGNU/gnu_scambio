@@ -373,15 +373,15 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	struct cal_folder *cf = (struct cal_folder *)data;
 	mdir_version version = new ? 0 : param.version;
 	struct cal_date start, stop;
-	char const *start_str = header_search(header, SCAMBIO_START);
+	char const *start_str = header_search(header, SC_START);
 	if (start_str) {
 		cal_date_ctor_from_str(&start, start_str);
 		on_error return;
 	} else {
-		error("Invalid calendar message with no "SCAMBIO_START" field");
+		error("Invalid calendar message with no "SC_START" field");
 		return;
 	}
-	char const *stop_str = header_search(header, SCAMBIO_STOP);
+	char const *stop_str = header_search(header, SC_STOP);
 	if (stop_str) {
 		cal_date_ctor_from_str(&stop, stop_str);
 		on_error {
@@ -391,7 +391,7 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	} else {
 		cal_date_ctor(&stop, 0, 0, 0, 0, 0);
 	}
-	char const *desc = header_search(header, SCAMBIO_DESCR_FIELD);
+	char const *desc = header_search(header, SC_DESCR_FIELD);
 	(void)cal_event_new(cf, &start, &stop, desc, version);
 	on_error error_clear();	// forget this event, go ahead with others
 	cal_date_dtor(&stop);

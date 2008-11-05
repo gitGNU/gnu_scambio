@@ -1,11 +1,10 @@
 export MALLOC_CHECK_=2
 export MDIRD_LOG_DIR=/tmp
-export MDIRD_LOG_LEVEL=5
+export SC_LOG_LEVEL=5
 export MDIRD_PORT=21435
-export SCAMBIO_FILED_PORT=21436
+export SC_FILED_PORT=21436
 export MDIRD_HOST=localhost
 export MERELIB_LOG_DIR=/tmp
-export MERELIB_LOG_LEVEL=5
 export SMTPD_PORT=1025
 
 function auth_user {
@@ -37,11 +36,10 @@ function run_server {
 }
 
 function run_filed {
-	export SCAMBIO_FILED_LOG_DIR=/tmp
-	export SCAMBIO_FILED_LOG_LEVEL=5
-	export SCAMBIO_FILES_DIR=/tmp/filed/files
+	export SC_FILED_LOG_DIR=/tmp
+	export SC_FILES_DIR=/tmp/filed/files
 	rm -f /tmp/filed.log
-	mkdir -p $SCAMBIO_FILES_DIR
+	mkdir -p $SC_FILES_DIR
 	build/filed/filed
 }
 
@@ -94,7 +92,6 @@ EOF
 
 function run_client {
 	export MDIRC_LOG_DIR=/tmp
-	export MDIRC_LOG_LEVEL=5
 	export MDIR_ROOT_DIR=/tmp/mdirc
 	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
@@ -108,7 +105,6 @@ function run_client {
 
 function run_smtpd {
 	export SMTPD_LOG_DIR=/tmp
-	export SMTPD_LOG_LEVEL=5
 	export MDIR_ROOT_DIR=/tmp/mdirc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/smtpd/files

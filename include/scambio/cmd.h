@@ -62,13 +62,15 @@ struct mdir_cmd {
  */
 struct mdir_syntax {
 	LIST_HEAD(cmd_defs, mdir_cmd_def) defs;
+	bool no_answer_if_no_seqnum;
 };
 
 /* Construct and destruct a syntax.
  */
-static inline void mdir_syntax_ctor(struct mdir_syntax *syntax)
+static inline void mdir_syntax_ctor(struct mdir_syntax *syntax, bool no_answer_if_no_seqnum)
 {
 	LIST_INIT(&syntax->defs);
+	syntax->no_answer_if_no_seqnum = no_answer_if_no_seqnum;
 }
 static inline void mdir_syntax_dtor(struct mdir_syntax *syntax)
 {

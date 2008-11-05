@@ -65,7 +65,7 @@ static void *stream_push(void *arg)
 			if_fail (ReadFrom(box->data, content_fd, tx->end_offset, size)) return NULL;
 			// If we took data from the backstore instead of the cache file, write to the cache file as well
 			if (stream->backstore != -1) {
-				if_fail (WriteTo(stream->backstore, tx->end_offset, box->data, size)) return NULL;
+				if_fail (WriteTo(stream->fd, tx->end_offset, box->data, size)) return NULL;
 			}
 			chn_tx_write(tx, size, box, eof);
 			chn_box_unref(box);
@@ -160,8 +160,8 @@ extern inline void stream_unref(struct stream *stream);
 void stream_begin(void)
 {
 	LIST_INIT(&streams);
-	conf_set_default_str("SCAMBIO_FILES_DIR", "/tmp/files");
-	chn_files_root = conf_get_str("SCAMBIO_FILES_DIR");
+	conf_set_default_str("SC_FILES_DIR", "/tmp/files");
+	chn_files_root = conf_get_str("SC_FILES_DIR");
 	chn_files_root_len = strlen(chn_files_root);
 	Mkdir(chn_files_root);
 }

@@ -58,7 +58,7 @@ char const kw_quit[] = "quit";
 static void init_conf(void)
 {
 	conf_set_default_str("SMTPD_LOG_DIR", "/var/log");
-	conf_set_default_int("SMTPD_LOG_LEVEL", 3);
+	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_int("SMTPD_PORT", 25);
 }
 
@@ -68,7 +68,7 @@ static void init_log(void)
 	on_error return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
-	log_level = conf_get_int("SMTPD_LOG_LEVEL");
+	log_level = conf_get_int("SC_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
 }
 
@@ -79,7 +79,7 @@ static void deinit_server(void)
 
 static void init_syntax(void)
 {
-	mdir_syntax_ctor(&syntax);
+	mdir_syntax_ctor(&syntax, false);
 	// Register all services
 	static struct mdir_cmd_def services[] = {
 		{

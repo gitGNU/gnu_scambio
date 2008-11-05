@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
+#include <string.h>
 #include <unistd.h>
 #include <netdb.h>
 #include "scambio.h"
@@ -43,6 +44,7 @@ char const kw_read[]  = "read";
 char const kw_copy[]  = "copy";
 char const kw_skip[]  = "skip";
 char const kw_miss[]  = "miss";
+char const kw_thx[]   = "thx";
 
 /*
  * Constructors for mdir_sent_query
@@ -136,8 +138,12 @@ static void cnx_connect(struct mdir_cnx *cnx, char const *host, char const *serv
 {
 	// Resolve hostname into sockaddr
 	struct addrinfo *info_head, *ainfo;
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;	// AF_UNSPEC to allow IPv6
+	hints.ai_socktype = SOCK_STREAM;	// TODO: configure this
 	int err;
-	if (0 != (err = getaddrinfo(host, service, NULL, &info_head))) {
+	if (0 != (err = getaddrinfo(host, service, &hints, &info_head))) {
 		// TODO: check that freeaddrinfo is not required in this case
 		with_error(gaierr2errno(err), "Cannot getaddrinfo") return;
 	}
@@ -229,11 +235,12 @@ void mdir_cnx_read(struct mdir_cnx *cnx)
 
 void mdir_cnx_answer(struct mdir_cnx *cnx, struct mdir_cmd *cmd, int status, char const *compl)
 {
+	debug("status = %d, compl = %s, seq = %lld", status, compl, cmd->seq);
 	char reply[512];
 	size_t len = 0;
 	if (cmd->seq != -1) {
 		len += snprintf(reply, sizeof(reply), "%lld ", cmd->seq);
-	}
+	} else if (cnx->syntax->no_answer_if_no_seqnum) return;
 	len += snprintf(reply+len, sizeof(reply)-len, "%s %d %s\n", cmd->def->keyword, status, compl);
 	Write(cnx->fd, reply, len);
 }

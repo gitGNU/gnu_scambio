@@ -35,7 +35,7 @@
 #include <pth.h>
 #include <scambio/cnx.h>
 
-#define DEFAULT_FILED_PORT 21436
+#define DEFAULT_FILED_PORT "21436"
 
 /*
  * Init
@@ -63,6 +63,7 @@ void chn_cnx_ctor_inbound(struct chn_cnx *cnx, int fd);
 void chn_cnx_dtor(struct chn_cnx *cnx);
 struct chn_cnx *chn_cnx_new_outbound(char const *host, char const *service, char const *username);
 struct chn_cnx *chn_cnx_new_inbound(int fd);
+bool chn_cnx_all_tx_done(struct chn_cnx *cnx);
 void chn_cnx_del(struct chn_cnx *cnx);
 
 /* Will return the name of a file containing the full content.

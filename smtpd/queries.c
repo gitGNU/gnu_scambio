@@ -184,9 +184,9 @@ static void submit_patch(struct cnx_env *env)
 {
 	struct header *h = header_new();
 	on_error return;
-	header_add_field(h, SCAMBIO_TYPE_FIELD, SCAMBIO_MAIL_TYPE);
-	header_add_field(h, SCAMBIO_FROM_FIELD, env->reverse_path);
-	if (env->subject) header_add_field(h, SCAMBIO_DESCR_FIELD, env->subject);
+	header_add_field(h, SC_TYPE_FIELD, SC_MAIL_TYPE);
+	header_add_field(h, SC_FROM_FIELD, env->reverse_path);
+	if (env->subject) header_add_field(h, SC_DESCR_FIELD, env->subject);
 	unless_error mdir_patch_request(env->mailbox, MDIR_ADD, h);
 	header_del(h);
 }

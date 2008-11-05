@@ -12,5 +12,6 @@ libcommons_la_SOURCES = \
 	daemon.c \
 	persist.c \
 	digest.c \
-	auth.c
+	auth.c \
+	options.c
 

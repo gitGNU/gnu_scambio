@@ -45,6 +45,7 @@ AC_CONFIG_FILES([
 	merelib/Makefile
 	meremail/Makefile
 	merecal/Makefile
+	tools/Makefile
 	doc/Makefile
 ])
 AC_OUTPUT

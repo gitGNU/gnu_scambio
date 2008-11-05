@@ -67,7 +67,7 @@ extern inline struct mdird *mdir2mdird(struct mdir *mdir);
 static void init_conf(void)
 {
 	conf_set_default_str("MDIRD_LOG_DIR", "/var/log");
-	conf_set_default_int("MDIRD_LOG_LEVEL", 3);
+	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_int("MDIRD_PORT", DEFAULT_MDIRD_PORT);
 }
 
@@ -77,7 +77,7 @@ static void init_log(void)
 	on_error return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
-	log_level = conf_get_int("MDIRD_LOG_LEVEL");
+	log_level = conf_get_int("SC_LOG_LEVEL");
 	debug("Seting log level to %d", log_level);
 }
 
@@ -88,7 +88,7 @@ static void deinit_server(void)
 
 static void init_syntax(void)
 {
-	mdir_syntax_ctor(&syntax);
+	mdir_syntax_ctor(&syntax, true);
 	static struct mdir_cmd_def services[] = {
 		{
 			.keyword = kw_quit,  .cb = exec_quit,  .nb_arg_min = 0, .nb_arg_max = 0,

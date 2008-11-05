@@ -60,9 +60,9 @@ void chn_begin(bool server_)
 {
 	server = server_;
 	if_fail (stream_begin()) return;
-	if_fail(conf_set_default_str("SCAMBIO_FILES_DIR", "/tmp/mdir/files")) return;
-	mdir_files = conf_get_str("SCAMBIO_FILES_DIR");
-	if_fail (mdir_syntax_ctor(&syntax)) return;
+	if_fail(conf_set_default_str("SC_FILES_DIR", "/tmp/mdir/files")) return;
+	mdir_files = conf_get_str("SC_FILES_DIR");
+	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	static struct mdir_cmd_def def_server[] = {
 		{
 			.keyword = kw_creat, .cb = serve_creat, .nb_arg_min = 0, .nb_arg_max = 1,
@@ -78,6 +78,11 @@ void chn_begin(bool server_)
 			.nb_types = 0, .types = {},
 		},
 	};
+	// Evaluates to a mdir_cmd_def for a query answer.
+#	define MDIR_CNX_QUERY_REGISTER(KEYWORD, CALLBACK) { \
+		.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = UINT_MAX, \
+		.nb_types = 1, .types = { CMD_INTEGER } \
+	}
 	static struct mdir_cmd_def def_client[] = {
 		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
 		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
@@ -282,11 +287,15 @@ static void command_ctor(struct chn_cnx *cnx, struct command *command, char cons
 	command->status = 0;
 	command->stream = stream;
 	if (stream) stream_ref(stream);
-	mdir_cnx_query(&cnx->cnx, kw, &command->sq, kw == kw_creat ? (rt ? "*":NULL) : resource, NULL);
+	debug("locking condition mutex");
 	pth_cond_init(&command->cond);
 	pth_mutex_init(&command->condmut);
+	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
+	mdir_cnx_query(&cnx->cnx, kw, &command->sq, kw == kw_creat ? (rt ? "*":NULL) : resource, NULL);
 }
 
+// The command is returned with the lock taken, so that the condition cannot be signaled
+// before the caller wait for it. It's thus the caller that must release it (by waiting).
 static struct command *command_new(struct chn_cnx *cnx, char const *kw, char *resource, struct stream *stream, bool rt)
 {
 	struct command *command = malloc(sizeof(*command));
@@ -317,9 +326,10 @@ static void command_del(struct command *command, struct chn_cnx *cnx)
 
 static void command_wait(struct command *command)
 {
-	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
+	debug("waiting for command@%p", command);
 	(void)pth_cond_await(&command->cond, &command->condmut, NULL);
 	(void)pth_mutex_release(&command->condmut);
+	debug("done");
 }
 
 // Sender
@@ -458,8 +468,8 @@ static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 	on_error return;
 	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
 	struct command *command = DOWNCAST(sq, sq, command);
-	int const status = cmd->args[0].integer;
-	if (200 == status) {
+	command->status = cmd->args[0].integer;
+	if (200 == command->status) {
 		struct chn_tx *tx;
 		if (command->keyword == kw_write) {
 			tx = chn_tx_new_sender(ccnx, cmd->seq, command->stream);
@@ -468,7 +478,7 @@ static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 		}
 		error_clear();
 	}
-	command_del(command, ccnx);
+	(void)pth_cond_notify(&command->cond, TRUE);
 }
 
 static void *reader_thread(void *arg)
@@ -675,8 +685,9 @@ static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
 	first = TAILQ_FIRST(&tx->in_frags);
 	last = TAILQ_LAST(&tx->in_frags, fragments_queue);
 	if (first == last && last->eof && first->start == 0) {
-		tx->status = 200;
-		// Shall we destroy this TX then ?
+		tx->status = 199;
+		// Send the thanx message back to sender
+		mdir_cnx_query(...)
 	}
 }
 
@@ -815,6 +826,7 @@ static void fetch_file_with_cnx(struct chn_cnx *cnx, char *name, struct stream *
 	command_wait(command);
 	if (command->status != 200) error_push(0, "Cannot get file '%s'", name);
 	command_del(command, cnx);
+	// Remember that the transfert is still in progress !
 }
 
 void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
@@ -853,10 +865,11 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 	assert(cnx && name && fd >= 0);
 	assert(! server);
 	struct stream *stream = stream_lookup(name);
-	if (stream) {
+	unless_error {
 		stream_unref(stream);
 		with_error(0, "Resource '%s' already exists", name) return;
 	}
+	error_clear();
 	if_fail (stream = stream_new_from_fd(name, fd)) return;
 	struct command *command;
 	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return;
@@ -864,6 +877,7 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 	command_wait(command);
 	if (command->status != 200) error_push(0, "Cannot send file '%s'", name);
 	command_del(command, cnx);
+	// Remember that the transfert is still in progress !
 }
 
 /*
@@ -893,3 +907,15 @@ void chn_create(struct chn_cnx *cnx, char *name, bool rt)
 	if (command->status != 200) error_push(0, "No answer to create request");
 	command_del(command, cnx);
 }
+
+bool chn_cnx_all_tx_done(struct chn_cnx *cnx)
+{
+	pth_yield(NULL);
+	struct chn_tx *tx;
+	LIST_FOREACH(tx, &cnx->txs, cnx_entry) {
+		debug("tx @%p status is %d", tx, tx->status);
+		if (tx->status == 0) return false;
+	}
+	return true;
+}
+

@@ -264,16 +264,16 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 	assert(h);
 	// check that the given header does _not_ already have a dirId,
 	// and add fields name and type if necessary
-	char const *name = header_search(h, SCAMBIO_NAME_FIELD);
+	char const *name = header_search(h, SC_NAME_FIELD);
 	if (! name) {
 		name = "Unnamed";
-		header_add_field(h, SCAMBIO_NAME_FIELD, name);
+		header_add_field(h, SC_NAME_FIELD, name);
 		on_error return;
 	}
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
 	struct mdir *child;
-	char const *dirid = header_search(h, SCAMBIO_DIRID_FIELD);
+	char const *dirid = header_search(h, SC_DIRID_FIELD);
 	if (dirid) {
 		assert(! transient);
 		// A symlink to a transient dirId may already exist. If so, rename it.
@@ -307,7 +307,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		child = mdir_create(transient);
 		on_error return;
 		if (! transient) {
-			header_add_field(h, SCAMBIO_DIRID_FIELD, mdir_id(child));
+			header_add_field(h, SC_DIRID_FIELD, mdir_id(child));
 			on_error return;
 		}
 	}
@@ -319,7 +319,7 @@ static void mdir_unlink(struct mdir *parent, struct header *h)
 {
 	debug("remove a link from mdir %s", mdir_id(parent));
 	assert(h);
-	char const *name = header_search(h, SCAMBIO_NAME_FIELD);
+	char const *name = header_search(h, SC_NAME_FIELD);
 	if (! name) with_error(0, "folder name ommited") return;
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
@@ -388,7 +388,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *h)
 {
 	bool is_dir = header_is_directory(h);
-	char const *dirId = is_dir ? header_search(h, SCAMBIO_DIRID_FIELD):NULL;
+	char const *dirId = is_dir ? header_search(h, SC_DIRID_FIELD):NULL;
 	if (dirId && dirId[0] == '_') with_error(0, "Cannot refer to a temporary dirId") return;
 	char temp[PATH_MAX];
 	int len = snprintf(temp, sizeof(temp), "%s/.tmp/", mdir->path);
@@ -416,7 +416,7 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 {
 	struct header *h = header_new();
 	on_error return;
-	header_add_field(h, SCAMBIO_TARGET_FIELD, mdir_version2str(to_del));
+	header_add_field(h, SC_TARGET_FIELD, mdir_version2str(to_del));
 	unless_error mdir_patch_request(mdir, MDIR_REM, h);
 	header_del(h);
 }
@@ -427,7 +427,7 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 
 static mdir_version get_target(struct header *h)
 {
-	char const *target_str = header_search(h, SCAMBIO_TARGET_FIELD);
+	char const *target_str = header_search(h, SC_TARGET_FIELD);
 	if (! target_str) with_error(0, "Removal patch with no target ?") return 0;
 	return mdir_str2version(target_str);
 }
