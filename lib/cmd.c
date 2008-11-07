@@ -106,7 +106,7 @@ static int read_seq(long long *seq, char const *str)
 static bool is_seq(char const *str)
 {
 	debug("token : %s", str);
-	return isdigit(str[0]);
+	return isdigit(str[0]) || (str[0] == '-' && isdigit(str[1]));
 }
 
 static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct varbuf *vb, int fd)
@@ -123,11 +123,14 @@ static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct 
 	char const *const keyword = tokens[with_seq ? 1:0].string;
 	cmd->nb_args = nb_tokens - (with_seq ? 2:1);
 	union mdir_cmd_arg *const args = tokens + (with_seq ? 2:1);
-	cmd->seq = -1;
+	cmd->seq = 0;
 	if (with_seq) if_fail (read_seq(&cmd->seq, tokens[0].string)) return;
 	LIST_FOREACH(cmd->def, &syntax->defs, entry) {
+		if (cmd->seq < 0 && !cmd->def->negseq) continue;
+		if (cmd->seq > 0 && cmd->def->negseq) continue;
 		if (same_keyword(cmd->def->keyword, keyword)) {
 			build_cmd(cmd, args);	// will check args types and number, and convert some args from string to integer
+			if (cmd->seq < 0) cmd->seq = -cmd->seq;
 			return;
 		}
 	}
@@ -147,8 +150,11 @@ void mdir_cmd_read(struct mdir_syntax *syntax, int fd, void *user_data)
 	} while (! cmd.def);
 	varbuf_dtor(&vb);	// TODO: keep this vb until after the cb(), then we could ue the original strings in it instead of strduping
 	unless_error {
-		if (cmd.def->cb) cmd.def->cb(&cmd, user_data);
-		else debug("No handler for command '%s'", cmd.def->keyword);
+		if (cmd.def->cb) {
+			cmd.def->cb(&cmd, user_data);
+		} else {
+			debug("No handler for command '%s'", cmd.def->keyword);
+		}
 		mdir_cmd_dtor(&cmd);
 	}
 	return;

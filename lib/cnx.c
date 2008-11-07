@@ -50,16 +50,8 @@ char const kw_thx[]   = "thx";
  * Constructors for mdir_sent_query
  */
 
-static void mdir_sent_query_ctor(struct mdir_sent_query *sq, struct mdir_cnx *cnx, long long seq)
-{
-	sq->seq = seq;
-	LIST_INSERT_HEAD(&cnx->sent_queries, sq, cnx_entry);
-}
-
-static void mdir_sent_query_dtor(struct mdir_sent_query *sq)
-{
-	LIST_REMOVE(sq, cnx_entry);
-}
+extern inline void mdir_sent_query_ctor(struct mdir_sent_query *sq);
+extern inline void mdir_sent_query_dtor(struct mdir_sent_query *sq);
 
 /*
  * Register/Send a query
@@ -71,17 +63,12 @@ struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdi
 	struct mdir_sent_query *sq;
 	LIST_FOREACH(sq, &cnx->sent_queries, cnx_entry) {
 		if (sq->seq == cmd->seq) {
+			// FIXME : call the user provided del function (for instance, chn commands include a send_query and should be freed now)
 			mdir_sent_query_dtor(sq);
 			return sq;
 		}
 	}
 	with_error(0, "Unexpected answer for seq# %lld", cmd->seq) return NULL;
-}
-
-void mdir_cnx_query_cancel(struct mdir_cnx *cnx, struct mdir_sent_query *sq)
-{
-	(void)cnx;
-	mdir_sent_query_dtor(sq);
 }
 
 void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
@@ -106,7 +93,10 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
 		if_fail (varbuf_append_strs(&vb, "\n", NULL)) break;
 		debug("Will write '%s'", vb.buf);
 		if_fail (Write(cnx->fd, vb.buf, vb.used-1)) break;	// do not output the final '\0'
-		if (sq) if_fail (mdir_sent_query_ctor(sq, cnx, seq)) break;
+		if (sq) {
+			sq->seq = seq;
+			LIST_INSERT_HEAD(&cnx->sent_queries, sq, cnx_entry);
+		}
 	} while (0);
 	varbuf_dtor(&vb);
 }
@@ -120,7 +110,7 @@ static void cnx_ctor_common(struct mdir_cnx *cnx, struct mdir_syntax *syntax, bo
 	cnx->client = client;
 	cnx->fd = -1;
 	cnx->user = NULL;
-	cnx->next_seq = 0;
+	cnx->next_seq = 1;
 	cnx->syntax = syntax;
 	LIST_INIT(&cnx->sent_queries);
 }
@@ -183,7 +173,7 @@ void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, ch
 	if_fail (cnx_connect(cnx, host, service)) return;
 	cnx->user = NULL;
 	if (username) do {
-		struct mdir_cmd_def auth_def = MDIR_CNX_QUERY_REGISTER(kw_auth, auth_answ);
+		struct mdir_cmd_def auth_def = MDIR_CNX_ANSW_REGISTER(kw_auth, auth_answ);
 		if_fail (mdir_syntax_register(cnx->syntax, &auth_def)) break;
 		struct auth_sent_query my_sq = { .done = false, };
 		if_fail (mdir_cnx_query(cnx, kw_auth, &my_sq.sq, username, NULL)) break;
@@ -238,8 +228,9 @@ void mdir_cnx_answer(struct mdir_cnx *cnx, struct mdir_cmd *cmd, int status, cha
 	debug("status = %d, compl = %s, seq = %lld", status, compl, cmd->seq);
 	char reply[512];
 	size_t len = 0;
-	if (cmd->seq != -1) {
-		len += snprintf(reply, sizeof(reply), "%lld ", cmd->seq);
+	if (cmd->seq != 0) {
+		assert(cmd->seq > 0);
+		len += snprintf(reply, sizeof(reply), "-%lld ", cmd->seq);
 	} else if (cnx->syntax->no_answer_if_no_seqnum) return;
 	len += snprintf(reply+len, sizeof(reply)-len, "%s %d %s\n", cmd->def->keyword, status, compl);
 	Write(cnx->fd, reply, len);

@@ -83,16 +83,15 @@ void connecter_begin(void)
 	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	// Register all queries (for answer)
 	static struct mdir_cmd_def defs[] = {
-		MDIR_CNX_QUERY_REGISTER(kw_sub,   finalize_sub),
-		MDIR_CNX_QUERY_REGISTER(kw_unsub, finalize_unsub),
-		MDIR_CNX_QUERY_REGISTER(kw_put,   finalize_put),
-		MDIR_CNX_QUERY_REGISTER(kw_rem,   finalize_rem),
-		MDIR_CNX_QUERY_REGISTER(kw_quit,  finalize_quit),
-		MDIR_CNX_QUERY_REGISTER(kw_auth,  finalize_auth),
+		MDIR_CNX_ANSW_REGISTER(kw_sub,   finalize_sub),
+		MDIR_CNX_ANSW_REGISTER(kw_unsub, finalize_unsub),
+		MDIR_CNX_ANSW_REGISTER(kw_put,   finalize_put),
+		MDIR_CNX_ANSW_REGISTER(kw_rem,   finalize_rem),
+		MDIR_CNX_ANSW_REGISTER(kw_quit,  finalize_quit),
+		MDIR_CNX_ANSW_REGISTER(kw_auth,  finalize_auth),
 		{
 			.keyword = kw_patch, .cb = patch_service, .nb_arg_min = 4, .nb_arg_max = 4,
-			.nb_types = 4, .types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, },
-
+			.nb_types = 4, .types = { CMD_STRING, CMD_INTEGER, CMD_INTEGER, CMD_STRING, }, .negseq = false,
 		},
 	};
 	for (unsigned t=0; t<sizeof_array(defs); t++) {

@@ -84,38 +84,38 @@ static void init_syntax(void)
 	static struct mdir_cmd_def services[] = {
 		{
 			.keyword = kw_ehlo, .cb = exec_helo, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_helo, .cb = exec_helo, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_mail, .cb = exec_mail, .nb_arg_min = 1, .nb_arg_max = UINT_MAX,
 			// no support for extended mail parameters, but we accept them (and ignore them)
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_rcpt, .cb = exec_rcpt, .nb_arg_min = 1, .nb_arg_max = UINT_MAX,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_data, .cb = exec_data, .nb_arg_min = 0, .nb_arg_max = 0,
-			.nb_types = 0, .types = {},
+			.nb_types = 0, .types = {}, .negseq = false,
 		}, {
 			.keyword = kw_rset, .cb = exec_rset, .nb_arg_min = 0, .nb_arg_max = 0,
-			.nb_types = 0, .types = {},
+			.nb_types = 0, .types = {}, .negseq = false,
 		}, {
 			.keyword = kw_vrfy, .cb = exec_vrfy, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_expn, .cb = exec_expn, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_help, .cb = exec_help, .nb_arg_min = 0, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_help, .cb = exec_help, .nb_arg_min = 0, .nb_arg_max = UINT_MAX,
-			.nb_types = 0, .types = {},
+			.nb_types = 0, .types = {}, .negseq = false,
 		}, {
 			.keyword = kw_quit, .cb = exec_quit, .nb_arg_min = 0, .nb_arg_max = 0,
-			.nb_types = 0, .types = {},
+			.nb_types = 0, .types = {}, .negseq = false,
 		},
 	};
 	for (unsigned d=0; d<sizeof_array(services); d++) {

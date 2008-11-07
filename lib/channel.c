@@ -40,7 +40,9 @@
 static char const *mdir_files;
 static struct mdir_syntax syntax;
 static bool server;
-static mdir_cmd_cb finalize_creat, finalize_txstart, serve_copy, serve_skip, serve_miss, serve_creat, serve_read, serve_write, serve_quit;
+static mdir_cmd_cb serve_copy, serve_skip, serve_miss, serve_thx, finalize_thx;	// used by client & server
+static mdir_cmd_cb finalize_creat, finalize_txstart;	// used by client
+static mdir_cmd_cb serve_creat, serve_read, serve_write, serve_quit;	// used by server
 
 #define RETRANSM_TIMEOUT 2000000//400000	// .4s
 #define OUT_FRAGS_TIMEOUT 1000000	// timeout fragments after 1 second
@@ -66,39 +68,38 @@ void chn_begin(bool server_)
 	static struct mdir_cmd_def def_server[] = {
 		{
 			.keyword = kw_creat, .cb = serve_creat, .nb_arg_min = 0, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_write, .cb = serve_write, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_read,  .cb = serve_read,  .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING },
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_quit,  .cb = serve_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
-			.nb_types = 0, .types = {},
+			.nb_types = 0, .types = {}, .negseq = false,
 		},
 	};
-	// Evaluates to a mdir_cmd_def for a query answer.
-#	define MDIR_CNX_QUERY_REGISTER(KEYWORD, CALLBACK) { \
-		.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = UINT_MAX, \
-		.nb_types = 1, .types = { CMD_INTEGER } \
-	}
 	static struct mdir_cmd_def def_client[] = {
-		MDIR_CNX_QUERY_REGISTER(kw_creat, finalize_creat),
-		MDIR_CNX_QUERY_REGISTER(kw_write, finalize_txstart),
-		MDIR_CNX_QUERY_REGISTER(kw_read,  finalize_txstart),
+		MDIR_CNX_ANSW_REGISTER(kw_creat, finalize_creat),
+		MDIR_CNX_ANSW_REGISTER(kw_write, finalize_txstart),
+		MDIR_CNX_ANSW_REGISTER(kw_read,  finalize_txstart),
 	};
 	static struct mdir_cmd_def def_common[] = {
 		{
-			.keyword = kw_copy,  .cb = serve_copy, .nb_arg_min = 3, .nb_arg_max = 4,
-			.nb_types = 3, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER, CMD_STRING },	/* seqnum of the read/write, offset, length, [eof] */
+			.keyword = kw_copy, .cb = serve_copy, .nb_arg_min = 3, .nb_arg_max = 4,
+			.nb_types = 3, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER, CMD_STRING }, .negseq = false,	/* seqnum of the read/write, offset, length, [eof] */
 		}, {
-			.keyword = kw_skip,  .cb = serve_skip, .nb_arg_min = 3, .nb_arg_max = 4,
-			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length, [eof] */
+			.keyword = kw_skip, .cb = serve_skip, .nb_arg_min = 3, .nb_arg_max = 4,
+			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER }, .negseq = false,	/* seqnum of the read/write, offset, length, [eof] */
 		}, {
-			.keyword = kw_miss,  .cb = serve_miss, .nb_arg_min = 3, .nb_arg_max = 3,
-			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER },	/* seqnum of the read/write, offset, length */
-		}
+			.keyword = kw_miss, .cb = serve_miss, .nb_arg_min = 3, .nb_arg_max = 3,
+			.nb_types = 2, .types = { CMD_INTEGER, CMD_INTEGER, CMD_INTEGER }, .negseq = false,	/* seqnum of the read/write, offset, length */
+		}, {
+			.keyword = kw_thx,  .cb = serve_thx,  .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_INTEGER }, .negseq = false,	/* seqnum of the read/write */
+		},
+		MDIR_CNX_ANSW_REGISTER(kw_thx, finalize_thx),	// FIXME: faut le distinguer de la requete! Faire un truc pour distinguer requetes de reponses, qui soit toujours utilisable par smtp
 	};
 	for (unsigned d=0; d<sizeof_array(def_common); d++) {
 		if_fail (mdir_syntax_register(&syntax, def_common+d)) goto q1;
@@ -144,6 +145,7 @@ static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, lon
 	tx->pth = NULL;
 	tx->stream = stream;
 	if (stream) stream_ref(stream);
+	mdir_sent_query_ctor(&tx->sent_thx);
 	if_fail (tx->ts = get_ts()) return;
 	if (sender) {
 		if (stream) {
@@ -162,11 +164,13 @@ void chn_tx_dtor(struct chn_tx *tx)
 	struct fragment *f;
 	while (NULL != (f = TAILQ_FIRST(&tx->in_frags)))  fragment_del(f, &tx->in_frags);
 	while (NULL != (f = TAILQ_FIRST(&tx->out_frags))) fragment_del(f, &tx->out_frags);
+	mdir_sent_query_dtor(&tx->sent_thx);
 	if (tx->pth) {
 		pth_cancel(tx->pth);
 		tx->pth = NULL;
 	}
 	if (tx->stream) {
+		if (tx->sender) stream_remove_reader(tx->stream, tx);
 		stream_unref(tx->stream);
 		tx->stream = NULL;
 	}
@@ -279,6 +283,7 @@ struct command {
 	pth_mutex_t condmut;
 };
 
+// FIXME: if we never have a response, the sent_query within the command will be destructed but the command will not be freed. Make command inherit from sent_query
 static void command_ctor(struct chn_cnx *cnx, struct command *command, char const *kw, char *resource, struct stream *stream, bool rt)
 {
 	command->keyword = kw;
@@ -286,6 +291,7 @@ static void command_ctor(struct chn_cnx *cnx, struct command *command, char cons
 	command->sent = time(NULL);
 	command->status = 0;
 	command->stream = stream;
+	mdir_sent_query_ctor(&command->sq);
 	if (stream) stream_ref(stream);
 	debug("locking condition mutex");
 	pth_cond_init(&command->cond);
@@ -307,20 +313,18 @@ static struct command *command_new(struct chn_cnx *cnx, char const *kw, char *re
 	return command;
 }
 
-static void command_dtor(struct command *command, struct chn_cnx *cnx)
+static void command_dtor(struct command *command)
 {
-	if (command->status == 0) {
-		mdir_cnx_query_cancel(&cnx->cnx, &command->sq);
-	}
+	mdir_sent_query_dtor(&command->sq);
 	if (command->stream) {
 		stream_unref(command->stream);
 		command->stream = NULL;
 	}
 }
 
-static void command_del(struct command *command, struct chn_cnx *cnx)
+static void command_del(struct command *command)
 {
-	command_dtor(command, cnx);
+	command_dtor(command);
 	free(command);
 }
 
@@ -354,12 +358,16 @@ static struct chn_tx *chn_tx_new_sender(struct chn_cnx *cnx, long long id, struc
 static size_t send_chunk(struct chn_tx *tx, struct fragment *f, off_t offset)
 {
 	size_t sent = f->end - offset;
-	if (sent > CHUNK_SIZE) sent = CHUNK_SIZE;
+	bool eof = f->eof;
+	if (sent > CHUNK_SIZE) {
+		sent = CHUNK_SIZE;
+		eof = false;
+	}
 	char params[256];
 	(void)snprintf(params, sizeof(params), "%lld %u %zu%s",
-		tx->id, (unsigned)offset, fragment_size(f), f->eof ? " *":"");
+		tx->id, (unsigned)offset, sent, eof ? " *":"");
 	if_fail (mdir_cnx_query(&tx->cnx->cnx, f->box ? kw_copy:kw_skip, NULL, params, NULL)) return 0;
-	if (f->box) Write(tx->cnx->cnx.fd, f->box->data, sent);
+	if (f->box) Write(tx->cnx->cnx.fd, f->box->data+(offset - f->start), sent);
 	return sent;
 }
 
@@ -420,7 +428,7 @@ void chn_tx_write(struct chn_tx *tx, size_t length, struct chn_box *box, bool eo
 		if_fail (retransmit_missed(tx)) return;
 		if_fail (now = get_ts()) return;
 		if_fail (timeout_fragments(&tx->out_frags, now, OUT_FRAGS_TIMEOUT)) return;
-	} while (! chn_tx_status(tx));
+	} while (0 == chn_tx_status(tx));
 }
 
 // Receiver
@@ -587,6 +595,16 @@ void chn_cnx_del(struct chn_cnx *cnx)
  * Transfert commands handlers
  */
 
+static struct chn_tx *find_wtx(struct chn_cnx *cnx, long long id)
+{
+	struct chn_tx *tx;
+	LIST_FOREACH(tx, &cnx->txs, cnx_entry) {
+		if (! tx->sender) continue;	// we are looking for a sender
+		if (tx->id == id) return tx;
+	}
+	return NULL;
+}
+
 static struct chn_tx *find_rtx(struct chn_cnx *cnx, long long id)
 {
 	struct chn_tx *tx;
@@ -618,7 +636,11 @@ static void check_in_frags(struct chn_tx *tx, uint_least64_t now)
 			if_fail (ask_retransmit(tx, last_end, f->start - last_end)) return;
 			f->ts = now;
 		} else if (last_frag) {	// merge those two fragments
-			if (f->end > last_frag->end) last_frag->end = f->end;
+			debug("merging fragment %p and %p", last_frag, f);
+			if (f->end >= last_frag->end) {
+				last_frag->end = f->end;
+				last_frag->eof = f->eof;
+			}
 			fragment_del(f, &tx->in_frags);
 			last_end = last_frag->end;
 			continue;
@@ -639,6 +661,24 @@ static void check_in_frags(struct chn_tx *tx, uint_least64_t now)
 	}
 }
 
+static char const *tx_id_str(struct chn_tx *tx)
+{
+	static char id[20+1];
+	snprintf(id, sizeof(id), "%lld", tx->id);
+	return id;
+}
+
+static void finalize_thx(struct mdir_cmd *cmd, void *user_data)
+{
+	struct mdir_cnx *cnx = user_data;
+	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
+	on_error return;
+	struct chn_tx *tx = DOWNCAST(sq, sent_thx, chn_tx);
+	int status = cmd->args[0].integer;
+	debug("status = %d", status);
+	tx->status = status;
+}
+
 static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
 {
 	struct chn_cnx *cnx = DOWNCAST(cnx_, cnx, chn_cnx);
@@ -649,7 +689,7 @@ static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
 	debug("id=%lld, offset=%u, size=%zu, eof=%s", id, (unsigned)offset, size, eof ? "y":"n");
 	struct chn_tx *tx = find_rtx(cnx, id);
 	if (! tx) {
-		mdir_cnx_answer(&cnx->cnx, cmd, 500, "No such tx id");
+		mdir_cnx_answer(&cnx->cnx, cmd, 500, "No such receiving tx id");
 		return;
 	}
 	struct chn_box *box = chn_box_alloc(size);
@@ -684,10 +724,10 @@ static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
 	struct fragment *first, *last;
 	first = TAILQ_FIRST(&tx->in_frags);
 	last = TAILQ_LAST(&tx->in_frags, fragments_queue);
+	debug("fragments : first=%p (offset=%u), last=%p (offset=%u, eof=%c)", first, first->start, last, last->start, last->eof ? 'y':'n');
 	if (first == last && last->eof && first->start == 0) {
-		tx->status = 199;
 		// Send the thanx message back to sender
-		mdir_cnx_query(...)
+		if_fail (mdir_cnx_query(&cnx->cnx, kw_thx, &tx->sent_thx, tx_id_str(tx), NULL)) return;
 	}
 }
 
@@ -717,6 +757,20 @@ static void serve_miss(struct mdir_cmd *cmd, void *cnx_)
 	(void)offset;
 	(void)size;
 	(void)id;
+}
+
+static void serve_thx(struct mdir_cmd *cmd, void *cnx_)
+{
+	struct chn_cnx *cnx = DOWNCAST(cnx_, cnx, chn_cnx);
+	long long id  = cmd->args[0].integer;
+	debug("id = %lld", id);
+	struct chn_tx *tx = find_wtx(cnx, id);
+	if (! tx) {
+		mdir_cnx_answer(&cnx->cnx, cmd, 500, "No such sending tx id");
+		return;
+	}
+	tx->status = 200;
+	mdir_cnx_answer(&cnx->cnx, cmd, 200, "Ok");
 }
 
 void serve_creat(struct mdir_cmd *cmd, void *user_data)
@@ -825,7 +879,7 @@ static void fetch_file_with_cnx(struct chn_cnx *cnx, char *name, struct stream *
 	if_fail (command = command_new(cnx, kw_read, name, stream, false)) return;
 	command_wait(command);
 	if (command->status != 200) error_push(0, "Cannot get file '%s'", name);
-	command_del(command, cnx);
+	command_del(command);
 	// Remember that the transfert is still in progress !
 }
 
@@ -876,7 +930,7 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 	stream_unref(stream);
 	command_wait(command);
 	if (command->status != 200) error_push(0, "Cannot send file '%s'", name);
-	command_del(command, cnx);
+	command_del(command);
 	// Remember that the transfert is still in progress !
 }
 
@@ -887,7 +941,6 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 static void finalize_creat(struct mdir_cmd *cmd, void *user_data)
 {
 	struct mdir_cnx *cnx = user_data;
-	assert(cmd->def->keyword == kw_creat);
 	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
 	struct command *command = DOWNCAST(sq, sq, command);
@@ -905,7 +958,7 @@ void chn_create(struct chn_cnx *cnx, char *name, bool rt)
 	if_fail (command = command_new(cnx, kw_creat, name, NULL, rt)) return;
 	command_wait(command);
 	if (command->status != 200) error_push(0, "No answer to create request");
-	command_del(command, cnx);
+	command_del(command);
 }
 
 bool chn_cnx_all_tx_done(struct chn_cnx *cnx)

@@ -62,5 +62,6 @@ static inline void stream_unref(struct stream *stream)
 }
 void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_box *box, bool eof);
 void stream_add_reader(struct stream *stream, struct chn_tx *tx);
+void stream_remove_reader(struct stream *stream, struct chn_tx *tx);
 
 #endif

@@ -143,6 +143,7 @@ struct chn_tx {
 	struct fragments_queue in_frags;	// all received miss (for sender) of fragments (for receiver)
 	pth_t pth;	// a thread to check for missed data
 	uint_least64_t ts;	// reset at creation or when we ask for first fragment
+	struct mdir_sent_query sent_thx;
 };
 
 /* Start a new tx for sending data (once the read/write command have been acked)

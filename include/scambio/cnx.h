@@ -50,6 +50,20 @@ struct mdir_sent_query {
 	long long seq;
 };
 
+static inline void mdir_sent_query_ctor(struct mdir_sent_query *sq)
+{
+	sq->seq = 0;
+}
+
+static inline void mdir_sent_query_dtor(struct mdir_sent_query *sq)
+{
+	if (sq->seq != 0) {
+		LIST_REMOVE(sq, cnx_entry);
+		sq->seq = 0;
+	}
+}
+
+
 /* TODO: - a callback to free a sent_query ?
  *       - a callback to report a sent_query timeout ?
  */
@@ -77,6 +91,12 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int
  */
 void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
+// Evaluates to a mdir_cmd_def for a query answer.
+#define MDIR_CNX_ANSW_REGISTER(KEYWORD, CALLBACK) { \
+	.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = UINT_MAX, \
+	.nb_types = 1, .types = { CMD_INTEGER }, .negseq = true, \
+}
+
 /* Sends a query to the peer.
  * The query must have been registered first if you do expect an answer.
  * If !sq, no seqnum will be set (and you will receive no answer).
@@ -102,11 +122,6 @@ void mdir_cnx_read(struct mdir_cnx *cnx);
  * else then to delete it (the internal sent_query will be destructed).
  */
 struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd);
-
-/* You may want to cancel a query, ie you won't receive the answer (and you can free the sent_query).
- * Do not cancel a query which sent_query you already retrieved !
- */
-void mdir_cnx_query_cancel(struct mdir_cnx *cnx, struct mdir_sent_query *sq);
 
 /* Once in a service callback, you may want to answer a query.
  * If the seqnum is set it will be prepended.

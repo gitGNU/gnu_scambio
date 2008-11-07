@@ -43,13 +43,14 @@ struct mdir_cmd_def {
 	unsigned nb_arg_min, nb_arg_max;
 	unsigned nb_types;	// after which STRING is assumed
 	enum mdir_cmd_arg_type { CMD_STRING, CMD_INTEGER } types[CMD_MAX_ARGS];
+	bool negseq;	// if set, this definition apply only to seq<0. If not set, only to seq>0
 };
 
 /* This structure stores a command, once parsed and once the syntax is checked against its definition.
  */
 struct mdir_cmd {
 	struct mdir_cmd_def *def;
-	long long seq;	// -1 if no seqnum was read
+	long long seq;	// 0 if no seqnum was read
 	unsigned nb_args;
 	union mdir_cmd_arg {	// actual type is taken from the definition. Past def->nb_arg_max it's STRING.
 		char *string;

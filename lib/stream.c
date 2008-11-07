@@ -232,3 +232,10 @@ void stream_add_reader(struct stream *stream, struct chn_tx *tx)
 	LIST_INSERT_HEAD(&stream->readers, tx, reader_entry);
 }
 
+void stream_remove_reader(struct stream *stream, struct chn_tx *tx)
+{
+	(void)stream;
+	debug("stream@%p, reader@%p", stream, tx);
+	LIST_REMOVE(tx, reader_entry);
+}
+
