@@ -72,5 +72,6 @@ void varbuf_read_line(struct varbuf *, int fd, size_t maxlen, char **new);
 void varbuf_clean(struct varbuf *);
 void varbuf_stringify(struct varbuf *vb);
 void varbuf_destringify(struct varbuf *vb);
+void varbuf_write(struct varbuf const *vb, int fd);
 
 #endif

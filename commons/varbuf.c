@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <pth.h>
 #include "varbuf.h"
+#include "misc.h"
 
 /*
  * Data Definitions
@@ -140,3 +141,7 @@ void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 	varbuf_stringify(vb);
 }
 
+void varbuf_write(struct varbuf const *vb, int fd)
+{
+	Write(fd, vb->buf, vb->used);
+}

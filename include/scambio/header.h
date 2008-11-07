@@ -76,21 +76,23 @@ bool header_is_directory(struct header *h);
 #include "scambio/mdir.h"
 mdir_version header_target(struct header *h);
 
-#define SC_TYPE_FIELD   "sc-type"
-#define SC_TARGET_FIELD "sc-target"
-#define SC_DIRID_FIELD  "sc-dirId"
-#define SC_NAME_FIELD   "sc-name"
-#define SC_FROM_FIELD   "sc-from"
-#define SC_DESCR_FIELD  "sc-descr"
-#define SC_START        "sc-start"
-#define SC_STOP         "sc-stop"
-#define SC_PERIOD       "sc-period"
+#define SC_TYPE_FIELD     "sc-type"
+#define SC_TARGET_FIELD   "sc-target"
+#define SC_DIRID_FIELD    "sc-dirId"
+#define SC_NAME_FIELD     "sc-name"
+#define SC_FROM_FIELD     "sc-from"
+#define SC_DESCR_FIELD    "sc-descr"
+#define SC_EXTID_FIELD    "sc-extid"
+#define SC_RESOURCE_FIELD "sc-resource"
+#define SC_START          "sc-start"
+#define SC_STOP           "sc-stop"
+#define SC_PERIOD         "sc-period"
 
 // Common values for type field
-#define SC_DIR_TYPE     "dir"
-#define SC_MAIL_TYPE    "mail"
-#define SC_CAL_TYPE     "cal"
-#define SC_IM_TYPE      "im"
-#define SC_DIR_TYPE     "dir"
+#define SC_DIR_TYPE       "dir"
+#define SC_MAIL_TYPE      "mail"
+#define SC_CAL_TYPE       "cal"
+#define SC_IM_TYPE        "im"
+#define SC_DIR_TYPE       "dir"
 
 #endif

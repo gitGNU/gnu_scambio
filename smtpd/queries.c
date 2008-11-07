@@ -159,36 +159,46 @@ void exec_rcpt(struct mdir_cmd *cmd, void *user_data)
  * DATA
  */
 
-static void store_file(struct cnx_env *env, struct header *header, struct varbuf *vb)
+static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf *vb)
 {
-	(void)vb;
-	(void)env;
-	(void)header;
-	// TODO: send the content to the file store and add returned URL to the global header
+	// Do it a temp file, sends the file, removes the file !
+	char tmpfile[PATH_MAX] = "/tmp/vbXXXXXX";	// FIXME
+	int fd = mkstemp(tmpfile);
+	if (fd == -1) with_error(errno, "mkstemp(%s)", tmpfile) return;
+	if (0 != unlink(tmpfile)) {
+		error("Cannot unlink tmp file '%s' : %s", tmpfile, strerror(errno));
+		// go ahaid
+	}
+	do {
+		if_fail(varbuf_write(vb, fd)) break;
+		chn_send_file(cnx, resource, fd);
+	} while (0);
+	(void)close(fd);
 }
 
-static void store_file_rec(struct cnx_env *env, struct msg_tree *const tree)
+static void store_file(struct header *header, struct varbuf *vb, struct header *global_header)
+{
+	char resource[PATH_MAX];
+	debug("Creating a resource for");
+	header_debug(header);
+	if_fail (chn_create(&ccnx, resource, false)) return;
+	debug("Obtained resource '%s', now upload it", resource);
+	if_fail (send_varbuf(&ccnx, resource, vb)) return;
+	debug("That's great, now adding this info onto the env header");
+	if_fail (header_add_field(global_header, SC_RESOURCE_FIELD, resource)) return;
+}
+
+static void store_file_rec(struct msg_tree *const tree, struct header *global_header)
 {
 	if (tree->type == CT_FILE) {
-		store_file(env, tree->header, &tree->content.file);
+		store_file(tree->header, &tree->content.file, global_header);
 		return;
 	}
 	assert(tree->type == CT_MULTIPART);
 	struct msg_tree *subtree;
 	SLIST_FOREACH(subtree, &tree->content.parts, entry) {
-		if_fail (store_file_rec(env, subtree)) return;
+		if_fail (store_file_rec(subtree, global_header)) return;
 	}
-}
-
-static void submit_patch(struct cnx_env *env)
-{
-	struct header *h = header_new();
-	on_error return;
-	header_add_field(h, SC_TYPE_FIELD, SC_MAIL_TYPE);
-	header_add_field(h, SC_FROM_FIELD, env->reverse_path);
-	if (env->subject) header_add_field(h, SC_DESCR_FIELD, env->subject);
-	unless_error mdir_patch_request(env->mailbox, MDIR_ADD, h);
-	header_del(h);
 }
 
 static void process_mail(struct cnx_env *env)
@@ -196,12 +206,23 @@ static void process_mail(struct cnx_env *env)
 	// First parse the data into a mail tree
 	struct msg_tree *msg_tree = msg_tree_read(env->cnx.fd);
 	on_error return;
-	// Extract the values that will be used for all meta-data blocs from top-level header
-	env->subject = header_search(msg_tree->header, "subject");
-	env->message_id = header_search(msg_tree->header, "message-id");
-	// Then store each file in the mdir
-	store_file_rec(env, msg_tree);
-	submit_patch(env);
+	do {
+		struct header *h = header_new();
+		on_error break;
+		do {
+			if_fail (header_add_field(h, SC_TYPE_FIELD, SC_MAIL_TYPE)) break;
+			if_fail (header_add_field(h, SC_FROM_FIELD, env->reverse_path)) break;
+			// Store each file in the filed
+			if_fail (store_file_rec(msg_tree, h)) break;
+			char const *subject = header_search(msg_tree->header, "subject");
+			if (subject) header_add_field(h, SC_DESCR_FIELD, subject);
+			char const *message_id = header_search(msg_tree->header, "message-id");
+			if (message_id) header_add_field(h, SC_EXTID_FIELD, message_id);
+			// submit the header
+			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h)) break;
+		} while (0);
+		header_del(h);
+	} while (0);
 	msg_tree_del(msg_tree);
 }
 

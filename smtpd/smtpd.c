@@ -38,6 +38,7 @@ static struct server server;
 static struct mdir_syntax syntax;
 static sig_atomic_t terminate = 0;
 char my_hostname[256];
+struct chn_cnx ccnx;
 
 char const kw_ehlo[] = "ehlo";
 char const kw_helo[] = "helo";
@@ -60,6 +61,9 @@ static void init_conf(void)
 	conf_set_default_str("SMTPD_LOG_DIR", "/var/log");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_int("SMTPD_PORT", 25);
+	conf_set_default_str("SC_FILED_HOST", "localhost");
+	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
+	conf_set_default_str("SC_FILED_USER", "smtpd");
 }
 
 static void init_log(void)
@@ -140,6 +144,23 @@ static void init_server(void)
 	if (0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
 }
 
+static void deinit_filed(void)
+{
+	chn_cnx_dtor(&ccnx);
+	chn_end();
+}
+
+static void init_filed(void)
+{
+	if_fail (chn_begin(false)) return;
+	char const *host, *serv, *user;
+	if_fail (host = conf_get_str("SC_FILED_HOST")) return;
+	if_fail (serv = conf_get_str("SC_FILED_PORT")) return;
+	if_fail (user = conf_get_str("SC_FILED_USER")) return;
+	if_fail (chn_cnx_ctor_outbound(&ccnx, host, serv, user)) return;
+	if (0 != atexit(deinit_filed)) with_error(0, "atexit") return;
+}
+
 static void init(void)
 {
 	error_begin();
@@ -148,8 +169,9 @@ static void init(void)
 	if_fail (init_log()) return;
 	if_fail (mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	if_fail (daemonize()) return;
 	if_fail (init_server()) return;
+	if_fail (init_filed()) return;
+	if_fail (daemonize()) return;
 }
 
 /*

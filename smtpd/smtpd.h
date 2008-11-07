@@ -21,6 +21,7 @@
 #include <pth.h>
 #include "scambio/queue.h"
 #include "scambio/cnx.h"
+#include "scambio/channel.h"
 #include "varbuf.h"
 
 #define CRLF "\r\n"
@@ -32,6 +33,7 @@
 #define MAX_BOUNDARY_LENGTH 70
 
 extern char my_hostname[256];
+extern struct chn_cnx ccnx;
 
 struct mdir;
 struct cnx_env {
@@ -44,8 +46,6 @@ struct cnx_env {
 	char client_address[100];
 	char reception_date[10+1];
 	char reception_time[8+1];
-	// From the top-level header (points toward a varbuf that will be deleted by the time this env is deleted)
-	char const *subject, *message_id;
 };
 
 // From queries.c
