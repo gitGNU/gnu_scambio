@@ -21,5 +21,5 @@
  * Also use conf for log configuration.
  */
 
-void daemonize(void);
+void daemonize(char const *log_ident);
 

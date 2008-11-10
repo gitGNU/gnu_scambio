@@ -171,7 +171,7 @@ static void init(void)
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 	if_fail (init_server()) return;
 	if_fail (init_filed()) return;
-	if_fail (daemonize()) return;
+	if_fail (daemonize("sc_smtpd")) return;
 }
 
 /*

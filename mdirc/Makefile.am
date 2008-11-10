@@ -1,9 +1,9 @@
 AM_CFLAGS = -std=c99 -Wall -W
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 
-bin_PROGRAMS = mdirc
+bin_PROGRAMS = sc_mdirc
 
-mdirc_SOURCES = \
+sc_mdirc_SOURCES = \
 	mdirc.c \
 	command.c \
 	connecter.c \
@@ -11,5 +11,5 @@ mdirc_SOURCES = \
 	writer.c \
 	hide.c
 
-mdirc_LDADD = ../lib/libmdir.la ../commons/libcommons.la
+sc_mdirc_LDADD = ../lib/libmdir.la ../commons/libcommons.la
 

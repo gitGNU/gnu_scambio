@@ -6,6 +6,8 @@ export SC_FILED_PORT=21436
 export MDIRD_HOST=localhost
 export MERELIB_LOG_DIR=/tmp
 export SMTPD_PORT=1025
+#export SC_RUNASUSER=scambio
+#export SC_RUNASGROUP=scambio
 
 function auth_user {
 	dir=$1
@@ -32,7 +34,7 @@ function run_server {
 	rm -rf $MDIR_ROOT_DIR
 	mkdir -p $MDIR_ROOT_DIR/root
 	auth_users
-	build/mdird/mdird
+	build/mdird/sc_mdird
 }
 
 function run_filed {
@@ -40,7 +42,7 @@ function run_filed {
 	export SC_FILES_DIR=/tmp/filed/files
 	rm -f /tmp/filed.log
 	mkdir -p $SC_FILES_DIR
-	build/filed/filed
+	build/filed/sc_filed
 }
 
 function send_content {
@@ -100,7 +102,7 @@ function run_client {
 	rm -rf $MDIR_ROOT_DIR
 	mkdir -p $MDIR_ROOT_DIR/root
 	auth_users
-	build/mdirc/mdirc
+	build/mdirc/sc_mdirc
 }
 
 function run_smtpd {
@@ -110,7 +112,7 @@ function run_smtpd {
 	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/smtpd/files
 	mkdir -p $MDIR_FILES_DIR
 	rm -f /tmp/smtpd.log
-	build/smtpd/smtpd
+	build/smtpd/sc_smtpd
 }
 
 function run_meremail {

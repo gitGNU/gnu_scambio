@@ -192,8 +192,8 @@ void mdir_begin(void)
 	mdir_alloc = mdir_alloc_default;
 	mdir_free = mdir_free_default;
 	// Default configuration values
-	conf_set_default_str("MDIR_ROOT_DIR", "/tmp/mdir");
-	conf_set_default_str("MDIR_DIRSEQ", "/tmp/.dirid.seq");
+	conf_set_default_str("MDIR_ROOT_DIR", "/var/lib/scambio/mdir");
+	conf_set_default_str("MDIR_DIRSEQ", "/var/lib/scambio/mdir/.dirid.seq");
 	on_error return;
 	if_fail (jnl_begin()) return;
 	// Inits

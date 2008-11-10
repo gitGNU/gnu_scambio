@@ -100,7 +100,7 @@ struct mdir_user *mdir_user_load(char const *name)
 
 void auth_begin(void)
 {
-	if_fail (conf_set_default_str("MDIR_USERS_DIR", "/tmp/mdir/users")) return;
+	if_fail (conf_set_default_str("MDIR_USERS_DIR", "/var/lib/scambio/users")) return;
 	users_root = conf_get_str("MDIR_USERS_DIR");
 	LIST_INIT(&users);
 }
