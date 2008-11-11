@@ -68,7 +68,8 @@ struct cal_event {
 	mdir_version version;	// 0 if no synched yet
 };
 
-void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (*cb)(struct cal_event *));
+void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (*cb)(struct cal_event *, void *), void *data);
+int month_days(unsigned year, unsigned month);	// month is from 0 to 11
 
 /*
  * GUI functions

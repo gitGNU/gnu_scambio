@@ -101,19 +101,12 @@ static void reset_day(void)
 	}
 }
 
-static void select_event(struct cal_event *ce)
+static void select_event(struct cal_event *ce, void *data)
 {
-	debug("event '%s' selected", ce->description);
-	struct cal_date *end = cal_date_is_set(&ce->stop) ? &ce->stop : &ce->start;
-	for (
-		struct cal_date period = ce->start;
-		cal_date_compare(&period, end) <= 0 && period.day <= 31;
-		period.day ++
-	) {
-		gtk_calendar_mark_day(GTK_CALENDAR(calendar), period.day);
-		day2event_new(ce, period.day);
-		debug("  and added to day %u", period.day);
-	}
+	int *day = data;
+	debug("event '%s' selected for day %d", ce->description, *day);
+	gtk_calendar_mark_day(GTK_CALENDAR(calendar), *day);
+	day2event_new(ce, *day);
 }
 
 // month changed (or the calendar was just created) : prepare the
@@ -125,17 +118,20 @@ static void reset_month(void)
 	gtk_calendar_clear_marks(GTK_CALENDAR(calendar));
 	for (unsigned i=0; i<sizeof_array(day2events); i++) {
 		struct day2event *d2e;
-		while (NULL != (d2e = TAILQ_FIRST(day2events+i))) day2event_del(d2e, i);
+		while (NULL != (d2e = TAILQ_FIRST(day2events+i))) day2event_del(d2e, i+1);
 	}
 	// Rebuild
 	guint year, month, day;
 	gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
-	struct cal_date month_start, month_stop;
-	cal_date_ctor(&month_start, year, month, 1, 0, 0);
-	cal_date_ctor(&month_stop,  year, month, 31, 23, 29);
-	foreach_event_between(&month_start, &month_stop, select_event);
-	cal_date_dtor(&month_start);
-	cal_date_dtor(&month_stop);
+	int const max_days = month_days(year, month);
+	for (int d=1; d <= max_days; d++) {
+		struct cal_date day_start, day_stop;
+		cal_date_ctor(&day_start, year, month, d, 0, 0);
+		cal_date_ctor(&day_stop,  year, month, d, 23, 59);
+		foreach_event_between(&day_start, &day_stop, select_event, &d);
+		cal_date_dtor(&day_start);
+		cal_date_dtor(&day_stop);
+	}
 	reset_day();
 }
 

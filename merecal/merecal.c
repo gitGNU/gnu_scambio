@@ -137,7 +137,7 @@ static bool is_leap_year(unsigned y)
 	return (y%4 == 0) && (y%100 != 0 || y%400 == 0);
 }
 
-static int month_days(unsigned year, unsigned month)	// month is from 0 to 11
+int month_days(unsigned year, unsigned month)	// month is from 0 to 11
 {
 	static unsigned const days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 	return days[month] + (month == 1 && is_leap_year(year));
@@ -195,10 +195,10 @@ int cal_date_compare(struct cal_date const *a, struct cal_date const *b)
 	COMPARE_FIELD(month);
 	COMPARE_FIELD(day);
 	if (! cal_date_has_time(a)) {
-		if (cal_date_has_time(b)) return -1;
+		if (cal_date_has_time(b) && (b->hour > 0 || b->min > 0)) return -1;
 		return 0;
 	}
-	if (! cal_date_has_time(b)) return 1;
+	if (! cal_date_has_time(b) && (a->hour > 0 || a->min > 0)) return 1;
 	COMPARE_FIELD(hour);
 	COMPARE_FIELD(min);
 	return 0;
@@ -276,7 +276,7 @@ static void cal_event_del(struct cal_event *ce)
 	free(ce);
 }
 
-void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (*cb)(struct cal_event *))
+void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (*cb)(struct cal_event *, void *), void *data)
 {
 	struct cal_event *ce;
 	LIST_FOREACH(ce, &cal_events, entry) {
@@ -291,7 +291,7 @@ void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (
 			debug("  skip because end date (%s) before start (%s)", end->str, start->str);
 			continue;
 		}
-		cb(ce);
+		cb(ce, data);
 	}
 }
 
@@ -356,6 +356,7 @@ static void cal_folder_del(struct cal_folder *cf)
 
 static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
 {
+	debug("action=%s, new=%c", action==MDIR_ADD ? "add":"rem", new ? 'y':'n');
 	(void)mdir;
 	if (action == MDIR_REM) {
 		mdir_version target = header_target(header);
@@ -375,24 +376,25 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	struct cal_date start, stop;
 	char const *start_str = header_search(header, SC_START);
 	if (start_str) {
-		cal_date_ctor_from_str(&start, start_str);
-		on_error return;
+		if_fail (cal_date_ctor_from_str(&start, start_str)) return;
 	} else {
 		error("Invalid calendar message with no "SC_START" field");
 		return;
 	}
+	debug("new event is version %lld, start str = '%s'", version, start_str);
 	char const *stop_str = header_search(header, SC_STOP);
 	if (stop_str) {
-		cal_date_ctor_from_str(&stop, stop_str);
-		on_error {
+		if_fail (cal_date_ctor_from_str(&stop, stop_str)) {
+			error_save();
 			cal_date_dtor(&start);
+			error_restore();
 			return;
 		}
 	} else {
 		cal_date_ctor(&stop, 0, 0, 0, 0, 0);
 	}
 	char const *desc = header_search(header, SC_DESCR_FIELD);
-	(void)cal_event_new(cf, &start, &stop, desc, version);
+	unless_error (void)cal_event_new(cf, &start, &stop, desc, version);
 	on_error error_clear();	// forget this event, go ahead with others
 	cal_date_dtor(&stop);
 	cal_date_dtor(&start);
@@ -404,6 +406,7 @@ static void refresh_folder(struct cal_folder *cf)
 	// First we delete all the events that were not versionned yet
 	struct cal_event *ce;
 	while (NULL != (ce = LIST_FIRST(&cf->new_events))) {
+		assert(ce->version == 0);
 		cal_event_del(ce);
 	}
 	// Then we ask for the newer or not synched events
@@ -412,6 +415,7 @@ static void refresh_folder(struct cal_folder *cf)
 
 void refresh(void)
 {
+	debug("refresh");
 	struct cal_folder *cf;
 	LIST_FOREACH(cf, &cal_folders, entry) {
 		refresh_folder(cf);
