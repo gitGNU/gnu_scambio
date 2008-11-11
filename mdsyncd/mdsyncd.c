@@ -66,7 +66,7 @@ extern inline struct mdird *mdir2mdird(struct mdir *mdir);
 
 static void init_conf(void)
 {
-	conf_set_default_str("SC_LOG_DIR", "/var/log");
+	conf_set_default_str("SC_LOG_DIR", "/var/log/scambio");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_int("MDIRD_PORT", DEFAULT_MDIRD_PORT);
 }

@@ -1,7 +1,7 @@
 AM_CFLAGS = -std=c99 -Wall -W
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 
-bin_PROGRAMS = sc_smtpd
+sbin_PROGRAMS = sc_smtpd
 
 sc_smtpd_SOURCES = \
 	smtpd.c \
