@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.61)
+AC_PREREQ(2.59)
 AC_INIT(scambio, 0, rixed@free.fr)
 AC_CONFIG_SRCDIR([mdsyncd])
 AC_CONFIG_HEADER([commons/config.h])
