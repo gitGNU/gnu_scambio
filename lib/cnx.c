@@ -115,18 +115,27 @@ static void cnx_ctor_common(struct mdir_cnx *cnx, struct mdir_syntax *syntax, bo
 	LIST_INIT(&cnx->sent_queries);
 }
 
-static int gaierr2errno(int err)
+static char const *gaierr2str(int err)
 {
 	switch (err) {
-		case EAI_SYSTEM: return errno;
-		case EAI_MEMORY: return ENOMEM;
+		case EAI_SYSTEM:     return strerror(errno);
+		case EAI_ADDRFAMILY: return "No addr in family";
+		case EAI_BADFLAGS:   return "Bad flags";
+		case EAI_FAIL:       return "DNS failed";
+		case EAI_FAMILY:     return "Bad family";
+		case EAI_MEMORY:     return "No mem";
+		case EAI_NODATA:     return "No address";
+		case EAI_NONAME:     return "No such name";
+		case EAI_SERVICE:    return "Not in this socket type";
+		case EAI_SOCKTYPE:   return "Bad socket type";
 	}
-	return -1;	// FIXME
+	return "Unknown error";
 }
 
 static void cnx_connect(struct mdir_cnx *cnx, char const *host, char const *service)
 {
 	// Resolve hostname into sockaddr
+	debug("Connecting to %s:%s", host, service);
 	struct addrinfo *info_head, *ainfo;
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
@@ -135,7 +144,7 @@ static void cnx_connect(struct mdir_cnx *cnx, char const *host, char const *serv
 	int err;
 	if (0 != (err = getaddrinfo(host, service, &hints, &info_head))) {
 		// TODO: check that freeaddrinfo is not required in this case
-		with_error(gaierr2errno(err), "Cannot getaddrinfo") return;
+		with_error(0, "Cannot getaddrinfo : %s", gaierr2str(err)) return;
 	}
 	err = ENOENT;
 	for (ainfo = info_head; ainfo; ainfo = ainfo->ai_next) {
