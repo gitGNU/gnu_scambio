@@ -108,13 +108,13 @@ q0:
 }
 static void init_conf(void)
 {
-	conf_set_default_str("MDIRC_LOG_DIR", "/tmp");
+	conf_set_default_str("SC_LOG_DIR", "/tmp");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 }
 
 static void init_log(void)
 {
-	log_begin(conf_get_str("MDIRC_LOG_DIR"), "mdirc.log");
+	log_begin(conf_get_str("SC_LOG_DIR"), "mdirc.log");
 	on_error return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
