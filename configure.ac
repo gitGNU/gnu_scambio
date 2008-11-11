@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.61)
 AC_INIT(scambio, 0, rixed@free.fr)
-AC_CONFIG_SRCDIR([mdird])
+AC_CONFIG_SRCDIR([mdsyncd])
 AC_CONFIG_HEADER([commons/config.h])
 AM_INIT_AUTOMAKE
 
@@ -38,8 +38,8 @@ AC_CONFIG_FILES([
 	commons/Makefile
 	include/Makefile
 	lib/Makefile
-	mdird/Makefile
-	mdirc/Makefile
+	mdsyncd/Makefile
+	mdsyncc/Makefile
 	filed/Makefile
 	smtpd/Makefile
 	merelib/Makefile
