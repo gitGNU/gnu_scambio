@@ -1,9 +1,9 @@
 export MALLOC_CHECK_=2
 export SC_LOG_DIR=/tmp
 export SC_LOG_LEVEL=5
-export MDIRD_PORT=21435
+export MDIRD_PORT=21654
 export SC_FILED_PORT=21436
-export MDIRD_HOST=127.0.0.1
+export MDIRD_HOST=scambio.happyleptic.org
 export SMTPD_PORT=1025
 #export SC_RUNASUSER=scambio
 #export SC_RUNASGROUP=scambio
@@ -138,7 +138,7 @@ EOF
 }
 
 function send_email {
-	nc 127.0.0.1 $SMTPD_PORT < smtpd/check/multipart
+	nc scambio.happyleptic.org $SMTPD_PORT < smtpd/check/multipart
 }
 
 ulimit -c unlimited
