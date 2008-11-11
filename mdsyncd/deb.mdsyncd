@@ -13,14 +13,17 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 . /lib/lsb/init-functions
 
-NAME=mdsyncd
+NAME=sc_mdsyncd
 DAEMON=/usr/local/bin/mdsyncd
 PIDFILE=/var/run/mdsyncd.pid
 
 test -x $DAEMON || exit 5
 
-if [ -r /usr/local/etc/$NAME.conf ]; then
-	. /usr/local/etc/$NAME.conf
+CONFFILE=/usr/local/etc/$NAME.conf
+if [ -r $CONFFILE ]; then
+	. $CONFFILE
+else
+	log_failure_msg "Configuration file $CONFFILE not found"
 fi
 
 case $1 in
