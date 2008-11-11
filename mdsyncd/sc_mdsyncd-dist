@@ -15,14 +15,13 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 NAME=sc_mdsyncd
 DAEMON=/usr/local/sbin/sc_mdsyncd
-PIDFILE=/var/run/sc_mdsyncd.pid
+export PIDFILE=/var/run/sc_mdsyncd.pid
 CONFFILE=/usr/local/etc/$NAME.conf
 
 test -x $DAEMON || exit 5
 
 if [ -r $CONFFILE ]; then
 	. $CONFFILE
-	mkdir -p $MDIR_ROOT_DIR/root
 else
 	log_failure_msg "Cannot find configuration file $CONFFILE"
 	exit 5

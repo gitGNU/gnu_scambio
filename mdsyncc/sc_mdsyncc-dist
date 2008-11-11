@@ -15,7 +15,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 NAME=sc_mdsyncc
 DAEMON=/usr/local/sbin/sc_mdsyncc
-PIDFILE=/var/run/sc_mdsyncc.pid
+export PIDFILE=/var/run/sc_mdsyncc.pid
 CONFFILE=/usr/local/etc/$NAME.conf
 
 test -x $DAEMON || exit 5

@@ -1,6 +1,7 @@
 * Fix complex init sequence
 
-At init, error needs pth and log, and conf needs error.
+At init, error needs pth and log, and conf needs error, and log_begin needs 
+errors !
 Also, to init the log we need to get the conf envvar telling us where to write 
 log messages.
 

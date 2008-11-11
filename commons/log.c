@@ -19,6 +19,7 @@
 #include <errno.h>
 #include "scambio.h"
 #include "log.h"
+#include "misc.h"
 
 /*
  * Public Functions
@@ -47,6 +48,7 @@ static int open_log(void)
 int log_begin(char const *dirname, char const *filename)
 {
 	if (!dirname || !filename) return 0;
+	if_fail (Mkdir(dirname)) return 0;
 	snprintf(file_path, sizeof(file_path), "%s/%s", dirname, filename);
 	return open_log();
 }

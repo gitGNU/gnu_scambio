@@ -15,7 +15,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 NAME=sc_smtpd
 DAEMON=/usr/local/sbin/sc_smtpd
-PIDFILE=/var/run/sc_smtpd.pid
+export PIDFILE=/var/run/sc_smtpd.pid
 CONFFILE=/usr/local/etc/$NAME.conf
 
 test -x $DAEMON || exit 5

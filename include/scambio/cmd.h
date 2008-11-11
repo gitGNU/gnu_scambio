@@ -28,7 +28,7 @@
 #include <stdbool.h>
 #include <scambio/queue.h>
 
-#define CMD_MAX_ARGS 8
+#define CMD_MAX_ARGS 64
 
 struct mdir_cmd;
 typedef void mdir_cmd_cb(struct mdir_cmd *cmd, void *user_data);

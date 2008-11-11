@@ -108,7 +108,7 @@ q0:
 }
 static void init_conf(void)
 {
-	conf_set_default_str("SC_LOG_DIR", "/tmp");
+	conf_set_default_str("SC_LOG_DIR", "/var/log/scambio");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 }
 

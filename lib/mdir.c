@@ -200,6 +200,9 @@ void mdir_begin(void)
 	LIST_INIT(&mdirs);
 	mdir_root = conf_get_str("MDIR_ROOT_DIR");
 	mdir_root_len = strlen(mdir_root);
+	char root_path[PATH_MAX];
+	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
+	if_fail (Mkdir(root_path)) return;
 	persist_ctor(&dirid_seq, sizeof(uint64_t), conf_get_str("MDIR_DIRSEQ"));
 }
 
