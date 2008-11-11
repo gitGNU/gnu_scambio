@@ -19,7 +19,7 @@
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/cnx.h"
-#include "mdirc.h"
+#include "mdsyncc.h"
 
 /*
  * Threads share some structures related to the shared socket :

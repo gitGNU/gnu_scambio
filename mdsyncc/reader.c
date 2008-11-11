@@ -22,7 +22,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "mdirc.h"
+#include "mdsyncc.h"
 #include "scambio.h"
 #include "scambio/cnx.h"
 #include "scambio/header.h"

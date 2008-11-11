@@ -26,15 +26,15 @@ function auth_users {
 }
 
 function run_server {
-	export MDIR_ROOT_DIR=/tmp/mdird
+	export MDIR_ROOT_DIR=/tmp/mdsyncd
 	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_MAX_JNL_SIZE=30
-	rm -f /tmp/mdird.log
+	rm -f /tmp/mdsyncd.log
 	rm -rf $MDIR_ROOT_DIR
 	mkdir -p $MDIR_ROOT_DIR/root
 	auth_users
-	build/mdird/sc_mdird
+	build/mdsyncd/sc_mdsyncd
 }
 
 function run_filed {
@@ -94,20 +94,20 @@ EOF
 
 function run_client {
 	export MDIRC_LOG_DIR=/tmp
-	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_ROOT_DIR=/tmp/mdsyncc
 	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_MAX_JNL_SIZE=10
-	rm -f /tmp/mdirc.log
+	rm -f /tmp/mdsyncc.log
 	rm -rf $MDIR_ROOT_DIR
 	mkdir -p $MDIR_ROOT_DIR/root
 	auth_users
-	build/mdirc/sc_mdirc
+	build/mdsyncc/sc_mdsyncc
 }
 
 function run_smtpd {
 	export SMTPD_LOG_DIR=/tmp
-	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_ROOT_DIR=/tmp/mdsyncc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/smtpd/files
 	mkdir -p $MDIR_FILES_DIR
@@ -116,7 +116,7 @@ function run_smtpd {
 }
 
 function run_meremail {
-	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_ROOT_DIR=/tmp/mdsyncc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/client/files
 	mkdir -p $MDIR_FILES_DIR
@@ -125,7 +125,7 @@ function run_meremail {
 }
 
 function run_merecal {
-	export MDIR_ROOT_DIR=/tmp/mdirc
+	export MDIR_ROOT_DIR=/tmp/mdsyncc
 	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/client/files
 	mkdir -p $MDIR_FILES_DIR
@@ -134,8 +134,8 @@ function run_merecal {
 }
 
 function add_client_msg {
-	mkdir /tmp/mdirc/root/.tmp
-	cat > /tmp/mdirc/root/.tmp/+test1 <<EOF
+	mkdir /tmp/mdsyncc/root/.tmp
+	cat > /tmp/mdsyncc/root/.tmp/+test1 <<EOF
 test: 1
 
 EOF

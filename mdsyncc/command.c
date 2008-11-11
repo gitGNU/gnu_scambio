@@ -28,7 +28,7 @@
 #include "scambio.h"
 #include "misc.h"
 #include "scambio/cmd.h"
-#include "mdirc.h"
+#include "mdsyncc.h"
 #include "command.h"
 
 /*

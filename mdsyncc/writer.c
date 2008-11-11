@@ -30,7 +30,7 @@
 #include "misc.h"
 #include "hide.h"
 #include "scambio.h"
-#include "mdirc.h"
+#include "mdsyncc.h"
 #include "scambio/header.h"
 
 static bool terminate_writer;

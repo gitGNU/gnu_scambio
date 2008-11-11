@@ -21,7 +21,7 @@
 #include "scambio.h"
 #include "varbuf.h"
 #include "sub.h"
-#include "mdird.h"
+#include "mdsyncd.h"
 #include "digest.h"
 #include "misc.h"
 #include "scambio/header.h"

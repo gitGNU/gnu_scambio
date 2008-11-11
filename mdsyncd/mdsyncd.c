@@ -25,7 +25,7 @@
 #include "server.h"
 #include "varbuf.h"
 #include "scambio/cnx.h"
-#include "mdird.h"
+#include "mdsyncd.h"
 #include "sub.h"
 
 /*

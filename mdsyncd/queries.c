@@ -23,7 +23,7 @@
 #include <limits.h>
 #include <pth.h>
 #include "scambio.h"
-#include "mdird.h"
+#include "mdsyncd.h"
 #include "misc.h"
 #include "varbuf.h"
 #include "scambio/header.h"

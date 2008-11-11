@@ -33,7 +33,7 @@
 #include "daemon.h"
 #include "scambio/cmd.h"
 #include "misc.h"
-#include "mdirc.h"
+#include "mdsyncc.h"
 #include "command.h"
 #include "auth.h"
 
