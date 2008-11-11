@@ -6,6 +6,8 @@ depcomp
 ltmain.sh
 missing
 Makefile
+Makefile.in
+configure
 config.h
 config.log
 config.status
