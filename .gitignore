@@ -9,10 +9,12 @@ Makefile
 Makefile.in
 configure
 config.h
+config.h.in
 config.log
 config.status
 libtool
 stamp-h1
+install-sh
 build/
 cscope.out
 config.h.in~
