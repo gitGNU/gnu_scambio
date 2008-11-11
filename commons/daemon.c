@@ -33,12 +33,14 @@ static void switch_user(void)
 	char const *user = conf_get_str("SC_RUNASUSER");
 	char const *group = conf_get_str("SC_RUNASGROUP");
 	if (user) {
+		debug("Switching to user '%s'", user);
 		errno = 0;
 		struct passwd *pwd = getpwnam(user);
 		if (! pwd) with_error(errno, "Cannot get uid for '%s'", user) return;
 		if (setuid(pwd->pw_uid) < 0) with_error(errno, "setuid(%d)", (int)pwd->pw_uid) return;
 	}
 	if (group) {
+		debug("Switching to group '%s'", group);
 		errno = 0;
 		struct group *grp = getgrnam(group);
 		if (! grp) with_error(errno, "Cannot get gid for '%s'", group) return;

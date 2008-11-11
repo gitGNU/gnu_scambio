@@ -1,21 +1,21 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:        sc_mdsyncd
+# Provides:        sc_smtpd
 # Required-Start:  $network $remote_fs $syslog
 # Required-Stop:   $network $remote_fs $syslog
 # Default-Start:   2 3 4 5
 # Default-Stop:    0 1 6
-# Short-Description: Start sc_mdsync daemon (scambio message synch)
+# Short-Description: Start sc_smtp daemon (scambio message synch)
 ### END INIT INFO
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 . /lib/lsb/init-functions
 
-NAME=sc_mdsyncd
-DAEMON=/usr/local/sbin/sc_mdsyncd
-PIDFILE=/var/run/sc_mdsyncd.pid
+NAME=sc_smtpd
+DAEMON=/usr/local/sbin/sc_smtpd
+PIDFILE=/var/run/sc_smtpd.pid
 CONFFILE=/usr/local/etc/$NAME.conf
 
 test -x $DAEMON || exit 5
@@ -30,12 +30,12 @@ fi
 
 case $1 in
 	start)
-		log_daemon_msg "Starting SC_MDSYNCD server" "sc_mdsyncd"
+		log_daemon_msg "Starting SC_SMTPD server" "sc_smtpd"
   		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON
 		log_end_msg $?
   		;;
 	stop)
-		log_daemon_msg "Stopping SC_MDSYNCD server" "sc_mdsyncd"
+		log_daemon_msg "Stopping SC_SMTPD server" "sc_smtpd"
   		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
 		log_end_msg $?
 		rm -f $PIDFILE
@@ -47,9 +47,9 @@ case $1 in
 		pidofproc -p $PIDFILE $DAEMON >/dev/null
 		status=$?
 		if [ $status -eq 0 ]; then
-			log_success_msg "SC_MDSYNCD server is running."
+			log_success_msg "SC_SMTPD server is running."
 		else
-			log_failure_msg "SC_MDSYNCD server is not running."
+			log_failure_msg "SC_SMTPD server is not running."
 		fi
 		exit $status
 		;;
