@@ -1,4 +1,3 @@
-Makefile.in
 .deps/
 Makefile
 conf_lexer.c
