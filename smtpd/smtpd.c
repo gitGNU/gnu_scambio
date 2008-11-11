@@ -58,7 +58,7 @@ char const kw_quit[] = "quit";
 
 static void init_conf(void)
 {
-	conf_set_default_str("SC_LOG_DIR", "/var/log");
+	conf_set_default_str("SC_LOG_DIR", "/var/log/scambio");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_int("SMTPD_PORT", 25);
 	conf_set_default_str("SC_FILED_HOST", "localhost");

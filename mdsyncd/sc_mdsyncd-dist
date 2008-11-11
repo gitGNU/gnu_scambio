@@ -1,36 +1,41 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:        mdsyncd
+# Provides:        sc_mdsyncd
 # Required-Start:  $network $remote_fs $syslog
 # Required-Stop:   $network $remote_fs $syslog
 # Default-Start:   2 3 4 5
 # Default-Stop:    0 1 6
-# Short-Description: Start mdsync daemon (scambio message synch)
+# Short-Description: Start sc_mdsync daemon (scambio message synch)
 ### END INIT INFO
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 . /lib/lsb/init-functions
 
-NAME=mdsyncd
-DAEMON=/usr/local/bin/mdsyncd
-PIDFILE=/var/run/mdsyncd.pid
+NAME=sc_mdsyncd
+DAEMON=/usr/local/sbin/sc_mdsyncd
+PIDFILE=/var/run/sc_mdsyncd.pid
+CONFFILE=/usr/local/etc/$NAME.conf
 
 test -x $DAEMON || exit 5
 
-if [ -r /usr/local/etc/$NAME.conf ]; then
-	. /usr/local/etc/$NAME.conf
+if [ -r $CONFFILE ]; then
+	. $CONFFILE
+	mkdir -p $MDIR_ROOT_DIR/root
+else
+	log_failure_msg "Cannot find configuration file $CONFFILE"
+	exit 5
 fi
 
 case $1 in
 	start)
-		log_daemon_msg "Starting MDSYNCD server" "mdsyncd"
+		log_daemon_msg "Starting MDSYNCD server" "sc_mdsyncd"
   		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON
 		log_end_msg $?
   		;;
 	stop)
-		log_daemon_msg "Stopping MDSYNCD server" "mdsyncd"
+		log_daemon_msg "Stopping MDSYNCD server" "sc_mdsyncd"
   		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
 		log_end_msg $?
 		rm -f $PIDFILE
