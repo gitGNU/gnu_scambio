@@ -65,8 +65,9 @@ void mdir_end(void);
 // add/remove a header into a mdir
 // do not use this in plugins : only the server decides how and when to apply a patch
 // plugins use mdir_patch_request instead
+// insert nb_deleted empty patches before the one given
 // returns the new version number
-mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *);
+mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *, unsigned nb_deleted);
 
 // Ask for the addition of this patch to the mdir. Actually the patch will be
 // saved in a tempfile in subfolder ".tmp" with a tempname starting with '+'

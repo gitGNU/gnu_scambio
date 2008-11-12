@@ -108,7 +108,7 @@ static mdir_version add_header(char const *dir, struct header *h, enum mdir_acti
 	debug("adding a header in dir %s", dir);
 	struct mdir *mdir = mdir_lookup(dir);
 	on_error return 0;
-	return mdir_patch(mdir, action, h);
+	return mdir_patch(mdir, action, h, 0);
 }
 
 static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *user_data)

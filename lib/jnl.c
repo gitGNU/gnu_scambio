@@ -207,11 +207,9 @@ static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
 {
 	struct index_entry ie;
-	ie.offset = filesize(jnl->patch_fd);
-	on_error return 0;
+	if_fail (ie.offset = filesize(jnl->patch_fd)) return 0;
 	// Write the index
-	Write(jnl->idx_fd, &ie, sizeof(ie));
-	on_error return 0;	// FIXME: on short writes, truncate
+	if_fail (Write(jnl->idx_fd, &ie, sizeof(ie))) return 0;	// FIXME: on short writes, truncate
 	// Then the patch command
 	Write_strs(jnl->patch_fd, mdir_action2str(action), "\n", NULL);
 	header_write(header, jnl->patch_fd);
@@ -228,8 +226,24 @@ void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
 	char tag;
 	ReadFrom(&tag, jnl->patch_fd, offset, 1);
 	on_error return;
+	if (tag == '%') {
+		warning("Version %"PRIversion" is already deleted", to_del);
+		return;
+	}
 	if (tag != '+') with_error(0, "Cannot delete version %"PRIversion" : tag is '%c'", to_del, tag) return;
 	WriteTo(jnl->repatch_fd, offset, "%", 1);
+}
+
+mdir_version jnl_patch_blank(struct jnl *jnl)
+{
+	struct index_entry ie;
+	if_fail (ie.offset = filesize(jnl->patch_fd)) return 0;
+	// Write the index
+	if_fail (Write(jnl->idx_fd, &ie, sizeof(ie))) return 0; // FIXME: on short writes, truncate
+	// Then the blank patch
+	Write(jnl->patch_fd, "%\n\n", 3);
+	unless_error jnl->nb_patches ++;
+	return jnl->version + jnl->nb_patches -1;
 }
 
 /*

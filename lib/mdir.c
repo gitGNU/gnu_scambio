@@ -354,13 +354,25 @@ static struct jnl *find_jnl(struct mdir *mdir, mdir_version version)
 	return NULL;
 }
 
-mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header)
+static void insert_blank_patches(struct mdir *mdir, unsigned nb)
 {
-	debug("patch mdir %s", mdir_id(mdir));
+	debug("insert %u blank patch(es)", nb);
+	struct jnl *jnl;
+	while (nb --) {
+		if_fail (jnl = last_jnl(mdir)) break;
+		if_fail ((void)jnl_patch_blank(jnl)) break;
+	}
+}
+
+mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
+{
+	debug("patch mdir %s (with %u dels)", mdir_id(mdir), nb_deleted);
 	mdir_version version = 0;
 	// First acquire writer-grade lock
 	(void)pth_rwlock_acquire(&mdir->rwlock, PTH_RWLOCK_RW, FALSE, NULL);	// better use a reader/writer lock (we also need to lock out readers!)
 	do {
+		// We may want to insert some blank entry before this one
+		if (nb_deleted) if_fail (insert_blank_patches(mdir, nb_deleted)) break;
 		// If it's a removal, check the header and the deleted version
 		if (action == MDIR_REM) {
 			mdir_version to_del = header_target(header);
