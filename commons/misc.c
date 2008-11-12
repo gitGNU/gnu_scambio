@@ -144,6 +144,19 @@ void Mkdir(char const *path_)
 	Mkdir_single(path);
 }
 
+void Mkdir_for_file(char *path)
+{
+	char *last_sep = NULL;
+	for (char *c = path; *c; c++) {
+		if (*c == '/') last_sep = c;
+	}
+	if (last_sep) {
+		*last_sep = '\0';
+		Mkdir(path);
+		*last_sep = '/';
+	}
+}
+
 void Make_path(char *buf, size_t buf_size, ...)
 {
 	va_list ap;

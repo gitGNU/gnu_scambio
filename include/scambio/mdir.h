@@ -118,9 +118,9 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir
 // (will also list unconfirmed patches)
-union mdir_list_param {
-	mdir_version version;	// if not new (ie. not on server yet)
-	char const *path;	// if new
+union mdir_list_param {	// FIXME: hide this complexity somehow
+	mdir_version version;	// if not new
+	char const *path;	// if new (ie. not on server yet)
 };
 void mdir_patch_list(struct mdir *, mdir_version from, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, union mdir_list_param, void *data), void *data);
 
@@ -141,5 +141,6 @@ char const *mdir_action2str(enum mdir_action action);
 enum mdir_action mdir_str2action(char const *str);
 bool mdir_is_transient(struct mdir *mdir);
 unsigned mdir_size(struct mdir *);
+struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h);
 
 #endif

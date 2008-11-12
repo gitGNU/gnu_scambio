@@ -29,8 +29,9 @@ void Write_strs(int fd, ...)
 void Read(void *buf, int fd, size_t len);
 void ReadFrom(void *buf, int fd, off_t offset, size_t len);
 void WriteTo(int fd, off_t offset, void *buf, size_t len);
-void Copy(int dest, int src);	// will add a trailing newline if src lacks one
+void Copy(int dest, int src);
 void Mkdir(char const *path);
+void Mkdir_for_file(char *path);
 void Make_path(char *buf, size_t bufsize, ...)
 #ifdef __GNUC__
 	__attribute__ ((sentinel))

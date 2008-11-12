@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools @GTK_SUBDIRS@
+SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools merefs @GTK_SUBDIRS@
 
 .PHONY: cscope loc
 

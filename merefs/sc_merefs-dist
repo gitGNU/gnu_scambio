@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:        sc_mdsyncc
+# Provides:        sc_merefs
 # Required-Start:  $network $remote_fs $syslog
 # Required-Stop:   $network $remote_fs $syslog
 # Default-Start:   2 3 4 5
@@ -13,15 +13,23 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 . /lib/lsb/init-functions
 
-NAME=sc_mdsyncc
-DAEMON=/usr/local/sbin/sc_mdsyncc
-export PIDFILE=/var/run/sc_mdsyncc.pid
+NAME=sc_merefs
+DAEMON=/usr/local/sbin/sc_merefs
+export PIDFILE=/var/run/sc_merefs.pid
 CONFFILE=/usr/local/etc/$NAME.conf
 
 test -x $DAEMON || exit 5
 
 if [ -r $CONFFILE ]; then
 	. $CONFFILE
+	if ! [ -n "$SC_MEREFS_PATH" ]; then
+		log_failure_msg "Local path not specified"
+		exit 5
+	fi
+	if ! [ -n "$SC_MEREFS_MDIR" ]; then
+		log_failure_msg "Mdir name not specified"
+		exit 5
+	fi
 else
 	log_failure_msg "Cannot find configuration file $CONFFILE"
 	exit 5
@@ -29,12 +37,12 @@ fi
 
 case $1 in
 	start)
-		log_daemon_msg "Starting SC_MDSYNCC server" "sc_mdsyncc"
-  		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON
+		log_daemon_msg "Starting SC_MEREFS server" "sc_merefs"
+  		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON -- -p "$SC_MEREFS_PATH" -m "$SC_MEREFS_MDIR"
 		log_end_msg $?
   		;;
 	stop)
-		log_daemon_msg "Stopping SC_MDSYNCC server" "sc_mdsyncc"
+		log_daemon_msg "Stopping SC_MEREFS server" "sc_merefs"
   		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
 		log_end_msg $?
 		rm -f $PIDFILE
@@ -46,9 +54,9 @@ case $1 in
 		pidofproc -p $PIDFILE $DAEMON >/dev/null
 		status=$?
 		if [ $status -eq 0 ]; then
-			log_success_msg "SC_MDSYNCC server is running."
+			log_success_msg "SC_MEREFS server is running."
 		else
-			log_failure_msg "SC_MDSYNCC server is not running."
+			log_failure_msg "SC_MEREFS server is not running."
 		fi
 		exit $status
 		;;

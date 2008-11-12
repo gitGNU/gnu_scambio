@@ -29,4 +29,8 @@
  */
 size_t digest(char *out, size_t len, char const *in);
 
+/* This one may report an error.
+ */
+size_t digest_file(char *out, char const *filename);
+
 #endif

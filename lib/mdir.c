@@ -256,6 +256,22 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
 	return header;
 }
 
+static struct header *get_header(struct mdir *mdir, mdir_version version, enum mdir_action *action)
+{
+	struct jnl *jnl;
+	struct header *header;
+	// Look for the jnl
+	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
+		if (jnl->version <= version && jnl->version + jnl->nb_patches > version) {
+			break;
+		}
+	}
+	if (! jnl) with_error(0, "No such version (%"PRIversion")", version) return NULL;
+	// Extract header and action
+	if_fail (header = jnl_read(jnl, version-jnl->version, action)) return NULL;
+	return header;
+}
+
 /*
  * (Un)Link
  */
@@ -557,6 +573,17 @@ void mdir_folder_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *
 	}
 	if (0 != closedir(d)) error_push(errno, "Cannot closedir %s", mdir->path);
 	return;
+}
+
+struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h)
+{
+	mdir_version version;
+	struct header *header;
+	enum mdir_action action;
+	if_fail (version = get_target(h)) return NULL;
+	if_fail (header = get_header(mdir, version, &action)) return NULL;
+	if (action != MDIR_ADD) with_error(0, "Target header was not an addition !") return NULL;
+	return header;
 }
 
 /*

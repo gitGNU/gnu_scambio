@@ -78,6 +78,7 @@ mdir_version header_target(struct header *h);
 
 #define SC_TYPE_FIELD     "sc-type"
 #define SC_TARGET_FIELD   "sc-target"
+#define SC_DIGEST_FIELD   "sc-digest"
 #define SC_DIRID_FIELD    "sc-dirId"
 #define SC_NAME_FIELD     "sc-name"
 #define SC_FROM_FIELD     "sc-from"
@@ -94,5 +95,6 @@ mdir_version header_target(struct header *h);
 #define SC_CAL_TYPE       "cal"
 #define SC_IM_TYPE        "im"
 #define SC_DIR_TYPE       "dir"
+#define SC_FILE_TYPE      "file"
 
 #endif
