@@ -8,5 +8,5 @@ merecal_SOURCES = \
 	cal_view.c \
 	edit_view.c
 
-merecal_LDADD = ../merelib/libgui.la ../lib/libmdir.la ../commons/libcommons.la $(GTKS_LIBS)
+merecal_LDADD = ../merelib/libgui.la ../lib/libscambio.la ../commons/libcommons.la $(GTKS_LIBS)
 

@@ -8,5 +8,5 @@ meremail_SOURCES = \
 	list_view.c \
 	folder_view.c
 
-meremail_LDADD = ../merelib/libgui.la ../lib/libmdir.la ../commons/libcommons.la $(GTKS_LIBS)
+meremail_LDADD = ../merelib/libgui.la ../lib/libscambio.la ../commons/libcommons.la $(GTKS_LIBS)
 

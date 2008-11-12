@@ -1,9 +1,9 @@
 AM_CFLAGS = -std=c99 -Wall -W
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 
-lib_LTLIBRARIES = libmdir.la
+lib_LTLIBRARIES = libscambio.la
 
-libmdir_la_SOURCES = \
+libscambio_la_SOURCES = \
 	mdir.c \
 	jnl.c \
 	header.c \
@@ -13,5 +13,5 @@ libmdir_la_SOURCES = \
 	channel.c \
 	stream.c
 
-libmdir_la_LIBADD = ../commons/libcommons.la
+libscambio_la_LIBADD = ../commons/libcommons.la
 

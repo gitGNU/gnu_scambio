@@ -11,5 +11,5 @@ sc_mdsyncd_SOURCES = \
 	queries.c \
 	sub.c
 
-sc_mdsyncd_LDADD = ../lib/libmdir.la ../commons/libcommons.la
+sc_mdsyncd_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 

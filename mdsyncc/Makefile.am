@@ -13,5 +13,5 @@ sc_mdsyncc_SOURCES = \
 	writer.c \
 	hide.c
 
-sc_mdsyncc_LDADD = ../lib/libmdir.la ../commons/libcommons.la
+sc_mdsyncc_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 

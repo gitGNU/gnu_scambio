@@ -10,4 +10,4 @@ sc_smtpd_SOURCES = \
 	queries.c \
 	parse.c
 
-sc_smtpd_LDADD = ../lib/libmdir.la ../commons/libcommons.la
+sc_smtpd_LDADD = ../lib/libscambio.la ../commons/libcommons.la

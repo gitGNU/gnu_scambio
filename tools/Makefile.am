@@ -7,5 +7,5 @@ bin_PROGRAMS = sc_filec
 sc_filec_SOURCES = \
 	sc_filec.c
 
-sc_filec_LDADD = ../lib/libmdir.la ../commons/libcommons.la
+sc_filec_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 
