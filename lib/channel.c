@@ -785,15 +785,21 @@ void serve_creat(struct mdir_cmd *cmd, void *user_data)
 	// Just create a unique file (if it's a file), or create the RT stream,
 	char path[PATH_MAX];
 	char *name;
-	static unsigned rtseq = 0;
 	if (rt) {
+		static unsigned rtseq = 0;
 		snprintf(path, sizeof(path), "%u_%u", (unsigned)time(NULL), rtseq++);
 		name = path;
 		(void)stream_new_rt(name);	// we drop the ref, the RT timeouter will unref if
 	} else {
-		// TODO a per day/week directory would be better
-		int len = snprintf(path, sizeof(path), "%s/XXXXXX", chn_files_root);
-		name = path + len - 6;
+		time_t now = time(NULL);
+		struct tm *tm = localtime(&now);
+		int len = snprintf(path, sizeof(path), "%s/%04d/%02d/%02d", chn_files_root, tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
+		if_fail (Mkdir(path)) {
+			error_clear();
+			mdir_cnx_answer(cnx, cmd, 501 /* INTERNAL ERROR */, "Cannot mkstemp");
+			return;
+		}
+		snprintf(path+len, sizeof(path)-len, "/XXXXXX");
 		int fd = mkstemp(path);
 		if (fd < 0) {
 			error("Cannot mkstemp(%s) : %s", path, strerror(errno));
@@ -801,6 +807,7 @@ void serve_creat(struct mdir_cmd *cmd, void *user_data)
 			return;
 		}
 		(void)close(fd);
+		name = path + chn_files_root_len;
 	}
 	// and answer at once.
 	mdir_cnx_answer(cnx, cmd, 200, name);
