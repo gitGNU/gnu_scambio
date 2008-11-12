@@ -7,6 +7,12 @@ AC_CONFIG_SRCDIR([mdsyncd])
 AC_CONFIG_HEADER([commons/config.h])
 AM_INIT_AUTOMAKE
 
+# Configuration alternatives : configure for no GTK, GTK or GTK+Maemo ?
+AC_ARG_WITH([desktop],
+	[AS_HELP_STRING([--with-desktop=ARG], [choose between gtk, maemo or no])],
+	[],
+	[with_desktop=check])
+
 # Checks for programs.
 AM_PROG_LEX
 AC_PROG_YACC
@@ -16,9 +22,24 @@ AM_PROG_LIBTOOL
 AC_CHECK_PTH(2.0.0)
 AC_CHECK_LIB(ssl, SHA1)
 AC_CHECK_LIB(gnutls, gnutls_fingerprint)
-PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2)
-AC_SUBST(GTKS_CFLAGS)
-AC_SUBST(GTKS_LIBS)
+DO_GTKAPPS="yes"
+AS_IF(
+	[test "x$with_desktop" = xmaemo],
+		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 hildon-1 >= 0.18 libosso >= 1.3, [], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
+	[test "x$with_desktop" = xgtk],
+		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2, [], [AC_MSG_ERROR("cannot found GTK libs")])],
+	[test "x$with_desktop" = xno],
+		[DO_GTKAPPS="no"],
+	[test "x$with_desktop" = xcheck],
+		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2, [], [DO_GTKAPPS="no"])])
+
+AS_IF(
+	[test "x$DO_GTKAPPS" = xyes], [AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")],
+	[test "x$DO_GTKAPPS" = xno],
+		[
+			AC_MSG_WARN([will skip GTK applications])
+			AC_SUBST(GTK_SUBDIRS, [])
+		])
 
 # Checks for header files.
 AC_HEADER_STDC

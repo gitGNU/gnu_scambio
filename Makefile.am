@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd merelib meremail merecal tools doc
+SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools @GTK_SUBDIRS@
 
 .PHONY: cscope loc
 
