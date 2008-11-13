@@ -1,0 +1,59 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:        sc_filed
+# Required-Start:  $network $remote_fs $syslog
+# Required-Stop:   $network $remote_fs $syslog
+# Default-Start:   2 3 4 5
+# Default-Stop:    0 1 6
+# Short-Description: Start sc_file daemon (scambio message synch)
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+. /lib/lsb/init-functions
+
+NAME=sc_filed
+DAEMON=/usr/local/sbin/sc_filed
+export PIDFILE=/var/run/sc_filed.pid
+CONFFILE=/usr/local/etc/$NAME.conf
+
+test -x $DAEMON || exit 5
+
+if [ -r $CONFFILE ]; then
+	. $CONFFILE
+else
+	log_failure_msg "Cannot find configuration file $CONFFILE"
+	exit 5
+fi
+
+case $1 in
+	start)
+		log_daemon_msg "Starting SC_FILED server" "sc_filed"
+  		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON
+		log_end_msg $?
+  		;;
+	stop)
+		log_daemon_msg "Stopping SC_FILED server" "sc_filed"
+  		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
+		log_end_msg $?
+		rm -f $PIDFILE
+  		;;
+	restart|force-reload)
+		$0 stop && sleep 2 && $0 start
+  		;;
+	status)
+		pidofproc -p $PIDFILE $DAEMON >/dev/null
+		status=$?
+		if [ $status -eq 0 ]; then
+			log_success_msg "SC_FILED server is running."
+		else
+			log_failure_msg "SC_FILED server is not running."
+		fi
+		exit $status
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|force-reload|status}"
+		exit 2
+		;;
+esac

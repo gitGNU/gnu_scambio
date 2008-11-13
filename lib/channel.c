@@ -62,7 +62,7 @@ void chn_begin(bool server_)
 {
 	server = server_;
 	if_fail (stream_begin()) return;
-	if_fail(conf_set_default_str("SC_FILES_DIR", "/tmp/mdir/files")) return;
+	if_fail(conf_set_default_str("SC_FILES_DIR", "/var/lib/scambio/files")) return;
 	mdir_files = conf_get_str("SC_FILES_DIR");
 	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	static struct mdir_cmd_def def_server[] = {

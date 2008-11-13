@@ -86,6 +86,10 @@ sc-start: 2008 10 25 12 00
 sc-stop:  2008 10 26 12 00
 sc-descr: PACS Ramine et Sandron
 
+11 put /
+sc-type: dir
+sc-name: files
+
 999 quit
 EOF
 }
