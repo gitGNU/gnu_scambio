@@ -1,13 +1,23 @@
+#include <string.h>
+#include <limits.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <limits.h>
-#include <stdio.h>
 #include <dirent.h>
 #include "scambio/channel.h"
+#include "scambio/header.h"
 #include "misc.h"
 #include "merefs.h"
+
+static void make_file_patch(struct header *header, struct file *file)
+{
+	if_fail (header_add_field(header, SC_TYPE_FIELD, SC_FILE_TYPE)) return;
+	if_fail (header_add_field(header, SC_NAME_FIELD, file->name)) return;
+	if_fail (header_add_field(header, SC_DIGEST_FIELD, file->digest)) return;
+	if_fail (header_add_field(header, SC_RESOURCE_FIELD, file->resource)) return;
+}
 
 static void upload_file(struct file *file, char const *filename)
 {
@@ -18,9 +28,19 @@ static void upload_file(struct file *file, char const *filename)
 	// Send file contents for this resource
 	if_fail (chn_send_file(&ccnx, file->resource, fd)) return;
 	// Now patch the mdir : send a patch to advertize the new file
-	if_fail (mdir_patch_request(mdir, MDIR_ADD, new_file)) return;
+	struct header *header;
+	if_fail (header = header_new()) return;
+	make_file_patch(header, file);
+	unless_error mdir_patch_request(mdir, MDIR_ADD, header);
+	header_del(header);
 }
 
+static void remove_remote(struct file *file)
+{
+	if_fail (mdir_del_request(mdir, file->version)) return;
+}
+
+static void traverse_dir_rec(char *dirpath, int dirlen);
 static void scan_opened_dir(DIR *dir, char *dirpath, int dirlen)
 {
 	struct dirent *dirent;
@@ -54,7 +74,7 @@ quit:
 				debug("file already there");
 				if (file->mtime != statbuf.st_mtime) {	// yes
 					debug("...but was changed");
-					file_del(file);	// will be updated to reflect reality
+					file_del(file, local_hash+h);	// will be updated to reflect reality
 					file = NULL;
 				}
 			}
@@ -62,20 +82,22 @@ quit:
 				debug("Compute its digest and insert it into the cache for the future");
 				char digest[MAX_DIGEST_STRLEN+1];
 				if_fail (digest_file(digest, dirpath)) goto quit;
-				if_fail (file = file_new(local_hash+h, name, digest, "", statbuf.st_mtime)) goto quit;
+				if_fail (file = file_new(local_hash+h, name, digest, "", statbuf.st_mtime, 0)) goto quit;
 			}
 			// Now that we have the digest, look for a match for this file in the unmatched_files
 			struct file *remote = file_search(&unmatched_files, name);
 			if (remote) {	// found
 				debug("Found a remote file");
+				STAILQ_REMOVE(&unmatched_files, remote, file, entry);
+				STAILQ_INSERT_HEAD(&matched_files, remote, entry);
 				if (0 == strcmp(file->digest, remote->digest)) {
 					debug("Same files !");
-					LIST_REMOVE(remote, entry);
-					LIST_INSERT_HEAD(&matched_files, remote, entry);
 				} else {
 					debug("Digest mismatch : local file was changed");
-					// TODO: add the new local file and then remove the former one
+					// Add the new local file and then remove the former one
 					// FIXME: in between, there are two files with the same name. Easy to deal with when reading the mdir
+					if_fail (upload_file(file, dirpath)) goto quit;
+					if_fail (remove_remote(remote)) goto quit;
 				}
 			} else {
 				debug("No remote counterpart");

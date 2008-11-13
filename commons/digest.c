@@ -74,3 +74,29 @@ size_t digest(char *out, size_t len, char const *in)
 #	error no digest function available. Use gnutls or openssl.
 
 #endif
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include "misc.h"
+
+size_t digest_file(char *out, char const *filename)
+{
+	size_t ret;
+	// Stupid method : read the whole file in RAM, then compute its digest
+	int fd = open(filename, O_RDONLY);
+	if (fd < 0) with_error(errno, "open(%s)", filename) return 0;
+	do {
+		off_t size = filesize(fd);
+		on_error break;
+		char *in = malloc(size);
+		if (! in) with_error(ENOMEM, "malloc file %s", filename) break;
+		Read(in, fd, size);
+		unless_error ret = digest(out, size, in);
+		free(in);
+	} while (0);
+	(void)close(fd);
+	return ret;
+}
+

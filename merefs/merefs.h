@@ -10,6 +10,7 @@
 
 extern char *mdir_name;
 extern char *local_path;
+extern unsigned local_path_len;
 extern struct mdir *mdir;
 extern bool quit;
 extern struct chn_cnx ccnx;
@@ -17,6 +18,7 @@ extern struct chn_cnx ccnx;
 time_t last_run_start(void);
 void start_read_mdir(void);
 void reread_mdir(void);
+void unmatch_all(void);
 void traverse_local_path(void);
 void create_unmatched_files(void);
 void create_local_file(struct file *file);

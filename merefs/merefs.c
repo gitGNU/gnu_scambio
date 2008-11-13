@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 #include <time.h>
 #include <pth.h>
 #include "daemon.h"
@@ -34,6 +35,7 @@
 
 char *mdir_name;
 char *local_path;
+unsigned local_path_len;
 struct mdir *mdir;
 static struct persist last_time_stamp;
 bool quit = false;
@@ -129,6 +131,7 @@ int main(int nb_args, char const **args)
 	if (! mdir_name) option_missing("mdir");
 	if (! local_path) option_missing("path");
 	debug("Keeping mdir '%s' in synch with path '%s'", mdir_name, local_path);
+	local_path_len = strlen(local_path);
 	if_fail (mdir = mdir_lookup(mdir_name)) return EXIT_FAILURE;
 	// Init time_stamp file
 	char persistant_ts_file[PATH_MAX];

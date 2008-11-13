@@ -445,6 +445,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 
 void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 {
+	assert(to_del != 0);
 	struct header *h = header_new();
 	on_error return;
 	header_add_field(h, SC_TARGET_FIELD, mdir_version2str(to_del));

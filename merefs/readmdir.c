@@ -1,3 +1,4 @@
+#include <string.h>
 #include "scambio/header.h"
 #include "merefs.h"
 
@@ -18,15 +19,13 @@ static void extract_file_info(struct header *h, char const **name, char const **
 	}
 }
 
-static void remove_remote_file(struct header *h)
+static void remove_remote_file(mdir_version to_del)
 {
-	struct header *target;
-	if_fail (target = mdir_get_targeted_header(mdir, h)) return;
-	char const *name, *digest, *resource;
-	if_fail (extract_file_info(h, &name, &digest, &resource)) return;
-	struct file *file = file_search(&unmatched_files, name, resource);
+	struct file *file = file_search_by_version(&unmatched_files, to_del);
 	on_error return;
-	if (file) file_del(file);
+	if (file) {
+		file_del(file, &unmatched_files);
+	};
 }
 
 static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
@@ -35,14 +34,14 @@ static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_
 	(void)data;
 	if (action == MDIR_REM) {
 		// Event if this is a full reread, we may have pending transiant removals.
-		remove_remote_file(header);
+		remove_remote_file(header_target(header));
 		return;
 	}
 	if (! header_has_type(header, SC_FILE_TYPE)) return;
 	char const *name, *digest, *resource;
 	if_fail (extract_file_info(header, &name, &digest, &resource)) return;
 	debug("Adding file '%s' to unmatched list", name);
-	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0)) return;
+	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0, new ? 0:param.version)) return;	// new files do not need a version : we use version only for deletion and transient patch cant be deleted (since they have no version to target)
 	if (! new && param.version > last_read) last_read = param.version;
 }
 
@@ -70,10 +69,16 @@ void reread_mdir(void)
 void create_unmatched_files(void)
 {
 	struct file *file, *tmp;
-	LIST_FOREACH_SAFE(file, &unmatched_files, entry, tmp) {
+	STAILQ_FOREACH_SAFE(file, &unmatched_files, entry, tmp) {
 		if_fail (create_local_file(file)) return;
 		debug("Promote file '%s' to matched list", file->name);
-		LIST_REMOVE(file, entry);
-		LIST_INSERT_HEAD(&matched_files, file, entry);
+		STAILQ_REMOVE(&unmatched_files, file, file, entry);
+		STAILQ_INSERT_HEAD(&matched_files, file, entry);
 	}
 }
+
+void unmatch_all(void)
+{
+	STAILQ_CONCAT(&unmatched_files, &matched_files);
+}
+
