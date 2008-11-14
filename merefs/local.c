@@ -54,8 +54,10 @@ static void scan_opened_dir(DIR *dir, char *dirpath, int dirlen)
 	struct dirent *dirent;
 	while (NULL != (dirent = readdir(dir))) {
 		debug("Dir entry '%s' of type %d", dirent->d_name, dirent->d_type);
-		if (dirent->d_name[0] == '.') {
-			debug("...skip");	// skip ".", ".." and any hidden file (like our persistent TS)
+		if (dirent->d_name[0] == '.' || dirent->d_type == DT_LNK) {
+			// Skip ".", ".." and any hidden file (like our persistent TS).
+			// Skip also synlinks to avoid loops.
+			debug("...skip");
 			continue;
 		}
 		if (dirent->d_type == DT_DIR) {	// recurse
