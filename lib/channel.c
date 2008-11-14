@@ -526,7 +526,6 @@ static void *reader_thread(void *arg)
 		if_fail (mdir_cnx_read(&cnx->cnx)) break;
 	} while (! cnx->quit);	// FIXME: or if the reader quits for some reason
 	error_clear();
-	chn_cnx_del(cnx);
 	return NULL;
 }
 
@@ -904,6 +903,7 @@ void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return;
 	// So lets fetch it
 	if (! cnx) with_error(0, "Cannot fetch and not local") return;
+	if_fail (Mkdir_for_file(localfile)) return;
 	fd = creat(localfile, 0640);
 	if (fd < 0) with_error(errno, "Cannot creat(%s)", localfile) return;
 	(void)close(fd);

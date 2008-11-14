@@ -206,7 +206,7 @@ void mdir_cnx_ctor_inbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, int
 
 void mdir_cnx_dtor(struct mdir_cnx *cnx)
 {
-	debug("destruct cnx");
+	debug("destruct cnx @%p", cnx);
 	if (cnx->fd != -1) {
 		(void)close(cnx->fd);
 		cnx->fd = -1;

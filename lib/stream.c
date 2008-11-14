@@ -97,6 +97,10 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd
 		} else {	// the file must not exist, we have a backstore fd for its content
 			stream->backstore = dup(fd);
 			if (stream->backstore < 0) with_error(errno, "dup(%d)", fd) return;
+			if_fail (Mkdir_for_file(path)) {
+				(void)close(stream->backstore);
+				return;
+			}
 			stream->fd = creat(path, 0640);
 			if (stream->fd < 0) {
 				(void)close(stream->backstore);
