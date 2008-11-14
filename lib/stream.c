@@ -49,6 +49,7 @@ static void *stream_push(void *arg)
 		while (LIST_EMPTY(&stream->readers)) pth_usleep(10000);	// FIXME
 		debug("for each reader...");
 		LIST_FOREACH(tx, &stream->readers, reader_entry) {
+			pth_cancel_point();
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
 			int content_fd = stream->backstore == -1 ? stream->fd : stream->backstore;
@@ -78,7 +79,7 @@ static void *stream_push(void *arg)
 
 static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd)
 {
-	debug("name=%s, rt=%c, fd=%d", name, rt ? 'y':'n', fd);
+	debug("stream @%p with name=%s, rt=%c, fd=%d", stream, name, rt ? 'y':'n', fd);
 	LIST_INIT(&stream->readers);
 	stream->writer = NULL;
 	stream->count = 1;	// the one who asks
@@ -130,11 +131,13 @@ static struct stream *stream_new(char const *name, bool rt, int fd)
 
 static void stream_dtor(struct stream *stream)
 {
+	debug("stream @%p", stream);
 	LIST_REMOVE(stream, entry);
 	assert(LIST_EMPTY(&stream->readers));
 	assert(! stream->writer);
 	assert(stream->count <= 0);
 	if (stream->pth) {
+		debug("cancelling stream thread");
 		pth_cancel(stream->pth);
 		stream->pth = NULL;
 	}

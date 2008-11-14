@@ -61,7 +61,7 @@ static void wait_complete(void)
 {
 	debug("waiting...");
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000 };
-	while (! chn_cnx_all_tx_done(cnx)) nanosleep(&ts, NULL);
+	while (! chn_cnx_all_tx_done(cnx)) pth_nanosleep(&ts, NULL);
 }
 
 int main(int nb_args, char const**args)

@@ -91,7 +91,7 @@ static void files_end(void)
 {
 	free_file_list(&unmatched_files);
 	free_file_list(&matched_files);
-	for (unsigned h=0; h<sizeof(local_hash); h++) {
+	for (unsigned h=0; h<sizeof_array(local_hash); h++) {
 		free_file_list(local_hash+h);
 	}
 }
@@ -100,7 +100,7 @@ void files_begin(void)
 {
 	STAILQ_INIT(&unmatched_files);
 	STAILQ_INIT(&matched_files);
-	for (unsigned h=0; h<sizeof(local_hash); h++) {
+	for (unsigned h=0; h<sizeof_array(local_hash); h++) {
 		STAILQ_INIT(local_hash+h);
 	}
 	atexit(files_end);

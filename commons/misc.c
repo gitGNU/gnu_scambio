@@ -216,7 +216,8 @@ void path_pop(char path[])
 off_t filesize(int fd)
 {
 	off_t size = lseek(fd, 0, SEEK_END);
-	if ((off_t)-1 == size) error_push(errno, "lseek");
+	if ((off_t)-1 == size) error_push(errno, "lseek(end)");
+	if ((off_t)-1 == lseek(fd, 0, SEEK_SET)) error_push(errno, "lseek(start)");
 	return size;
 }
 

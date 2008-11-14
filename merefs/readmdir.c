@@ -41,6 +41,21 @@ static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_
 	char const *name, *digest, *resource;
 	if_fail (extract_file_info(header, &name, &digest, &resource)) return;
 	debug("Adding file '%s' to unmatched list", name);
+	/* We allow only one file per name.
+	 * We may have severall patch for the same name if :
+	 * - the patch is not synched yet (thus has no version)
+	 * - someone f*cked up
+	 * To deal with this, we look for former unmatched_files with same name,
+	 * and delete them (thus keeping the last one (ie bigger version, or a new one)
+	 */
+	struct file *file = file_search(&unmatched_files, name);  
+	if (file) {
+		debug("...we already had a file for that name (resource was '%s') : delete it", file->resource);
+		file_del(file, &unmatched_files);
+		file = NULL;
+	} else {
+		debug("...this name is new");
+	}
 	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0, new ? 0:param.version)) return;	// new files do not need a version : we use version only for deletion and transient patch cant be deleted (since they have no version to target)
 	if (! new && param.version > last_read) last_read = param.version;
 }
@@ -60,14 +75,15 @@ void start_read_mdir(void)
 // Will append to unmatched list the new entry
 void reread_mdir(void)
 {
-	debug("Reread from version %"PRIversion, last_read);
-	if_fail (mdir_patch_list(mdir, last_read, false, add_remote_file, NULL)) return;
+	debug("Reread patches, last one was version %"PRIversion, last_read);
+	if_fail (mdir_patch_list(mdir, last_read+1, false, add_remote_file, NULL)) return;
 	debug("We've now read up to version %"PRIversion, last_read);
 }
 
 // If some remote files are still unmatched, create them
 void create_unmatched_files(void)
 {
+	debug("Create all files still not matched");
 	struct file *file, *tmp;
 	STAILQ_FOREACH_SAFE(file, &unmatched_files, entry, tmp) {
 		if_fail (create_local_file(file)) return;
@@ -79,6 +95,7 @@ void create_unmatched_files(void)
 
 void unmatch_all(void)
 {
+	debug("Unmatching all matched files");
 	STAILQ_CONCAT(&unmatched_files, &matched_files);
 }
 

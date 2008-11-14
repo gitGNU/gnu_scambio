@@ -116,7 +116,7 @@ void mdir_patch_request_abort(struct mdir *, enum mdir_action, mdir_version vers
 struct mdir *mdir_lookup(char const *name);
 struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
-// list all patches of a mdir
+// list all patches of a mdir from given version (or next valid one)
 // (will also list unconfirmed patches)
 union mdir_list_param {	// FIXME: hide this complexity somehow
 	mdir_version version;	// if not new

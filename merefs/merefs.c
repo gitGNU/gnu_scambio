@@ -51,7 +51,6 @@ static void init_conf(void)
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_str("SC_FILED_HOST", "localhost");
 	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
-	conf_set_default_str("SC_USERNAME", "Alice");
 }
 
 static void init_log(void)
@@ -105,10 +104,11 @@ static void loop(void)
 	while (! quit) {
 		time_t current_run_start = time(NULL);
 		unmatch_all();
-		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
 		if_fail (reread_mdir()) break;	// Will append to unmatched list the new entry
+		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
 		if_fail (create_unmatched_files()) break;	// Will add to local tree the new entries
 		*(time_t *)last_time_stamp.data = current_run_start;
+		pth_sleep(1);	// will schedule other threads and prevent us from eating the CPU
 	}
 }
 

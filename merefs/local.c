@@ -19,6 +19,13 @@ static void make_file_patch(struct header *header, struct file *file)
 	if_fail (header_add_field(header, SC_RESOURCE_FIELD, file->resource)) return;
 }
 
+static void wait_complete(void)
+{
+	debug("waiting...");
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000 };
+	while (! chn_cnx_all_tx_done(&ccnx)) pth_nanosleep(&ts, NULL);
+}
+
 static void upload_file(struct file *file, char const *filename)
 {
 	int fd = open(filename, O_RDONLY);
@@ -27,6 +34,7 @@ static void upload_file(struct file *file, char const *filename)
 	if_fail (chn_create(&ccnx, file->resource, false)) return;
 	// Send file contents for this resource
 	if_fail (chn_send_file(&ccnx, file->resource, fd)) return;
+	wait_complete();
 	// Now patch the mdir : send a patch to advertize the new file
 	struct header *header;
 	if_fail (header = header_new()) return;
@@ -46,6 +54,10 @@ static void scan_opened_dir(DIR *dir, char *dirpath, int dirlen)
 	struct dirent *dirent;
 	while (NULL != (dirent = readdir(dir))) {
 		debug("Dir entry '%s' of type %d", dirent->d_name, dirent->d_type);
+		if (dirent->d_name[0] == '.') {
+			debug("...skip");	// skip ".", ".." and any hidden file (like our persistent TS)
+			continue;
+		}
 		if (dirent->d_type == DT_DIR) {	// recurse
 			debug("...recurse");
 			int new_dirlen = dirlen + snprintf(dirpath+dirlen, sizeof(dirpath)-dirlen, "/%s", dirent->d_name);
@@ -104,10 +116,10 @@ quit:
 				// So its not on the remote server. Maybe because it's a new file, maybe because it's deleted
 				// To find out, compare file's mtime to our last saved mtime.
 				if (statbuf.st_mtime < last_run_start()) {
-					debug("...because it was deleted (age = %us)", (unsigned)last_run_start()-statbuf.st_mtime);
+					debug("...because it was deleted (age = %ds)", (int)(last_run_start()-statbuf.st_mtime));
 					if (0 != unlink(dirpath)) with_error(errno, "unlink(%s)", dirpath) goto quit;
 				} else {
-					debug("...because we just added it (age = %us)", (unsigned)last_run_start()-statbuf.st_mtime);
+					debug("...because we just added it (age = %ds)", (int)(last_run_start()-statbuf.st_mtime));
 					if_fail (upload_file(file, dirpath)) goto quit;
 				}
 			}
@@ -146,7 +158,10 @@ void create_local_file(struct file *file)
 	if (0 != unlink(path)) {
 		if (errno != ENOENT) with_error(errno, "unlink(%s)", path) return;
 	}
-	if (0 == link(cache_file, path)) return;	// done !
+	if (0 == link(cache_file, path)) {
+		debug("hardlinked from the cache");
+		return;	// done !
+	}
 	if (errno != EMLINK && errno != EPERM && errno != EXDEV) {	// these errors are permited
 		with_error(errno, "link(%s <- %s)", cache_file, path) return;
 	}

@@ -79,6 +79,7 @@ void chn_begin(bool server_)
 			.keyword = kw_quit,  .cb = serve_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
 			.nb_types = 0, .types = {}, .negseq = false,
 		},
+		// FIXME: add kw_auth
 	};
 	static struct mdir_cmd_def def_client[] = {
 		MDIR_CNX_ANSW_REGISTER(kw_creat, finalize_creat),
@@ -939,6 +940,9 @@ void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 
 void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 {
+	// FIXME: instead of copying it into the cache, hardlink it to the chache and
+	// then close the file, and use the cache as the stream source.
+	// More efficient and should also be simplier.
 	assert(cnx && name && fd >= 0);
 	assert(! server);
 	struct stream *stream = stream_lookup(name);

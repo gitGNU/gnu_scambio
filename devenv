@@ -4,6 +4,7 @@ export SC_LOG_LEVEL=5
 export MDIRD_PORT=21654
 export SC_FILED_PORT=21436
 export MDIRD_HOST=scambio.happyleptic.org
+export SC_FILED_HOST=scambio.happyleptic.org
 export SMTPD_PORT=1025
 #export SC_RUNASUSER=scambio
 #export SC_RUNASGROUP=scambio
@@ -113,6 +114,16 @@ function run_smtpd {
 	mkdir -p $MDIR_FILES_DIR
 	rm -f /tmp/smtpd.log
 	build/smtpd/sc_smtpd
+}
+
+function run_merefs {
+	export MDIR_ROOT_DIR=/tmp/mdsyncc
+	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/client/files
+	SHARED_DIR=/tmp/shared
+	mkdir -p $SHARED_DIR
+	rm -f /tmp/merefs.log
+	build/merefs/sc_merefs -p $SHARED_DIR -m files
 }
 
 function run_meremail {
