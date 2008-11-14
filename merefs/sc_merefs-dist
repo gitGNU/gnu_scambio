@@ -14,6 +14,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 . /lib/lsb/init-functions
 
 NAME=sc_merefs
+SERVNAME="Scambio shared folders client"
 DAEMON=/usr/local/sbin/sc_merefs
 export PIDFILE=/var/run/sc_merefs.pid
 CONFFILE=/usr/local/etc/$NAME.conf
@@ -37,12 +38,12 @@ fi
 
 case $1 in
 	start)
-		log_daemon_msg "Starting SC_MEREFS server" "sc_merefs"
+		log_daemon_msg "Starting $SERVNAME" "sc_merefs"
   		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON -- -p "$SC_MEREFS_PATH" -m "$SC_MEREFS_MDIR"
 		log_end_msg $?
   		;;
 	stop)
-		log_daemon_msg "Stopping SC_MEREFS server" "sc_merefs"
+		log_daemon_msg "Stopping $SERVNAME" "sc_merefs"
   		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
 		log_end_msg $?
 		rm -f $PIDFILE
@@ -54,9 +55,9 @@ case $1 in
 		pidofproc -p $PIDFILE $DAEMON >/dev/null
 		status=$?
 		if [ $status -eq 0 ]; then
-			log_success_msg "SC_MEREFS server is running."
+			log_success_msg "$SERVNAME is running."
 		else
-			log_failure_msg "SC_MEREFS server is not running."
+			log_failure_msg "$SERVNAME server is not running."
 		fi
 		exit $status
 		;;
