@@ -28,6 +28,11 @@
 #include "scambio.h"
 #include "misc.h"
 
+static bool retryable(int err)
+{
+	return err == EINTR || err == EAGAIN;
+}
+
 void Write(int fd, void const *buf, size_t len)
 {
 	debug("Write(%d, %p, %zu)", fd, buf, len);
@@ -36,7 +41,7 @@ void Write(int fd, void const *buf, size_t len)
 		ssize_t ret = pth_write(fd, buf + done, len - done);
 		if (ret < 0) {
 			// FIXME: truncate on short writes
-			if (errno != EINTR) with_error(errno, "Cannot write %zu bytes", len-done) return;
+			if (! retryable(errno)) with_error(errno, "Cannot write %zu bytes", len-done) return;
 			continue;
 		}
 		done += ret;
@@ -64,7 +69,7 @@ void ReadFrom(void *buf, int fd, off_t offset, size_t len)
 	while (done < len) {
 		ssize_t ret = pth_pread(fd, buf + done, len - done, offset + done);
 		if (ret < 0) {
-			if (errno != EINTR) with_error(errno, "Cannot pth_pread") return;
+			if (! retryable(errno)) with_error(errno, "Cannot pth_pread") return;
 			continue;
 		} else if (ret == 0) with_error(0, "EOF") return;
 		done += ret;
@@ -79,7 +84,7 @@ void Read(void *buf, int fd, size_t len)
 	while (done < len) {
 		ssize_t ret = pth_read(fd, buf + done, len - done);
 		if (ret < 0) {
-			if (errno != EINTR) with_error(errno, "Cannot pth_read") return;
+			if (! retryable(errno)) with_error(errno, "Cannot pth_read") return;
 			continue;
 		}
 		done += ret;
@@ -95,7 +100,7 @@ void WriteTo(int fd, off_t offset, void *buf, size_t len)
 		ssize_t ret = pth_pwrite(fd, buf + done, len - done, offset);
 		if (ret < 0) {
 			// FIXME: truncate on short writes
-			if (errno != EINTR) with_error(errno, "Cannot write %zu bytes", len-done) return;
+			if (! retryable(errno)) with_error(errno, "Cannot write %zu bytes", len-done) return;
 			continue;
 		}
 		done += ret;
@@ -110,7 +115,7 @@ void Copy(int dst, int src)
 	do {
 		ssize_t ret = pth_read(src, &byte, 1);
 		if (ret < 0) {
-			if (errno != EINTR) with_error(errno, "Cannot pth_read") return;
+			if (! retryable(errno)) with_error(errno, "Cannot pth_read") return;
 			continue;
 		}
 		if (ret == 0) return;

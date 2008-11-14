@@ -122,7 +122,7 @@ void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 		int8_t byte;
 		ssize_t ret = pth_read(fd, &byte, 1);	// "If in doubt, use brute force"
 		if (ret < 0) {
-			if (errno != EINTR) error_push(errno, "Cannot pth_read");
+			if (errno != EINTR && errno != EAGAIN) error_push(errno, "Cannot pth_read");
 		} else if (ret == 0) {
 			error_push(ENOENT, "End of file");
 		} else {
