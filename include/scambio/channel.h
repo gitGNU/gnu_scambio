@@ -55,7 +55,7 @@ struct chn_cnx {
 	struct mdir_cnx cnx;
 	pth_t reader;
 	LIST_HEAD(chn_txs, chn_tx) txs;
-	bool quit;
+	int status;
 };
 
 void chn_cnx_ctor_outbound(struct chn_cnx *cnx, char const *host, char const *service, char const *username);

@@ -99,7 +99,7 @@ void chn_begin(bool server_)
 			.keyword = kw_thx,  .cb = serve_thx,  .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_INTEGER }, .negseq = false,	/* seqnum of the read/write */
 		},
-		MDIR_CNX_ANSW_REGISTER(kw_thx, finalize_thx),	// FIXME: faut le distinguer de la requete! Faire un truc pour distinguer requetes de reponses, qui soit toujours utilisable par smtp
+		MDIR_CNX_ANSW_REGISTER(kw_thx, finalize_thx),
 	};
 	for (unsigned d=0; d<sizeof_array(def_common); d++) {
 		if_fail (mdir_syntax_register(&syntax, def_common+d)) goto q1;
@@ -157,6 +157,15 @@ static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, lon
 	LIST_INSERT_HEAD(&cnx->txs, tx, cnx_entry);
 }
 
+static void chn_tx_release_stream(struct chn_tx *tx)
+{
+	if (tx->stream) {
+		if (tx->sender) stream_remove_reader(tx->stream, tx);
+		stream_unref(tx->stream);
+		tx->stream = NULL;
+	}
+}
+
 static void fragment_del(struct fragment *f, struct fragments_queue *q);
 void chn_tx_dtor(struct chn_tx *tx)
 {
@@ -169,17 +178,21 @@ void chn_tx_dtor(struct chn_tx *tx)
 		pth_cancel(tx->pth);
 		tx->pth = NULL;
 	}
-	if (tx->stream) {
-		if (tx->sender) stream_remove_reader(tx->stream, tx);
-		stream_unref(tx->stream);
-		tx->stream = NULL;
-	}
+	chn_tx_release_stream(tx);
 }
 
 void chn_tx_del(struct chn_tx *tx)
 {
 	chn_tx_dtor(tx);
 	free(tx);
+}
+
+static void chn_tx_set_status(struct chn_tx *tx, int status)
+{
+	assert(tx->status == 0);
+	assert(status != 0);
+	tx->status = status;
+	chn_tx_release_stream(tx);
 }
 
 // Fragments (and misses)
@@ -428,7 +441,7 @@ void chn_tx_write(struct chn_tx *tx, size_t length, struct chn_box *box, bool eo
 		if_fail (retransmit_missed(tx)) return;
 		if_fail (now = get_ts()) return;
 		if_fail (timeout_fragments(&tx->out_frags, now, OUT_FRAGS_TIMEOUT)) return;
-	} while (0 == chn_tx_status(tx));
+	} while (tx->cnx->status == 0 && chn_tx_status(tx) == 0);
 }
 
 // Receiver
@@ -523,15 +536,15 @@ static void *reader_thread(void *arg)
 		 * respect (different QoS, different locations on the file, etc...). And
 		 * it's simplier.
 		 */
-		if_fail (mdir_cnx_read(&cnx->cnx)) break;
-	} while (! cnx->quit);	// FIXME: or if the reader quits for some reason
+		if_fail (mdir_cnx_read(&cnx->cnx)) cnx->status = 500 + error_code();
+	} while (cnx->status == 0);
 	error_clear();
 	return NULL;
 }
 
 static void chn_cnx_ctor(struct chn_cnx *cnx)
 {
-	cnx->quit = false;
+	cnx->status = 0;
 	LIST_INIT(&cnx->txs);
 	cnx->reader = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, cnx);
 	if (! cnx->reader) with_error(0, "pth_spawn(chn_cnx reader)") return;
@@ -675,7 +688,7 @@ static void finalize_thx(struct mdir_cmd *cmd, void *user_data)
 	struct chn_tx *tx = DOWNCAST(sq, sent_thx, chn_tx);
 	int status = cmd->args[0].integer;
 	debug("status = %d", status);
-	tx->status = status;
+	chn_tx_set_status(tx, status);
 }
 
 static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
@@ -707,7 +720,7 @@ static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
 	if_fail (stream_write(tx->stream, offset, size, box, eof)) {
 		mdir_cnx_answer(&cnx->cnx, cmd, 501, error_str());
 		error_clear();
-		tx->status = 501;
+		chn_tx_set_status(tx, 501);
 		chn_box_unref(box);
 		return;
 	}
@@ -768,7 +781,7 @@ static void serve_thx(struct mdir_cmd *cmd, void *cnx_)
 		mdir_cnx_answer(&cnx->cnx, cmd, 500, "No such sending tx id");
 		return;
 	}
-	tx->status = 200;
+	chn_tx_set_status(tx, 200);
 	mdir_cnx_answer(&cnx->cnx, cmd, 200, "Ok");
 }
 
@@ -857,7 +870,7 @@ static void serve_quit(struct mdir_cmd *cmd, void *user_data)
 {
 	struct mdir_cnx *cnx = user_data;
 	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
-	ccnx->quit = true;
+	ccnx->status = 200;
 	mdir_cnx_answer(cnx, cmd, 200, "Ok");
 }
 
@@ -865,7 +878,7 @@ static void *tx_checker(void *arg)
 {
 	struct chn_tx *tx = arg;
 	uint_least64_t now;
-	while (1) {
+	while (tx->cnx->status == 0) {
 		if_fail (now = get_ts()) return NULL;
 		if_fail (check_in_frags(tx, now)) return NULL;
 		pth_usleep(RETRANSM_TIMEOUT);
@@ -892,16 +905,19 @@ static void fetch_file_with_cnx(struct chn_cnx *cnx, char *name, struct stream *
 void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 {
 	assert(localfile && name);
+	debug("Try to get resource '%s'", name);
 	// Look into the file cache
 	snprintf(localfile, PATH_MAX, "%s/%s", mdir_files, name);
 	int fd = open(localfile, O_RDONLY);
 	if (fd >= 0) {
+		debug("found in cache file '%s'", localfile);
 		// TODO: Touch it
 		(void)close(fd);
 		return;
 	}
 	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return;
 	// So lets fetch it
+	debug("not in cache, need to fetch it");
 	if (! cnx) with_error(0, "Cannot fetch and not local") return;
 	if_fail (Mkdir_for_file(localfile)) return;
 	fd = creat(localfile, 0640);
@@ -971,6 +987,7 @@ void chn_create(struct chn_cnx *cnx, char *name, bool rt)
 bool chn_cnx_all_tx_done(struct chn_cnx *cnx)
 {
 	pth_yield(NULL);
+	if (cnx->status != 0) return true;
 	struct chn_tx *tx;
 	LIST_FOREACH(tx, &cnx->txs, cnx_entry) {
 		debug("tx @%p status is %d", tx, tx->status);
