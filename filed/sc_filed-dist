@@ -14,6 +14,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 . /lib/lsb/init-functions
 
 NAME=sc_filed
+SERVNAME="Scambio file server"
 DAEMON=/usr/local/sbin/sc_filed
 export PIDFILE=/var/run/sc_filed.pid
 CONFFILE=/usr/local/etc/$NAME.conf
@@ -29,12 +30,12 @@ fi
 
 case $1 in
 	start)
-		log_daemon_msg "Starting SC_FILED server" "sc_filed"
+		log_daemon_msg "Starting $SERVNAME" "sc_filed"
   		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON
 		log_end_msg $?
   		;;
 	stop)
-		log_daemon_msg "Stopping SC_FILED server" "sc_filed"
+		log_daemon_msg "Stopping $SERVNAME" "sc_filed"
   		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
 		log_end_msg $?
 		rm -f $PIDFILE
@@ -46,9 +47,9 @@ case $1 in
 		pidofproc -p $PIDFILE $DAEMON >/dev/null
 		status=$?
 		if [ $status -eq 0 ]; then
-			log_success_msg "SC_FILED server is running."
+			log_success_msg "$SERVNAME is running."
 		else
-			log_failure_msg "SC_FILED server is not running."
+			log_failure_msg "$SERVNAME is not running."
 		fi
 		exit $status
 		;;
