@@ -60,10 +60,10 @@ static void init_conf(void)
 {
 	conf_set_default_str("SC_LOG_DIR", "/var/log/scambio");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
-	conf_set_default_int("SMTPD_PORT", 25);
+	conf_set_default_int("SC_SMTPD_PORT", 25);
 	conf_set_default_str("SC_FILED_HOST", "localhost");
 	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
-	conf_set_default_str("SC_FILED_USER", "smtpd");
+	conf_set_default_str("SC_USERNAME", "smtpd");
 }
 
 static void init_log(void)
@@ -136,7 +136,7 @@ static void init_server(void)
 {
 	debug("init server");
 	if (0 != gethostname(my_hostname, sizeof(my_hostname))) with_error(errno, "gethostbyname") return;
-	if_fail (server_ctor(&server, conf_get_int("SMTPD_PORT"))) return;
+	if_fail (server_ctor(&server, conf_get_int("SC_SMTPD_PORT"))) return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
 	if_fail (exec_begin()) return;
 	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
@@ -156,7 +156,7 @@ static void init_filed(void)
 	char const *host, *serv, *user;
 	if_fail (host = conf_get_str("SC_FILED_HOST")) return;
 	if_fail (serv = conf_get_str("SC_FILED_PORT")) return;
-	if_fail (user = conf_get_str("SC_FILED_USER")) return;
+	if_fail (user = conf_get_str("SC_USERNAME")) return;
 	if_fail (chn_cnx_ctor_outbound(&ccnx, host, serv, user)) return;
 	if (0 != atexit(deinit_filed)) with_error(0, "atexit") return;
 }

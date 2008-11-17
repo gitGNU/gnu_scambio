@@ -14,8 +14,13 @@
 #export MDIR_HOST=localhost
 #export MDIRD_PORT=21435
 
-## Port smtpd listens at
-#export SMTPD_PORT=1025
+## SC_FILED server location
+#export SC_FILED_HOST=localhost
+#export SC_FILED_PORT=21436
+#export SC_USERNAME=Alice
+
+## Port sc_smtpd listens at
+#export SC_SMTPD_PORT=25
 
 ## System user/group to setuid to
 #export SC_RUNASUSER=scambio
