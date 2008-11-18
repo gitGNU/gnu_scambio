@@ -67,7 +67,7 @@ sc-name: Sent
 sc-type: dir
 sc-name: calendars
 
-7 put mailboxes
+7 put smtpd/mailboxes
 sc-type: dir
 sc-name: rixed@happyleptic.org
 
