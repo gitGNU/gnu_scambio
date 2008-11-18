@@ -97,7 +97,7 @@ static void set_reverse_path(struct cnx_env *env, char const *reverse_path)
 static void set_forward_path(struct cnx_env *env, char const *forward_path)
 {
 	char folder[PATH_MAX];
-	snprintf(folder, sizeof(folder), "mailboxes/%s", forward_path);
+	snprintf(folder, sizeof(folder), "/smtpd/mailboxes/%s", forward_path);
 	env->mailbox = mdir_lookup(folder);
 	on_error return;
 	if (env->forward_path) free(env->forward_path);

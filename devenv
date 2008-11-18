@@ -49,47 +49,63 @@ function send_content {
 1 auth Alice
 2 put /
 sc-type: dir
+sc-name: smtpd
+
+3 put /smtpd
+sc-type: dir
 sc-name: mailboxes
 
-3 put /
+4 put /smtpd
+sc-type: dir
+sc-name: To Send
+
+5 put /smtpd
+sc-type: dir
+sc-name: Sent
+
+6 put /
 sc-type: dir
 sc-name: calendars
 
-4 put mailboxes
+7 put mailboxes
 sc-type: dir
 sc-name: rixed@happyleptic.org
 
-5 put calendars
+8 put calendars
 sc-type: dir
 sc-name: rixed
 
-6 put calendars
+9 put calendars
 sc-type: dir
 sc-name: project-X
 
-7 put calendars/rixed
+10 put calendars/rixed
 sc-start: 2008 10 21 12 00
 sc-stop:  2008 10 21 13 00
 sc-descr: lunch time
 
-8 put calendars/rixed
+11 put calendars/rixed
 sc-start: 2008 10 21 15 00
 sc-stop:  2008 10 21 15 30
 sc-descr: meeting prod
 
-9 put calendars/rixed
+12 put calendars/rixed
 sc-start: 2008 10 21 15 30
 sc-stop:  2008 10 21 16 00
 sc-descr: meeting support
 
-10 put calendars/rixed
+13 put calendars/rixed
 sc-start: 2008 10 25 12 00
 sc-stop:  2008 10 26 12 00
 sc-descr: PACS Ramine et Sandron
 
-11 put /
+13 put /
 sc-type: dir
 sc-name: files
+
+14 put /
+sc-type: dir
+sc-name: contacts
 
 999 quit
 EOF
