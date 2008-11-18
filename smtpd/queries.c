@@ -177,7 +177,7 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 	(void)close(fd);
 }
 
-static void store_file(struct header *header, struct varbuf *vb, struct header *global_header)
+static void store_file(struct header *header, struct varbuf *vb, char const *name, struct header *global_header)
 {
 	// TODO: Instead of sending it to another file server, be our own file server
 	char resource[PATH_MAX];
@@ -188,12 +188,13 @@ static void store_file(struct header *header, struct varbuf *vb, struct header *
 	if_fail (send_varbuf(&ccnx, resource, vb)) return;
 	debug("That's great, now adding this info onto the env header");
 	if_fail (header_add_field(global_header, SC_RESOURCE_FIELD, resource)) return;
+	if_fail (header_add_field(global_header, SC_NAME_FIELD, name)) return;
 }
 
 static void store_file_rec(struct msg_tree *const tree, struct header *global_header)
 {
 	if (tree->type == CT_FILE) {
-		store_file(tree->header, &tree->content.file, global_header);
+		store_file(tree->header, &tree->content.file.data, tree->content.file.name, global_header);
 		return;
 	}
 	assert(tree->type == CT_MULTIPART);

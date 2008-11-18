@@ -108,10 +108,11 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 	// Process mail as a single file
 	debug("message is a single file");
 	// read the file in node->content.file
-	if_fail (varbuf_ctor(&node->content.file, 1024, true)) return;
+	snprintf(node->content.file.name, sizeof(node->content.file.name), "Undefined");	// TODO: find a suitable name
+	if_fail (varbuf_ctor(&node->content.file.data, 1024, true)) return;
 	node->type = CT_FILE;
 	if (msg[header_size] == '\n') header_size++;	// A SMTP header is supposed to be ended because of en empty line that we dont want on the file
-	if_fail (varbuf_append(&node->content.file, size-header_size, msg+header_size)) return;
+	if_fail (varbuf_append(&node->content.file.data, size-header_size, msg+header_size)) return;
 }
 
 static void msg_tree_dtor(struct msg_tree *node)
@@ -120,7 +121,7 @@ static void msg_tree_dtor(struct msg_tree *node)
 		case CT_NONE:
 			break;
 		case CT_FILE:
-			varbuf_dtor(&node->content.file);
+			varbuf_dtor(&node->content.file.data);
 			break;
 		case CT_MULTIPART:
 			{

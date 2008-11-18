@@ -61,7 +61,10 @@ struct msg_tree {
 	struct header *header;
 	enum msg_tree_type { CT_NONE=0, CT_FILE, CT_MULTIPART } type;
 	union {
-		struct varbuf file;
+		struct {
+			struct varbuf data;
+			char name[PATH_MAX];
+		} file;
 		SLIST_HEAD(subtrees, msg_tree) parts;
 	} content;
 	SLIST_ENTRY(msg_tree) entry;
