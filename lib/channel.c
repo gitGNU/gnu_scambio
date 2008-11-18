@@ -42,7 +42,7 @@ static struct mdir_syntax syntax;
 static bool server;
 static mdir_cmd_cb serve_copy, serve_skip, serve_miss, serve_thx, finalize_thx;	// used by client & server
 static mdir_cmd_cb finalize_creat, finalize_txstart;	// used by client
-static mdir_cmd_cb serve_creat, serve_read, serve_write, serve_quit;	// used by server
+static mdir_cmd_cb serve_creat, serve_read, serve_write, serve_quit, serve_auth;	// used by server
 
 #define RETRANSM_TIMEOUT 2000000//400000	// .4s
 #define OUT_FRAGS_TIMEOUT 1000000	// timeout fragments after 1 second
@@ -78,8 +78,10 @@ void chn_begin(bool server_)
 		}, {
 			.keyword = kw_quit,  .cb = serve_quit,  .nb_arg_min = 0, .nb_arg_max = 0,
 			.nb_types = 0, .types = {}, .negseq = false,
-		},
-		// FIXME: add kw_auth
+		}, {
+			.keyword = kw_auth,  .cb = serve_auth,  .nb_arg_min = 1, .nb_arg_max = 1,
+			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
+		}
 	};
 	static struct mdir_cmd_def def_client[] = {
 		MDIR_CNX_ANSW_REGISTER(kw_creat, finalize_creat),
@@ -869,6 +871,15 @@ static void serve_read(struct mdir_cmd *cmd, void *user_data)
 
 static void serve_quit(struct mdir_cmd *cmd, void *user_data)
 {
+	struct mdir_cnx *cnx = user_data;
+	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
+	ccnx->status = 200;
+	mdir_cnx_answer(cnx, cmd, 200, "Ok");
+}
+
+static void serve_auth(struct mdir_cmd *cmd, void *user_data)
+{
+	// TODO
 	struct mdir_cnx *cnx = user_data;
 	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
 	ccnx->status = 200;
