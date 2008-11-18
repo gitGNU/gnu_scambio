@@ -4,7 +4,9 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 bin_PROGRAMS = merenotifier
 
 merenotifier_SOURCES = \
-	notifier.c
+	notifier.c \
+	notif.c \
+	display_file.c
 
 merenotifier_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 
