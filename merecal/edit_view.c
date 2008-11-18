@@ -97,12 +97,12 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 			break;
 		}
 		if_fail (cal_date_to_str(&date, date_str, sizeof(date_str))) break;
-		if_fail (header_add_field(h, SC_START, date_str)) break;
+		if_fail (header_add_field(h, SC_START_FIELD, date_str)) break;
 		// To
 		if_fail (cal_date_ctor_from_input(&date, gtk_entry_get_text(GTK_ENTRY(e->stop_entry)))) break;
 		if (cal_date_is_set(&date)) {
 			if_fail (cal_date_to_str(&date, date_str, sizeof(date_str))) break;
-			if_fail (header_add_field(h, SC_STOP, date_str)) break;
+			if_fail (header_add_field(h, SC_STOP_FIELD, date_str)) break;
 		}
 		char *descr = get_serial_text(e->descr_buffer);
 		on_error break;
