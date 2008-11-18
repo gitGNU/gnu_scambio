@@ -60,7 +60,6 @@ static void *stream_push(void *arg)
 				eof = true;
 			}
 			debug("write %zu bytes / %u", size, (unsigned)totsize);
-			if (! size) continue;
 			struct chn_box *box;
 			if_fail (box = chn_box_alloc(size)) return NULL;
 			if_fail (ReadFrom(box->data, content_fd, tx->end_offset, size)) return NULL;
@@ -167,7 +166,7 @@ extern inline void stream_unref(struct stream *stream);
 void stream_begin(void)
 {
 	LIST_INIT(&streams);
-	conf_set_default_str("SC_FILES_DIR", "/tmp/files");
+	if_fail(conf_set_default_str("SC_FILES_DIR", "/var/lib/scambio/files")) return;
 	chn_files_root = conf_get_str("SC_FILES_DIR");
 	chn_files_root_len = strlen(chn_files_root);
 	Mkdir(chn_files_root);

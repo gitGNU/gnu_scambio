@@ -165,6 +165,7 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 	char tmpfile[PATH_MAX] = "/tmp/vbXXXXXX";	// FIXME
 	int fd = mkstemp(tmpfile);
 	if (fd == -1) with_error(errno, "mkstemp(%s)", tmpfile) return;
+	debug("Using temp file '%s' (unlinked)", tmpfile);
 	if (0 != unlink(tmpfile)) {
 		error("Cannot unlink tmp file '%s' : %s", tmpfile, strerror(errno));
 		// go ahaid
@@ -178,6 +179,7 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 
 static void store_file(struct header *header, struct varbuf *vb, struct header *global_header)
 {
+	// TODO: Instead of sending it to another file server, be our own file server
 	char resource[PATH_MAX];
 	debug("Creating a resource for");
 	header_debug(header);

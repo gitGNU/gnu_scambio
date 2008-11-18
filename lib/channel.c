@@ -37,7 +37,6 @@
  * Data Definitions
  */
 
-static char const *mdir_files;
 static struct mdir_syntax syntax;
 static bool server;
 static mdir_cmd_cb serve_copy, serve_skip, serve_miss, serve_thx, finalize_thx;	// used by client & server
@@ -62,8 +61,6 @@ void chn_begin(bool server_)
 {
 	server = server_;
 	if_fail (stream_begin()) return;
-	if_fail(conf_set_default_str("SC_FILES_DIR", "/var/lib/scambio/files")) return;
-	mdir_files = conf_get_str("SC_FILES_DIR");
 	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	static struct mdir_cmd_def def_server[] = {
 		{
@@ -881,8 +878,6 @@ static void serve_auth(struct mdir_cmd *cmd, void *user_data)
 {
 	// TODO
 	struct mdir_cnx *cnx = user_data;
-	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
-	ccnx->status = 200;
 	mdir_cnx_answer(cnx, cmd, 200, "Ok");
 }
 
@@ -919,7 +914,7 @@ void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 	assert(localfile && name);
 	debug("Try to get resource '%s'", name);
 	// Look into the file cache
-	snprintf(localfile, PATH_MAX, "%s/%s", mdir_files, name);
+	snprintf(localfile, PATH_MAX, "%s/%s", chn_files_root, name);
 	int fd = open(localfile, O_RDONLY);
 	if (fd >= 0) {
 		debug("found in cache file '%s'", localfile);
@@ -951,7 +946,7 @@ void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 
 void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 {
-	// FIXME: instead of copying it into the cache, hardlink it to the chache and
+	// FIXME: instead of copying it into the cache, hardlink it to the cache and
 	// then close the file, and use the cache as the stream source.
 	// More efficient and should also be simplier.
 	assert(cnx && name && fd >= 0);

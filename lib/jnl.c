@@ -275,7 +275,7 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 		if (buf[0] != '%') {	// read header
 			header = header_new();
 			on_error break;
-			header_parse(header, buf+2);
+			(void)header_parse(header, buf+2);
 		}
 	} while (0);
 	free(buf);

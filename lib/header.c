@@ -195,16 +195,16 @@ void header_write(struct header const *h, int fd)
 	Write(fd, "\n", 1);
 }
 
-void header_parse(struct header *h, char const *msg) {
+size_t header_parse(struct header *h, char const *msg_) {
 	ssize_t parsed;
+	char const *msg = msg_;
 	while (*msg) {
 		if (h->nb_fields >= NB_MAX_FIELDS) {
 			error_push(E2BIG, "Too many fields in this header (max is "TOSTR(NB_MAX_FIELDS)")");
-			return;
+			return 0;
 		}
 		struct head_field *field = h->fields + h->nb_fields;
-		parsed = parse_field(msg, &field->name, &field->value);
-		on_error return;
+		if_fail (parsed = parse_field(msg, &field->name, &field->value)) return 0;
 		if (parsed == 0) break;	// end of message
 		debug("parsed field '%s' to value '%s'", field->name, field->value);
 		h->nb_fields ++;
@@ -212,6 +212,7 @@ void header_parse(struct header *h, char const *msg) {
 		// Lowercase stored field names
 		str_tolower(field->name);
 	};
+	return msg - msg_;
 }
 
 void header_read(struct header *h, int fd)
@@ -248,7 +249,7 @@ void header_read(struct header *h, int fd)
 	error_restore();
 	if (nb_lines == 0) error_push(EINVAL, "No lines in header");
 	if (! eoh_reached) error_push(EINVAL, "End of file before end of header");
-	if (! is_error()) header_parse(h, vb.buf);
+	if (! is_error()) (void)header_parse(h, vb.buf);
 	varbuf_dtor(&vb);
 }
 

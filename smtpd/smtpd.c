@@ -24,6 +24,7 @@
 #include "scambio.h"
 #include "daemon.h"
 #include "scambio/cnx.h"
+#include "auth.h"
 #include "varbuf.h"
 #include "smtpd.h"
 #include "scambio/mdir.h"
@@ -148,10 +149,12 @@ static void deinit_filed(void)
 {
 	chn_cnx_dtor(&ccnx);
 	chn_end();
+	auth_end();
 }
 
 static void init_filed(void)
 {
+	if_fail (auth_begin()) return;
 	if_fail (chn_begin(false)) return;
 	char const *host, *serv, *user;
 	if_fail (host = conf_get_str("SC_FILED_HOST")) return;
@@ -167,11 +170,11 @@ static void init(void)
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail (init_conf()) return;
 	if_fail (init_log()) return;
+	if_fail (init_server()) return;
+	if_fail (daemonize("sc_smtpd")) return;
 	if_fail (mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	if_fail (init_server()) return;
 	if_fail (init_filed()) return;
-	if_fail (daemonize("sc_smtpd")) return;
 }
 
 /*
