@@ -67,6 +67,7 @@ AC_CONFIG_FILES([
 	merelib/Makefile
 	meremail/Makefile
 	merecal/Makefile
+	merenotifier/Makefile
 	tools/Makefile
 	doc/Makefile
 ])
