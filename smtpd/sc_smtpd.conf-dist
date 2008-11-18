@@ -17,7 +17,7 @@
 ## SC_FILED server location
 #export SC_FILED_HOST=localhost
 #export SC_FILED_PORT=21436
-#export SC_USERNAME=Alice
+#export SC_USERNAME=smtpd
 
 ## Port sc_smtpd listens at
 #export SC_SMTPD_PORT=25
