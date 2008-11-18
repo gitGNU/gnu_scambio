@@ -159,6 +159,26 @@ void header_del(struct header *h)
 	free(h);
 }
 
+char const **header_search_all(struct header const *h, char const *name, unsigned *nb)
+{
+	debug("looking for all%s in header @%p", name, h);
+	*nb = 0;
+	struct varbuf vb;
+	if_fail (varbuf_ctor(&vb, 10*sizeof(char *), true)) return NULL;
+	for (unsigned f=0; f<h->nb_fields; f++) {
+		if (0 == strcasecmp(h->fields[f].name, name)) {
+			debug("found, value = %s", h->fields[f].value);
+			if_fail (varbuf_append(&vb, sizeof(h->fields[f].value), &h->fields[f].value)) break;
+			(*nb)++;
+		}
+	}
+	on_error {
+		varbuf_dtor(&vb);
+		return NULL;
+	}
+	return varbuf_unbox(&vb);
+}
+
 char const *header_search(struct header const *h, char const *name)
 {
 	debug("looking for %s in header @%p", name, h);

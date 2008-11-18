@@ -41,9 +41,13 @@ struct header *header_new(void);
 
 void header_del(struct header *h);
 
-// Given a field name, return the field value
+// Given a field name, return the (first) field value
 // or NULL if undefined.
 char const *header_search(struct header const *h, char const *name);
+
+// Given a field name, return all the values with given field name
+// whatever *nb, the returned pointer must be freed
+char const **header_search_all(struct header const *h, char const *name, unsigned *nb);
 
 size_t header_parse(struct header *h, char const *msg);
 
