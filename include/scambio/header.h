@@ -45,7 +45,7 @@ void header_del(struct header *h);
 // or NULL if undefined.
 char const *header_search(struct header const *h, char const *name);
 
-void header_parse(struct header *h, char const *msg);
+size_t header_parse(struct header *h, char const *msg);
 
 // Write a header onto a filedescr
 // FIXME: file is written to on error

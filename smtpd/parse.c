@@ -83,12 +83,13 @@ static void parse_multipart(struct msg_tree *node, char *msg, size_t size, char 
 static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 {
 	// First read the header
-	node->header = header_new();
-	on_error return;
-	if_fail (header_parse(node->header, msg)) {
+	if_fail (node->header = header_new()) return;
+	size_t header_size;
+	if_fail (header_size = header_parse(node->header, msg)) {
 		header_del(node->header);
 		return;
 	}
+	assert(header_size <= size);
 	// Find out weither the body is total with a decoding method, or
 	// is another message up to a given boundary.
 	char const *content_type = header_search(node->header, "content-type");
@@ -106,7 +107,11 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 	}
 	// Process mail as a single file
 	debug("message is a single file");
+	// read the file in node->content.file
+	if_fail (varbuf_ctor(&node->content.file, 1024, true)) return;
 	node->type = CT_FILE;
+	if (msg[header_size] == '\n') header_size++;	// A SMTP header is supposed to be ended because of en empty line that we dont want on the file
+	if_fail (varbuf_append(&node->content.file, size-header_size, msg+header_size)) return;
 }
 
 static void msg_tree_dtor(struct msg_tree *node)
