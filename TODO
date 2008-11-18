@@ -17,3 +17,5 @@ Code a simplier init function the init pth, error, log and conf altogether.
 
 * smtp messages should name the resource (using the sc-name field ? Or maybe using two parameters to the resource field, url and name - and use this as well for merefs resources)
 
+* A mereNotifier fed by mdsyncc (from a pipe)
+

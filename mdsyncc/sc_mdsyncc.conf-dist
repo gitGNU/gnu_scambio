@@ -18,6 +18,9 @@
 #export SC_RUNASUSER=scambio
 #export SC_RUNASGROUP=scambio
 
+## Notifier to send new patches to (to stdin)
+#export SC_NOTIFIER_CMD=/usr/bin/merenotifier
+
 ## Where the meta-data are stored
 #export MDIR_ROOT_DIR=/var/lib/scambio/mdir
 export MDIR_ROOT_DIR=/var/lib/scambio/client/mdir
