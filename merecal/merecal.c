@@ -79,8 +79,7 @@ void cal_date_to_str(struct cal_date *cd, char *str, size_t size)
 		tm.tm_hour = cd->hour;
 		tm.tm_min  = cd->min;
 	}
-	time_t ts = mktime(&tm);	// now we have the timestamp
-	len = snprintf(str, size, "%s", sc_ts2gmfield(ts, cal_date_has_time(cd)));
+	len = snprintf(str, size, "%s", sc_tm2gmfield(&tm, cal_date_has_time(cd)));
 	if (len >= (int)size) error_push(0, "Buffer too small");
 }
 
@@ -234,7 +233,10 @@ void foreach_event_between(struct cal_date *start, struct cal_date *stop, void (
 	struct cal_event *ce;
 	LIST_FOREACH(ce, &cal_events, entry) {
 		debug("test event '%s' in between %s and %s", ce->description, start->str, stop->str);
-		if (cal_date_compare(&ce->start, stop) > 0) break;	// cal_events are sorted by start date
+		if (cal_date_compare(&ce->start, stop) > 0) {
+			debug("start after end");
+			break;	// cal_events are sorted by start date
+		}
 		if (! ce->folder->displayed) {
 			debug(" skip because not displayed");
 			continue;
