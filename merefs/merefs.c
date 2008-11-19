@@ -84,9 +84,9 @@ static void init(void)
 	if_fail(init_log()) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	if_fail (daemonize("sc_merefs")) return;
 	if_fail (files_begin()) return;
 	if_fail (init_chn()) return;
-	if_fail (daemonize("sc_merefs")) return;
 }
 
 /*
