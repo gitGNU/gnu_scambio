@@ -20,6 +20,10 @@
 
 #include <stdbool.h>
 #include <gtk/gtk.h>
+#ifdef WITH_MAEMO
+#include <hildon/hildon-program.h>
+#include <gtk/gtkmain.h>
+#endif
 
 void init(char const *name, int nb_args, char *args[]);
 void destroy_cb(GtkWidget *widget, gpointer data);

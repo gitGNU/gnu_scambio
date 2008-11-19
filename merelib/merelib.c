@@ -22,10 +22,6 @@
 #include "scambio.h"
 #include "scambio/mdir.h"
 #include "merelib.h"
-#ifdef WITH_MAEMO
-#include <hildon/hildon-program.h>
-#include <gtk/gtkmain.h>
-#endif
 
 /*
  * Data Definitions
@@ -104,7 +100,7 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 {
 #	ifdef WITH_MAEMO
 	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
-	hildon_program_add_window(hildon_program, hildon_window);
+	hildon_program_add_window(hildon_program, win);
 #	else
 	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), app_name);
@@ -112,7 +108,7 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
 	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
 	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), NULL);
-	return win;
+	return GTK_WIDGET(win);
 }
 
 GtkWidget *make_labeled_hbox(char const *label_text, GtkWidget *other)
