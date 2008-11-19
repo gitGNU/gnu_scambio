@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <time.h>
 #include <pth.h>
 #include "scambio.h"
 #include "smtpd.h"
@@ -29,6 +30,7 @@
 #include "varbuf.h"
 #include "scambio/header.h"
 #include "scambio/mdir.h"
+#include "scambio/timetools.h"
 
 // Errors from RFC
 #define SYSTEM_REPLY    211 // System status, or system help reply
@@ -217,10 +219,12 @@ static void process_mail(struct cnx_env *env)
 			if_fail (header_add_field(h, SC_FROM_FIELD, env->reverse_path)) break;
 			// Store each file in the filed
 			if_fail (store_file_rec(msg_tree, h)) break;
+			// Attach some more meta informations
 			char const *subject = header_search(msg_tree->header, "subject");
 			if (subject) header_add_field(h, SC_DESCR_FIELD, subject);
 			char const *message_id = header_search(msg_tree->header, "message-id");
 			if (message_id) header_add_field(h, SC_EXTID_FIELD, message_id);
+			header_add_field(h, SC_START_FIELD, sc_ts2gmfield(time(NULL), true));
 			// submit the header
 			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h)) break;
 		} while (0);
