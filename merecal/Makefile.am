@@ -1,5 +1,5 @@
 AM_CFLAGS = -std=c99 -Wall -W
-AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -I$(top_srcdir)/merelib -D_GNU_SOURCE $(GTKS_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -I$(top_srcdir)/merelib -D_GNU_SOURCE $(GTKS_CFLAGS) @MAEMO_CPPFLAGS@
 
 bin_PROGRAMS = merecal
 

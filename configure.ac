@@ -25,7 +25,7 @@ AC_CHECK_LIB(gnutls, gnutls_fingerprint)
 DO_GTKAPPS="yes"
 AS_IF(
 	[test "x$with_desktop" = xmaemo],
-		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 hildon-1 >= 0.18 libosso >= 1.3, [], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
+		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 hildon-1 >= 0.18 libosso >= 1.3, [DO_GTKAPPS="maemo"], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
 	[test "x$with_desktop" = xgtk],
 		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2, [], [AC_MSG_ERROR("cannot found GTK libs")])],
 	[test "x$with_desktop" = xno],
@@ -34,7 +34,16 @@ AS_IF(
 		[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2, [], [DO_GTKAPPS="no"])])
 
 AS_IF(
-	[test "x$DO_GTKAPPS" = xyes], [AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")],
+	[test "x$DO_GTKAPPS" = xyes],
+		[
+			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")
+			AC_SUBST(MAEMO_CPPFLAGS, "")
+		],
+	[test "x$DO_GTKAPPS" = xmaemo],
+		[
+			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")
+			AC_SUBST(MAEMO_CPPFLAGS, "-DWITH_MAEMO")
+		],
 	[test "x$DO_GTKAPPS" = xno],
 		[
 			AC_MSG_WARN([will skip GTK applications])

@@ -15,19 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef MERELIB_H_081008
-#define MERELIB_H_081008
+#ifndef TIMETOOLS_H_081119
+#define TIMETOOLS_H_081119
 
-#include <stdbool.h>
-#include <gtk/gtk.h>
-
-void init(char const *name, int nb_args, char *args[]);
-void destroy_cb(GtkWidget *widget, gpointer data);
-void alert(GtkMessageType type, char const *text);
-bool confirm(char const *);
-GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
-GtkWidget *make_labeled_hbox(char const *label, GtkWidget *other);
-GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...);
-GtkWidget *make_toolbar(unsigned nb_buttons, ...);
+char const *sc_ts2gmfield(time_t ts, bool with_hour);
+void sc_gmfield2uint(char const *str, unsigned *year, unsigned *month, unsigned *day, unsigned *hour, unsigned *min, unsigned *sec, bool *hour_set);
 
 #endif

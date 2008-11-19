@@ -22,6 +22,19 @@
 #include "scambio.h"
 #include "scambio/mdir.h"
 #include "merelib.h"
+#ifdef WITH_MAEMO
+#include <hildon/hildon-program.h>
+#include <gtk/gtkmain.h>
+#endif
+
+/*
+ * Data Definitions
+ */
+
+#ifdef WITH_MAEMO
+static HildonProgram *hildon_program;
+#endif
+static char const *app_name;
 
 /*
  * Inits
@@ -42,16 +55,21 @@ static void init_log(char const *filename)
 	debug("Setting log level to %d", log_level);
 }
 
-void init(char const *logfile, int nb_args, char *args[])
+void init(char const *name, int nb_args, char *args[])
 {
+	app_name = name;
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail(init_conf()) return;
-	if_fail(init_log(logfile)) return;
+	if_fail(init_log(name)) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 	gtk_init(&nb_args, &args);
+#	ifdef WITH_MAEMO
+	hildon_program = HILDON_PROGRAM(hildon_program_get_instance());
+	g_set_application_name(app_name);
+#	endif
 }
 
 /*
@@ -84,8 +102,13 @@ bool confirm(char const *text)
 
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 {
+#	ifdef WITH_MAEMO
+	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
+	hildon_program_add_window(hildon_program, hildon_window);
+#	else
 	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW(win), "MereMail "VERSION);
+	gtk_window_set_title(GTK_WINDOW(win), app_name);
+#	endif
 	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
 	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
 	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), NULL);
