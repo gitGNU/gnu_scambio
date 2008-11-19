@@ -224,7 +224,8 @@ static void process_mail(struct cnx_env *env)
 			if (subject) header_add_field(h, SC_DESCR_FIELD, subject);
 			char const *message_id = header_search(msg_tree->header, "message-id");
 			if (message_id) header_add_field(h, SC_EXTID_FIELD, message_id);
-			header_add_field(h, SC_START_FIELD, sc_ts2gmfield(time(NULL), true));
+			time_t now = time(NULL);
+			header_add_field(h, SC_START_FIELD, sc_tm2gmfield(localtime(&now), true));
 			// submit the header
 			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h)) break;
 		} while (0);

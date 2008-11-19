@@ -19,14 +19,16 @@
 #include <time.h>
 #include "scambio.h"
 
-char const *sc_ts2gmfield(time_t ts, bool with_hour)
+char const *sc_tm2gmfield(struct tm *tm, bool with_hour)
 {
 	static char field[] = "XXXX XX XX XX XX XX";
-	struct tm *tm = gmtime(&ts); // now we have the GM timestruct
 	if (with_hour) {
+		// convert to UTC
+		time_t ts = mktime(tm);
+		struct tm *gm = gmtime(&ts); // now we have the GM timestruct
 		snprintf(field, sizeof(field), "%04u %02u %02u %02u %02u %02u",
-			(unsigned)tm->tm_year+1900, (unsigned)tm->tm_mon+1, (unsigned)tm->tm_mday,
-			(unsigned)tm->tm_hour, (unsigned)tm->tm_min, (unsigned)tm->tm_sec);
+			(unsigned)gm->tm_year+1900, (unsigned)gm->tm_mon+1, (unsigned)gm->tm_mday,
+			(unsigned)gm->tm_hour, (unsigned)gm->tm_min, (unsigned)gm->tm_sec);
 	} else {
 		snprintf(field, sizeof(field), "%04u %02u %02u",
 			(unsigned)tm->tm_year+1900, (unsigned)tm->tm_mon+1, (unsigned)tm->tm_mday);
