@@ -49,7 +49,6 @@ AC_CHECK_HEADERS([stdlib.h string.h unistd.h miscmac.h])
 AC_HEADER_STDBOOL
 AC_C_CONST
 AC_TYPE_SIZE_T
-AC_TYPE_SSIZE_T
 
 # Checks for library functions.
 AC_CHECK_FUNCS([memset strtol strnstr])
@@ -69,6 +68,5 @@ AC_CONFIG_FILES([
 	merecal/Makefile
 	merenotifier/Makefile
 	tools/Makefile
-	doc/Makefile
 ])
 AC_OUTPUT

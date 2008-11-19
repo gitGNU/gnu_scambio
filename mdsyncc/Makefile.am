@@ -2,6 +2,7 @@ AM_CFLAGS = -std=c99 -Wall -W
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 
 pkgsysconfdir=$(sysconfdir)/@PACKAGE@
+docdir=$(prefix)/share/doc/
 
 bin_PROGRAMS    = sc_mdsyncc
 pkgsysconf_DATA = mdsyncc.conf-dist

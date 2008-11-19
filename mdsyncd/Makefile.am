@@ -3,6 +3,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
 #AM_YFLAGS = -d
 
 pkgsysconfdir=$(sysconfdir)/@PACKAGE@
+docdir=$(prefix)/share/doc/
 
 sbin_PROGRAMS   = sc_mdsyncd
 pkgsysconf_DATA = mdsyncd.conf-dist

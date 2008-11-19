@@ -3,6 +3,7 @@ SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools merefs merenotifier @GTK
 
 .PHONY: cscope loc
 
+docdir=$(prefix)/share/doc/
 doc_DATA = scambio.conf-dist
 
 cscope:
