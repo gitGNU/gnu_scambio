@@ -1,10 +1,10 @@
 export MALLOC_CHECK_=2
 export SC_LOG_DIR=/tmp
 export SC_LOG_LEVEL=5
-export MDIRD_PORT=21654
-export SC_FILED_PORT=21436
 export MDIRD_HOST=scambio.happyleptic.org
+export MDIRD_PORT=21654
 export SC_FILED_HOST=scambio.happyleptic.org
+export SC_FILED_PORT=21436
 export SC_SMTPD_PORT=1025
 #export SC_RUNASUSER=scambio
 #export SC_RUNASGROUP=scambio
