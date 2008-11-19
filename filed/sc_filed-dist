@@ -13,11 +13,10 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 . /lib/lsb/init-functions
 
-NAME=sc_filed
 SERVNAME="Scambio file server"
 DAEMON=/usr/local/sbin/sc_filed
 export PIDFILE=/var/run/sc_filed.pid
-CONFFILE=/usr/local/etc/$NAME.conf
+CONFFILE=/usr/local/etc/scambio/filed.conf
 
 test -x $DAEMON || exit 5
 

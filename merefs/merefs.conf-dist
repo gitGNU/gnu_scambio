@@ -10,20 +10,22 @@
 ## Log level goes from 0 (nothing but important errors) to 5 (debug)
 #export SC_LOG_LEVEL=3
 
-## MDSYNC server location
-#export MDIR_HOST=localhost
-#export MDIRD_PORT=21435
+## FILE server location
+#export SC_FILED_HOST=localhost
+#export SC_FILED_PORT=21436
+#export SC_USERNAME=Alice
+
+## The local PATH to synchronize
+SC_MEREFS_PATH=/var/lib/merefs
+## The corresponding mdir
+SC_MEREFS_MDIR=files
 
 ## System user/group to setuid to
 #export SC_RUNASUSER=scambio
 #export SC_RUNASGROUP=scambio
 
-## Notifier to send new patches to (to stdin)
-#export SC_NOTIFIER_CMD=/usr/bin/merenotifier
-
 ## Where the meta-data are stored
 #export MDIR_ROOT_DIR=/var/lib/scambio/mdir
-export MDIR_ROOT_DIR=/var/lib/scambio/client/mdir
 
 ## How many messages a file is allowed to store
 #export MDIR_MAX_JNL_SIZE=2000
@@ -31,9 +33,7 @@ export MDIR_MAX_JNL_SIZE=500
 
 ## A filename used to store a sequence number
 #export MDIR_DIRSEQ=/var/lib/scambio/mdir/.dirid.seq
-export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
 
 ## Where the users definition files are stored
 #export MDIR_USERS_DIR=/var/lib/scambio/users
-export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
 

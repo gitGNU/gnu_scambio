@@ -13,11 +13,10 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 . /lib/lsb/init-functions
 
-NAME=sc_mdsyncc
 SERVNAME="Scambio synch client daemon"
-DAEMON=/usr/local/sbin/sc_mdsyncc
+DAEMON=/usr/local/bin/sc_mdsyncc
 export PIDFILE=/var/run/sc_mdsyncc.pid
-CONFFILE=/usr/local/etc/$NAME.conf
+CONFFILE=/usr/local/etc/scambio/mdsyncc.conf
 
 test -x $DAEMON || exit 5
 

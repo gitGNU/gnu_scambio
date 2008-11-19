@@ -1,0 +1,42 @@
+## This file is meant to be used on the client.
+## It configures everything (mdsyncc, merefs, and all the GUI tools)
+## so that users need to deal with only one file.
+##
+## Source it before running anything.
+
+##
+## Log file
+##
+## Under this dir the logfile will be mdird.log
+export SC_LOG_DIR=$HOME/scambio/log
+## Log level goes from 0 (nothing but important errors) to 5 (debug)
+#export SC_LOG_LEVEL=3
+
+## MDSYNC server location
+#export MDIRD_HOST=localhost
+#export MDIRD_PORT=21435
+
+## Notifier to send new patches to (to stdin)
+#export SC_NOTIFIER_CMD=/usr/bin/merenotifier
+
+## Where the meta-data are stored
+export MDIR_ROOT_DIR=$HOME/scambio/mdir
+
+## How many messages a file is allowed to store
+export MDIR_MAX_JNL_SIZE=500
+
+## A filename used to store a sequence number
+export MDIR_DIRSEQ=$HOME/scambio/mdir/.dirid.seq
+
+## Where the users definition files are stored
+export MDIR_USERS_DIR=$HOME/scambio/users
+
+## Where the files cache is stored
+## (not used by mdsyncc but users may want to have a single conf file for everything)
+export SC_FILES_DIR=$HOME/scambio/cache
+
+## The local PATH to synchronize
+SC_MEREFS_PATH=$HOME/scambio/shared
+## The corresponding mdir
+SC_MEREFS_MDIR=files
+
