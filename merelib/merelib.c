@@ -22,10 +22,6 @@
 #include "scambio.h"
 #include "scambio/mdir.h"
 #include "merelib.h"
-#ifdef WITH_MAEMO
-#include <hildon/hildon-program.h>
-#include <gtk/gtkmain.h>
-#endif
 
 /*
  * Data Definitions
