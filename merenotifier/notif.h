@@ -50,4 +50,6 @@ extern struct notif_conf {
 void notif_begin(void);
 void notif_end(void);
 
+char const *notif_type2str(enum sc_notif_type type);
+
 #endif

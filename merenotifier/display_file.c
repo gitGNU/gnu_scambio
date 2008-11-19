@@ -35,7 +35,7 @@
  * Data Definitions
  */
 
-static int fd;
+static int fd = -1;
 
 /*
  * Init
@@ -51,14 +51,17 @@ void display_begin(void)
 
 	char const *filename = conf_get_str("SC_NOTIFIER_FILE");
 	on_error return;
-	int fd = open(filename, O_APPEND|O_CREAT, 0640);
+	fd = open(filename, O_WRONLY|O_APPEND|O_CREAT, 0640);
 	if (fd < 0) with_error(errno, "open(%s)", filename) return;
 	Write_strs(fd, "merenotifier startup\n", NULL);
 }
 
 void display_end(void)
 {
-	(void)close(fd);
+	if (fd >= 0) {
+		(void)close(fd);
+		fd = -1;
+	}
 }
 
 /*
@@ -70,7 +73,8 @@ void display_refresh(void)
 	struct notif *notif;
 	TAILQ_FOREACH(notif, &notifs, entry) {
 		if (notif->new) {
-			if_fail (Write_strs(fd, notif->descr, "\n", NULL)) return;
+			debug("new notif");
+			if_fail (Write_strs(fd, "New ", notif_type2str(notif->type), " : ", notif->descr, "\n", NULL)) return;
 			notif->new = false;
 		}
 	}

@@ -35,6 +35,7 @@ struct notifs notifs;
 
 static void notif_ctor(struct notif *notif, enum sc_notif_type type, char const *descr)
 {
+	debug("new notif @%p of type %s, '%s'", notif, notif_type2str(type), descr);
 	notif->new = true;
 	notif->type = type;
 	snprintf(notif->descr, sizeof(notif->descr), "%s", descr);
@@ -129,6 +130,7 @@ struct notif *notif_new_from_header(struct header *header)
 
 static void notif_dtor(struct notif *notif)
 {
+	debug("destruct notif @%p", notif);
 	TAILQ_REMOVE(&notifs, notif, entry);
 }
 
@@ -161,3 +163,18 @@ void notif_end(void)
 	}
 }
 
+/*
+ * Misc
+ */
+
+char const *notif_type2str(enum sc_notif_type type)
+{
+	switch (type) {
+		case SC_NOTIF_NEW_MAIL: return "message";
+		case SC_NOTIF_NEW_FILE: return "file";
+		case SC_NOTIF_NEW_EVENT: return "event";
+		case SC_NOTIF_ALERT_EVENT: return "alert";
+		case SC_NB_NOTIFS: break;
+	}
+	return "INVALID";
+}
