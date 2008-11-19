@@ -87,7 +87,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	struct header *h = header_new();
 	on_error return;
 	do {
-		char date_str[4+1+2+1+2+1+2+1+2+1];
+		char date_str[] = "XXXX XX XX XX XX XX";
 		struct cal_date date;
 		if_fail (header_add_field(h, SC_TYPE_FIELD, SC_CAL_TYPE)) break;
 		// From
