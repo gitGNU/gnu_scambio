@@ -187,7 +187,9 @@ static void try_apply(struct mdirc *mdirc)	// try to apply some of the stored pa
 	while (NULL != (patch = LIST_FIRST(&mdirc->patches)) && mdir_last_version(&mdirc->mdir) == patch->old_version) {
 		assert(patch->new_version > patch->old_version);
 		unsigned nb_deleted = patch->new_version - patch->old_version - 1;
-		if_fail ((void)mdir_patch(&mdirc->mdir, patch->action, patch->header, nb_deleted)) break;
+		mdir_version version;
+		if_fail (version = mdir_patch(&mdirc->mdir, patch->action, patch->header, nb_deleted)) break;
+		assert(version == patch->new_version);
 		patch_del(patch);
 	}
 }
