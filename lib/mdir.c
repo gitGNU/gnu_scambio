@@ -205,8 +205,10 @@ void mdir_begin(void)
 	char root_path[PATH_MAX];
 	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
 	if_fail (Mkdir(root_path)) return;
-	persist_ctor(&dirid_seq, sizeof(uint64_t), conf_get_str("MDIR_DIRSEQ"));
-	persist_ctor(&transient_version, sizeof(mdir_version), conf_get_str("MDIR_TRANSIENTSEQ"));
+	uint64_t const default_dirid = 0;
+	persist_ctor(&dirid_seq, sizeof(default_dirid), conf_get_str("MDIR_DIRSEQ"), &default_dirid);
+	mdir_version default_version = 1;
+	persist_ctor(&transient_version, sizeof(&default_version), conf_get_str("MDIR_TRANSIENTSEQ"), &default_version);
 }
 
 void mdir_end(void)
