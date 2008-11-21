@@ -45,7 +45,7 @@ static void close_cb(GtkToolButton *button, gpointer user_data)
  * Build the view
  */
 
-static void add_patch_to_store(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
+static void add_patch_to_store(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
 {
 	if (action != MDIR_ADD) return;
 	char const *from = header_search(header, SC_FROM_FIELD);
@@ -58,7 +58,7 @@ static void add_patch_to_store(struct mdir *mdir, struct header *header, enum md
 	gtk_list_store_insert_with_values(msg_store, &iter, G_MAXINT,
 		MSG_STORE_FROM, from,
 		MSG_STORE_SUBJECT, subject,
-		MSG_STORE_VERSION, new ? 0 : param.version,	// 0 is never a valid version number
+		MSG_STORE_VERSION, version,
 		-1);
 }
 
@@ -72,7 +72,8 @@ GtkWidget *make_list_window(char const *folder)
 	// The list of messages
 	GtkListStore *msg_store = gtk_list_store_new(NB_MSG_STORES, G_TYPE_STRING, G_TYPE_STRING, MDIR_VERSION_G_TYPE);
 	// Fill this store
-	mdir_patch_list(mdir, 0, false, add_patch_to_store, msg_store);
+	mdir_patch_reset(mdir);
+	mdir_patch_list(mdir, false, add_patch_to_store, msg_store);
 	
 	GtkWidget *msg_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(msg_store));
 	g_object_unref(G_OBJECT(msg_store));

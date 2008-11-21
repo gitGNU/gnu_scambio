@@ -52,7 +52,6 @@ struct cal_folder {
 	char path[PATH_MAX];
 	char *name;	// points onto path
 	struct mdir *mdir;
-	mdir_version last_version;
 	LIST_HEAD(cal_events, cal_event) new_events;	// we keep an eye on those that are not synched yet
 	bool displayed;
 };
