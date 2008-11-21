@@ -33,6 +33,7 @@
 #include "mdsyncc.h"
 #include "scambio/header.h"
 
+unsigned nb_pending_acks;
 static bool terminate_writer;
 
 #include <signal.h>
@@ -59,7 +60,10 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 	snprintf(filename, sizeof(filename), "%s/.tmp/%c%"PRIversion, mdir->path, action == MDIR_ADD ? '+':'-', version);
 	// FIXME : grasp cnx write lock
 	(void)command_new(kw, mdirc, folder, filename);
-	unless_error header_write(header, cnx.fd);
+	unless_error {
+		header_write(header, cnx.fd);
+		nb_pending_acks ++;
+	}
 	// FIXME : release cnx write lock
 }
 
@@ -111,6 +115,7 @@ void *writer_thread(void *arg)
 
 void writer_begin(void)
 {
+	nb_pending_acks = 0;
 	hide_begin();
 }
 

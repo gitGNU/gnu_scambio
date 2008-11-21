@@ -31,6 +31,7 @@ typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
 pth_t reader_pthid, writer_pthid;
 extern struct mdir_cnx cnx;
+extern unsigned nb_pending_acks;
 
 void reader_begin(void);
 void reader_end(void);
