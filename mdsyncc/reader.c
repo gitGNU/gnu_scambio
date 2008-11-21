@@ -85,6 +85,8 @@ void finalize_put(struct mdir_cmd *cmd, void *user_data)
 	struct mdir_cnx *const cnx = user_data;
 	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
+	assert(nb_pending_acks > 0);
+	nb_pending_acks--;
 	struct command *const command = DOWNCAST(sq, sq, command);
 	int status = cmd->args[0].integer;
 	char const *compl = cmd->args[1].string;
@@ -100,6 +102,8 @@ void finalize_rem(struct mdir_cmd *cmd, void *user_data)
 	struct mdir_cnx *const cnx = user_data;
 	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
+	assert(nb_pending_acks > 0);
+	nb_pending_acks--;
 	struct command *const command = DOWNCAST(sq, sq, command);
 	int status = cmd->args[0].integer;
 	char const *compl = cmd->args[1].string;
@@ -182,6 +186,12 @@ static void patch_del(struct patch *patch)
 
 static void try_apply(struct mdirc *mdirc)	// try to apply some of the stored patches
 {
+	if (nb_pending_acks > 0) {
+		// mdir_patch_list() is in trouble is we receive a PATCH for a local transient
+		// file before the acks gives us its version. Here is our work arnound this :
+		debug("Do not apply patches because we still wait for %u acks", nb_pending_acks);
+		return;
+	}
 	debug("try to apply received patch(es)");
 	struct patch *patch;
 	while (NULL != (patch = LIST_FIRST(&mdirc->patches)) && mdir_last_version(&mdirc->mdir) == patch->old_version) {
