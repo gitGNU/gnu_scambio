@@ -104,6 +104,8 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 	STAILQ_INIT(&mdir->jnls);
 	mdir_reload(mdir);
 	unless_error LIST_INSERT_HEAD(&mdirs, mdir, entry);
+	mdir->last_listed_sync = 0;
+	mdir->last_listed_unsync = 0;
 }
 
 static struct mdir *mdir_new(char const *id, bool create)
@@ -471,15 +473,12 @@ static mdir_version get_target(struct header *h)
 	return mdir_str2version(target_str);
 }
 
-static mdir_version last_listed_sync = 0;
-static mdir_version last_listed_unsync = 0;
-
-void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool, mdir_version, void *), void *data)
+void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version, void *), void *data)
 {
 	mdir_reload(mdir);	// journals may have changed, other appended
 	struct jnl *jnl;
 	if (! unsync_only) { // List content of journals
-		mdir_version from = last_listed_sync + 1;
+		mdir_version from = mdir->last_listed_sync + 1;
 		debug("listing synched from version %"PRIversion, from);
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
 			if (jnl->version + jnl->nb_patches <= from) {
@@ -507,14 +506,14 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				}
 				header_del(h);
 				on_error return;
-				last_listed_sync = jnl->version + index;
+				mdir->last_listed_sync = jnl->version + index;
 			}
 		}
 	}
 	// List content of ".tmp" subdirectory which holds both synched and not yet synched patches.
 	char temp[PATH_MAX];
 	int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
-	debug("listing %s from transient version %"PRIversion, temp, last_listed_unsync);
+	debug("listing %s from transient version %"PRIversion, temp, mdir->last_listed_unsync);
 	DIR *dir = opendir(temp);
 	if (! dir) {
 		if (errno == ENOENT) return;
@@ -547,16 +546,16 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				continue;
 			}
 			if (unsync_only) continue;
-			if (version <= last_listed_sync) continue;
-			last_listed_sync = version;
+			if (version <= mdir->last_listed_sync) continue;
+			mdir->last_listed_sync = version;
 		} else {	// not acked
 			if_fail (version = mdir_str2version(filename+1)) {
 				error("please fix %s", temp);
 				error_clear();
 				continue;
 			}
-			if (version <= last_listed_unsync) continue;
-			last_listed_unsync = version;
+			if (version <= mdir->last_listed_unsync) continue;
+			mdir->last_listed_unsync = version;
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;

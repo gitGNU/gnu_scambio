@@ -50,6 +50,9 @@ struct mdir {
 	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
 	pth_rwlock_t rwlock;
 	char path[PATH_MAX];	// absolute path to the dir (actual one, not one of the symlinks)
+	// used only by client (yes bad design, too late)
+	mdir_version last_listed_sync;
+	mdir_version last_listed_unsync;
 };
 
 // provides these allocators for previous structures (default ones being malloc/free)
