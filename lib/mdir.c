@@ -44,6 +44,7 @@ static size_t mdir_root_len;
 static char const *mdir_root;
 static LIST_HEAD(mdirs, mdir) mdirs;
 static struct persist dirid_seq;
+static struct persist transient_version;
 struct mdir *(*mdir_alloc)(void);
 void (*mdir_free)(struct mdir *);
 
@@ -194,6 +195,7 @@ void mdir_begin(void)
 	// Default configuration values
 	conf_set_default_str("MDIR_ROOT_DIR", "/var/lib/scambio/mdir");
 	conf_set_default_str("MDIR_DIRSEQ", "/var/lib/scambio/mdir/.dirid.seq");
+	conf_set_default_str("MDIR_TRANSIENTSEQ", "/var/lib/scambio/mdir/.transient.seq");
 	on_error return;
 	if_fail (jnl_begin()) return;
 	// Inits
@@ -204,6 +206,7 @@ void mdir_begin(void)
 	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
 	if_fail (Mkdir(root_path)) return;
 	persist_ctor(&dirid_seq, sizeof(uint64_t), conf_get_str("MDIR_DIRSEQ"));
+	persist_ctor(&transient_version, sizeof(mdir_version), conf_get_str("MDIR_TRANSIENTSEQ"));
 }
 
 void mdir_end(void)
@@ -214,6 +217,7 @@ void mdir_end(void)
 		mdir_del(mdir);
 	}
 	persist_dtor(&dirid_seq);
+	persist_dtor(&transient_version);
 }
 
 /*
@@ -428,11 +432,12 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 		if (error_code() == EEXIST) error_clear();
 		else return;
 	}
-	snprintf(temp+len, sizeof(temp)-len, "%cXXXXXX", action == MDIR_ADD ? '+':'-');
-	int fd = mkstemp(temp);
-	if (fd < 0) with_error(errno, "Cannot mkstemp(%s)", temp) return;
+	snprintf(temp+len, sizeof(temp)-len, "%c%"PRIversion, action == MDIR_ADD ? '+':'-', *(mdir_version *)transient_version.data);
+	(*(mdir_version *)transient_version.data)++;
+	int fd = open(temp, O_WRONLY|O_CREAT|O_EXCL, 0440);
+	if (fd < 0) with_error(errno, "Cannot create transient patch in %s", temp) return;
 	header_write(h, fd);
-	close(fd);
+	(void)close(fd);
 	on_error return;
 	if (is_dir) {
 		if (action == MDIR_ADD) {
@@ -464,23 +469,23 @@ static mdir_version get_target(struct header *h)
 	return mdir_str2version(target_str);
 }
 
-void mdir_patch_list(struct mdir *mdir, mdir_version from, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool, union mdir_list_param, void *), void *data)
+static mdir_version last_listed_sync = 0;
+static mdir_version last_listed_unsync = 0;
+
+void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool, mdir_version, void *), void *data)
 {
 	mdir_reload(mdir);	// journals may have changed, other appended
-	debug("listing from version %"PRIversion" %s", from, new_only ? "(new only)":"");
 	struct jnl *jnl;
-	if (! new_only) {
-		// List content of journals
-		debug("listing journal");
+	if (! unsync_only) { // List content of journals
+		mdir_version from = last_listed_sync + 1;
+		debug("listing synched from version %"PRIversion, from);
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
 			if (jnl->version + jnl->nb_patches <= from) {
 				debug("  jnl starting at %"PRIversion" too short (%u)", jnl->version, jnl->nb_patches);
 				continue;
 			}
-			for (
-				unsigned index = from <= jnl->version ? 0:from - jnl->version;
-				index < jnl->nb_patches; index++)
-			{
+			if (from < jnl->version) from = jnl->version;	// a gap
+			for (unsigned index = from - jnl->version; index < jnl->nb_patches; index++) {
 				enum mdir_action action;
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
@@ -496,23 +501,24 @@ void mdir_patch_list(struct mdir *mdir, mdir_version from, bool new_only, void (
 					}
 				}
 				if (! skip) {
-					cb(mdir, h, action, false, (union mdir_list_param){ .version = jnl->version + index }, data);
+					cb(mdir, h, action, false, jnl->version + index, data);
 				}
 				header_del(h);
 				on_error return;
+				last_listed_sync = jnl->version + index;
 			}
 		}
 	}
-	// List content of ".tmp" subdirectory
+	// List content of ".tmp" subdirectory which holds both synched and not yet synched patches.
 	char temp[PATH_MAX];
 	int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
-	debug("listing %s", temp);
+	debug("listing %s from transient version %"PRIversion, temp, last_listed_unsync);
 	DIR *dir = opendir(temp);
 	if (! dir) {
 		if (errno == ENOENT) return;
 		with_error(errno, "opendir(%s)", temp) return;
 	}
-	mdir_version last_version = mdir_last_version(mdir);
+	mdir_version last_version = mdir_last_version(mdir);	// used to remove transient acked patches already on the journals (ie synched down)
 	struct dirent *dirent;
 	while (NULL != (dirent = readdir(dir))) {
 		char const *const filename = dirent->d_name;
@@ -523,13 +529,12 @@ void mdir_patch_list(struct mdir *mdir, mdir_version from, bool new_only, void (
 		else if (filename[0] == '-') action = MDIR_REM;
 		else continue;
 		snprintf(temp+dirlen, sizeof(temp)-dirlen, "/%s", filename);
-		// then filename may be either a numeric key (patch was not sent yet)
+		// then filename may be either a transient version number (patch was not sent or not acked yet)
 		// or "=version" (patch was sent and acked with this version number)
-		bool new = filename[1] != '=';
+		bool acked = filename[1] == '=';
 		mdir_version version = 0;
-		if (! new) {	// maybe we already synchronized it down into the journal ?
-			version = mdir_str2version(filename+2);
-			on_error {
+		if (acked) {	// maybe we already synchronized it down into the journal ?
+			if_fail (version = mdir_str2version(filename+2)) {
 				error("please fix %s", temp);
 				error_clear();
 				continue;
@@ -539,12 +544,21 @@ void mdir_patch_list(struct mdir *mdir, mdir_version from, bool new_only, void (
 				if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) break;
 				continue;
 			}
-			if (new_only) continue;
-			if (version < from) continue;
+			if (unsync_only) continue;
+			if (version <= last_listed_sync) continue;
+			last_listed_sync = version;
+		} else {	// not acked
+			if_fail (version = mdir_str2version(filename+1)) {
+				error("please fix %s", temp);
+				error_clear();
+				continue;
+			}
+			if (version <= last_listed_unsync) continue;
+			last_listed_unsync = version;
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
-		cb(mdir, h, action, new, !new ? (union mdir_list_param){ .version = version } : (union mdir_list_param){ .path = temp }, data);
+		cb(mdir, h, action, !acked, version, data);
 		header_del(h);
 		on_error break;
 	}
@@ -647,22 +661,13 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
-// count only the patch that are not removed
-static void count_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
-{
-	(void)mdir;
-	(void)header;
-	(void)param;
-	(void)new;	// we do not count new removals since they may be invalid
-	unsigned *size = (unsigned *)data;
-	if (action != MDIR_ADD) return;
-	if (header_is_directory(header)) return; // exclude directories
-	(*size)++;
-}
-
+// FIXME: this count also removed patches, but forgetabout transient patches.
 unsigned mdir_size(struct mdir *mdir)
 {
 	unsigned size = 0;
-	mdir_patch_list(mdir, 0, false, count_patch, &size);
+	struct jnl *jnl;
+	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
+		size += jnl->nb_patches;
+	}
 	return size;
 }

@@ -25,8 +25,9 @@ export MDIR_ROOT_DIR=$HOME/scambio/mdir
 ## How many messages a file is allowed to store
 export MDIR_MAX_JNL_SIZE=500
 
-## A filename used to store a sequence number
+## Some filenames used to store sequence numbers (will be mmaped)
 export MDIR_DIRSEQ=$HOME/scambio/mdir/.dirid.seq
+export MDIR_TRANSIENTSEQ=$HOME/scambio/mdir/.transient.seq
 
 ## Where the users definition files are stored
 export MDIR_USERS_DIR=$HOME/scambio/users

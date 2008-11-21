@@ -116,13 +116,12 @@ void mdir_patch_request_abort(struct mdir *, enum mdir_action, mdir_version vers
 struct mdir *mdir_lookup(char const *name);
 struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
-// list all patches of a mdir from given version (or next valid one)
-// (will also list unconfirmed patches)
-union mdir_list_param {	// FIXME: hide this complexity somehow
-	mdir_version version;	// if not new
-	char const *path;	// if new (ie. not on server yet)
-};
-void mdir_patch_list(struct mdir *, mdir_version from, bool new_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, union mdir_list_param, void *data), void *data);
+// list all patches of a mdir. When called again, list only new patches.
+// (will also list unconfirmed patches, once)
+void mdir_patch_list(struct mdir *, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, mdir_version version, void *data), void *data);
+
+// Forget about previous lists to restart listing all available patches.
+void mdir_patch_reset(struct mdir *);
 
 // returns only the symlinks.
 void mdir_folder_list(struct mdir *, bool new_only, void (*cb)(struct mdir *parent, struct mdir *child, bool new, char const *name, void *data), void *data);

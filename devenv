@@ -25,25 +25,6 @@ function auth_users {
 	auth_user $MDIR_USERS_DIR Bob
 }
 
-function run_server {
-	export MDIR_ROOT_DIR=/tmp/mdsyncd
-	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
-	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-	export MDIR_MAX_JNL_SIZE=30
-	rm -f /tmp/mdsyncd.log
-	rm -rf $MDIR_ROOT_DIR
-	mkdir -p $MDIR_ROOT_DIR/root
-	auth_users
-	build/mdsyncd/sc_mdsyncd
-}
-
-function run_filed {
-	export SC_FILES_DIR=/tmp/filed/files
-	rm -f /tmp/filed.log
-	mkdir -p $SC_FILES_DIR
-	build/filed/sc_filed
-}
-
 function send_content {
 	nc $MDIRD_HOST $MDIRD_PORT <<EOF
 1 auth Alice
@@ -108,63 +89,6 @@ sc-type: dir
 sc-name: contacts
 
 999 quit
-EOF
-}
-
-function run_client {
-	export MDIR_ROOT_DIR=/tmp/mdsyncc
-	export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
-	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-	export MDIR_MAX_JNL_SIZE=10
-	rm -f /tmp/mdsyncc.log
-	rm -rf $MDIR_ROOT_DIR
-	mkdir -p $MDIR_ROOT_DIR/root
-	auth_users
-	build/mdsyncc/sc_mdsyncc
-}
-
-function run_smtpd {
-	export MDIR_ROOT_DIR=/tmp/mdsyncc
-	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/smtpd/files
-	mkdir -p $MDIR_FILES_DIR
-	rm -f /tmp/smtpd.log
-	build/smtpd/sc_smtpd
-}
-
-function run_merefs {
-	export MDIR_ROOT_DIR=/tmp/mdsyncc
-	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/client/files
-	SHARED_DIR=/tmp/shared
-	mkdir -p $SHARED_DIR
-	rm -f /tmp/merefs.log
-	build/merefs/sc_merefs -p $SHARED_DIR -m files
-}
-
-function run_meremail {
-	export MDIR_ROOT_DIR=/tmp/mdsyncc
-	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/client/files
-	mkdir -p $MDIR_FILES_DIR
-	rm -f /tmp/meremail.log
-	build/meremail/meremail
-}
-
-function run_merecal {
-	export MDIR_ROOT_DIR=/tmp/mdsyncc
-	export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
-	export MDIR_FILES_DIR=$MDIR_ROOT_DIR/client/files
-	mkdir -p $MDIR_FILES_DIR
-	rm -f /tmp/merecal.log
-	build/merecal/merecal
-}
-
-function add_client_msg {
-	mkdir /tmp/mdsyncc/root/.tmp
-	cat > /tmp/mdsyncc/root/.tmp/+test1 <<EOF
-test: 1
-
 EOF
 }
 
