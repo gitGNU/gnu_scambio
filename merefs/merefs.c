@@ -84,7 +84,6 @@ static void init(void)
 	if_fail(init_log()) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	if_fail (daemonize("sc_merefs")) return;
 	if_fail (files_begin()) return;
 	if_fail (init_chn()) return;
 }
@@ -130,6 +129,7 @@ int main(int nb_args, char const **args)
 	if_fail (option_parse(nb_args, args, options, sizeof_array(options))) return EXIT_FAILURE;
 	if (! mdir_name) option_missing("mdir");
 	if (! local_path) option_missing("path");
+	if_fail (daemonize("sc_merefs")) return EXIT_FAILURE;
 	debug("Keeping mdir '%s' in synch with path '%s'", mdir_name, local_path);
 	local_path_len = strlen(local_path);
 	if_fail (mdir = mdir_lookup(mdir_name)) return EXIT_FAILURE;
