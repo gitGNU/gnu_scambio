@@ -49,9 +49,8 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, mdir_version version, void *folder)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *folder)
 {
-	assert(new);
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked
 	// and as patch_list returns patches only once we a certain we did not sent it already

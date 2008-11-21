@@ -502,7 +502,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 					}
 				}
 				if (! skip) {
-					cb(mdir, h, action, false, jnl->version + index, data);
+					cb(mdir, h, action, jnl->version + index, data);
 				}
 				header_del(h);
 				on_error return;
@@ -559,11 +559,16 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
-		cb(mdir, h, action, !acked, version, data);
+		cb(mdir, h, action, acked ? version:-version, data);
 		header_del(h);
 		on_error break;
 	}
 	if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
+}
+
+void mdir_patch_reset(struct mdir *mdir)
+{
+	mdir->last_listed_sync = mdir->last_listed_unsync = 0;
 }
 
 void mdir_folder_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *, struct mdir *, bool, char const *, void *), void *data)
