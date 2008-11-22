@@ -1,0 +1,27 @@
+* 2008-11-22 : Local patches seen twice on some occasions
+
+When a program adds a patch and then lists the mdir, it sees the patch as a
+transient patch. Then eventualy the patch gets synchronized and it sees it
+again in the mdir log. There is currently now way to correlate the local
+patch from the one received from the server.
+
+When we receive an ack, we know what the ultimate mdir version will be for the
+patch. Actually, we store this information in the transient filename for the
+client programs, but without remembering the former local version. We should
+instead delete the transient file alltogether, but remember the mapping from
+local version to mdir version permanently in another index journal file, written
+as soon as we got the ack so that if we miss the patch before the program is
+stoped this information is not lost. When we read the journal we then also
+read the corresponding local version number which tells us weither we already
+reported this patch or not.
+
+This index is particular in that we will not write it in ascending order, so
+we cannot follow the journal closely but must rely on another scheme. For instance,
+the server may know of a gap in version numbers that we ignore for now, so
+we cant guess what will be the location of a given version number in the journal
+index file in advance. But we can use a similar approach : divide the version
+space with files of N versions, and to store/read the local version of version
+V we go to file named after V/N at offset V%N. The only trouble will arise when
+we write the journal files cleaner : when a jnl file is removed because all its
+patches were deleted, we must also clean the _relevant_ local version index file(s).
+
