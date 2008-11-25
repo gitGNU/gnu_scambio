@@ -136,7 +136,8 @@ int main(int nb_args, char const **args)
 	// Init time_stamp file
 	char persistant_ts_file[PATH_MAX];
 	snprintf(persistant_ts_file, sizeof(persistant_ts_file), "%s/.sc_merefs_ts", local_path);
-	if_fail (persist_ctor(&last_time_stamp, sizeof(time_t), persistant_ts_file)) return EXIT_FAILURE;
+	time_t default_ts = 0;
+	if_fail (persist_ctor(&last_time_stamp, sizeof(default_ts), persistant_ts_file, &default_ts)) return EXIT_FAILURE;
 	atexit(last_ts_save);
 
 	if_fail (loop()) return EXIT_FAILURE;

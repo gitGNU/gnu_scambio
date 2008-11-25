@@ -93,6 +93,7 @@ mdir_version header_target(struct header *h);
 #define SC_START_FIELD    "sc-start"
 #define SC_STOP_FIELD     "sc-stop"
 #define SC_PERIOD_FIELD   "sc-period"
+#define SC_LOCALID_FIELD  "sc-localid"
 
 // Common values for type field
 #define SC_DIR_TYPE       "dir"

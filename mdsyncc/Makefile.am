@@ -13,7 +13,8 @@ sc_mdsyncc_SOURCES = \
 	connecter.c \
 	reader.c \
 	writer.c \
-	hide.c
+	hide.c \
+	c2l.c
 
 sc_mdsyncc_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 
