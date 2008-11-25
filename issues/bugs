@@ -1,0 +1,19 @@
+* 2008-11-22 : Local patches seen twice on some occasions
+
+When a program adds a patch and then lists the mdir, it sees the patch as a
+transient patch. Then eventualy the patch gets synchronized and it sees it
+again in the mdir log. There is currently now way to correlate the local
+patch from the one received from the server.
+
+When we receive an ack, we know what the central mdir version will be for the
+patch. Actually, we store this information in the transient filename for the
+client programs, but without remembering the former local version. We should
+instead delete the transient file alltogether but remember the mapping from
+central to local version until the patch is received, and then add in the
+received patch header a field telling that this patch replaces the local
+version Vl.
+
+If this information is kept only in RAM it is lost when mdsyncc is stopped or
+crash, but the likeliness of the user to see a patch twice because of this is
+low enough not to bother storing the mapping in a file.
+

@@ -48,6 +48,7 @@ static struct mdir *mdirc_alloc(void)
 	struct mdirc *mdirc = malloc(sizeof(*mdirc));
 	if (! mdirc) with_error(ENOMEM, "malloc mdirc") return NULL;
 	mdirc->subscribed = false;
+	mdirc->nb_pending_acks = 0;
 	LIST_INIT(&mdirc->commands);
 	LIST_INIT(&mdirc->patches);
 	(void)pth_rwlock_init(&mdirc->command_lock);
