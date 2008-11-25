@@ -33,7 +33,6 @@
 #include "mdsyncc.h"
 #include "scambio/header.h"
 
-unsigned nb_pending_acks;
 static bool terminate_writer;
 
 #include <signal.h>
@@ -52,17 +51,18 @@ static void wait_signal(void)
 
 static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *folder)
 {
+	assert(version < 0);	// as the patch is transient
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked
 	// and as patch_list returns patches only once we a certain we did not sent it already
 	char const *kw = action == MDIR_ADD ? kw_put:kw_rem;
 	char filename[PATH_MAX];
-	snprintf(filename, sizeof(filename), "%s/.tmp/%c%"PRIversion, mdir->path, action == MDIR_ADD ? '+':'-', version);
+	snprintf(filename, sizeof(filename), "%s/.tmp/%c%"PRIversion, mdir->path, action == MDIR_ADD ? '+':'-', -version);
 	// FIXME : grasp cnx write lock
 	(void)command_new(kw, mdirc, folder, filename);
 	unless_error {
+		mdirc->nb_pending_acks ++;	// Notice : header_write may schedule the reader thread which may receive the answer before we run again. So must have to inc nb_pending_acks _before_ calling header_write
 		header_write(header, cnx.fd);
-		nb_pending_acks ++;
 	}
 	// FIXME : release cnx write lock
 }
@@ -115,7 +115,6 @@ void *writer_thread(void *arg)
 
 void writer_begin(void)
 {
-	nb_pending_acks = 0;
 	hide_begin();
 }
 

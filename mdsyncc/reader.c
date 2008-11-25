@@ -69,6 +69,7 @@ void finalize_unsub(struct mdir_cmd *cmd, void *user_data)
 static void remember_version_map(struct mdirc *mdirc, char const *central_str, char const *local_file)
 {
 	// Removes the local file
+	debug("Removing local file '%s'", local_file);
 	if (0 != unlink(local_file)) with_error(errno, "unlink(%s)", local_file) return;
 	// Then stores the mapping between central and local version
 	mdir_version central, local;
@@ -93,7 +94,7 @@ void finalize_put(struct mdir_cmd *cmd, void *user_data)
 	debug("put %s : %d", command->filename, status);
 	assert(command->filename[0] != '\0');
 	if (status == 200) {
-		remember_version_map(command->mdirc, compl, command->filename+1);
+		remember_version_map(command->mdirc, compl, command->filename);
 		error_clear();
 	}
 	command_del(command);
@@ -112,7 +113,7 @@ void finalize_rem(struct mdir_cmd *cmd, void *user_data)
 	debug("rem %s : %d", command->filename, status);
 	assert(command->filename[0] != '\0');
 	if (status == 200) {
-		remember_version_map(command->mdirc, compl, command->filename+1);
+		remember_version_map(command->mdirc, compl, command->filename);
 		error_clear();
 	}
 	command_del(command);
