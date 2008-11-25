@@ -15,31 +15,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-/* Persistant data, ie a struct that's also present on a disk file.
- * Aka very simple wrapper to mmap.
- */
-#ifndef PERSIST_H_080628
-#define PERSIST_H_080628
+#ifndef C2L_H_081125
+#define C2L_H_081125
+#include "mdsyncc.h"
 
-#include <inttypes.h>
-
-struct persist {
-	size_t size;
-	void *data;
-	int fd;
+struct c2l_map {
+	LIST_ENTRY(c2l_map) entry;
+	mdir_version central, local;
 };
 
-void persist_ctor(struct persist *, size_t size, char const *fname, void const *default_value);
-void persist_dtor(struct persist *);
-void persist_ctor_sequence(struct persist *p, char const *fname, uint64_t default_value);
-void persist_lock(struct persist *);
-void persist_unlock(struct persist *);
-static inline void const *persist_read(struct persist *persist)
-{
-	return persist->data;
-}
-
-void persist_write(struct persist *, void *);
-uint64_t persist_read_inc_sequence(struct persist *);
+struct c2l_map *c2l_new(struct c2l_maps *list, mdir_version central, mdir_version local);
+void c2l_del(struct c2l_map *c2l);
+struct c2l_map *c2l_search(struct c2l_maps *list, mdir_version central);
 
 #endif

@@ -26,25 +26,25 @@
 #include "persist.h"
 #include "misc.h"
 
-static int open_or_create(char const *fname, size_t size)
+static int open_or_create(char const *fname, size_t size, void const *default_value)
 {
 	int fd = open(fname, O_RDWR);
 	if (fd >= 0) return fd;	// FIXME: check size nonetheless
 	if (errno != ENOENT) with_error(errno, "Cannot open '%s'", fname) return -1;
 	fd = open(fname, O_RDWR|O_CREAT|O_EXCL, 0660);
 	if (fd < 0) with_error(errno, "Cannot create '%s'", fname) return -1;
-	if (0 != ftruncate(fd, size)) {
-		error_push(errno, "Cannot truncate '%s'", fname);
+	if (0 != write(fd, default_value, size)) {
+		error_push(errno, "Cannot write default value onto '%s'", fname);
 		(void)close(fd);
 		return -1;
 	}
 	return fd;
 }
 
-void persist_ctor(struct persist *p, size_t size, char const *fname)
+void persist_ctor(struct persist *p, size_t size, char const *fname, void const *default_value)
 {
 	p->size = size;
-	p->fd = open_or_create(fname, size);
+	p->fd = open_or_create(fname, size, default_value);
 	on_error return;
 	p->data = mmap(NULL, size, PROT_READ, MAP_SHARED, p->fd, 0);
 	if (MAP_FAILED == p->data) error_push(errno, "Cannot mmap '%s'", fname);
@@ -56,9 +56,9 @@ void persist_dtor(struct persist *p)
 	(void)close(p->fd);
 }
 
-void persist_ctor_sequence(struct persist *p, char const *fname)
+void persist_ctor_sequence(struct persist *p, char const *fname, uint64_t default_value)
 {
-	persist_ctor(p, sizeof(uint64_t), fname);
+	persist_ctor(p, sizeof(uint64_t), fname, &default_value);
 }
 
 void persist_lock(struct persist *p)

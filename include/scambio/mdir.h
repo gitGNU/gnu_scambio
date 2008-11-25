@@ -31,9 +31,9 @@
 
 enum mdir_action { MDIR_ADD, MDIR_REM };
 
-typedef uint64_t mdir_version;
-#define PRIversion PRIu64
-#define MDIR_VERSION_G_TYPE G_TYPE_UINT64	// must include gtk.h to use this
+typedef int64_t mdir_version;
+#define PRIversion PRId64
+#define MDIR_VERSION_G_TYPE G_TYPE_INT64	// must include gtk.h to use this
 
 // Do not use these but inherit from them
 struct jnl {
@@ -50,6 +50,9 @@ struct mdir {
 	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
 	pth_rwlock_t rwlock;
 	char path[PATH_MAX];	// absolute path to the dir (actual one, not one of the symlinks)
+	// used only by client (yes bad design, too late)
+	mdir_version last_listed_sync;
+	mdir_version last_listed_unsync;
 };
 
 // provides these allocators for previous structures (default ones being malloc/free)
@@ -117,8 +120,8 @@ struct mdir *mdir_lookup(char const *name);
 struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir. When called again, list only new patches.
-// (will also list unconfirmed patches, once)
-void mdir_patch_list(struct mdir *, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, bool new, mdir_version version, void *data), void *data);
+// (will also list unconfirmed patches, once, with a unique version < 0)
+void mdir_patch_list(struct mdir *, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version version, void *data), void *data);
 
 // Forget about previous lists to restart listing all available patches.
 void mdir_patch_reset(struct mdir *);

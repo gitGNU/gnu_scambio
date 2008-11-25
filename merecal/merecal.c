@@ -193,11 +193,6 @@ static void cal_event_ctor(struct cal_event *ce, struct cal_folder *cf, struct c
 	ce->description = descr ? strdup(descr) : NULL;
 	cal_event_insert(ce);
 	on_error return;
-	if (0 == ce->version) {	// not synchronized yet
-		LIST_INSERT_HEAD(&cf->new_events, ce, new_entry);
-	} else if (cf->last_version < ce->version) {
-		cf->last_version = ce->version;
-	}
 }
 
 static struct cal_event *cal_event_new(struct cal_folder *cf, struct cal_date const *start, struct cal_date const *stop, char const *descr, mdir_version version)
@@ -216,7 +211,6 @@ static void cal_event_dtor(struct cal_event *ce)
 {
 	debug("%s", ce->description);
 	LIST_REMOVE(ce, entry);
-	if (ce->version == 0) LIST_REMOVE(ce, new_entry);
 	cal_date_dtor(&ce->start);
 	cal_date_dtor(&ce->stop);
 	if (ce->description) free(ce->description);
@@ -262,11 +256,9 @@ static void cal_folder_ctor(struct cal_folder *cf, char const *path)
 	int len = snprintf(cf->path, sizeof(cf->path), "%s", path);
 	if (len >= (int)sizeof(cf->path)) with_error(0, "Path too long : %s", path) return;
 	cf->name = cf->path + len;
-	cf->last_version = 0;
 	while (cf->name > cf->path && *(cf->name-1) != '/') cf->name--;
 	if_fail (cf->mdir = mdir_lookup(path)) return;
 	cf->displayed = true;	// TODO: save user prefs somewhere
-	LIST_INIT(&cf->new_events);
 	LIST_INSERT_HEAD(&cal_folders, cf, entry);
 }
 
@@ -309,9 +301,9 @@ static void cal_folder_del(struct cal_folder *cf)
  * (reload calendar data)
  */
 
-static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
+static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
 {
-	debug("action=%s, new=%c", action==MDIR_ADD ? "add":"rem", new ? 'y':'n');
+	debug("action=%s, version=%"PRIversion, action==MDIR_ADD ? "add":"rem", version);
 	(void)mdir;
 	if (action == MDIR_REM) {
 		mdir_version target = header_target(header);
@@ -327,7 +319,6 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	}
 	assert(action == MDIR_ADD);
 	struct cal_folder *cf = (struct cal_folder *)data;
-	mdir_version version = new ? 0 : param.version;
 	struct cal_date start, stop;
 	char const *start_str = header_search(header, SC_START_FIELD);
 	if (start_str) {
@@ -358,14 +349,7 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 static void refresh_folder(struct cal_folder *cf)
 {
 	debug("refreshing folder %s", cf->name);
-	// First we delete all the events that were not versionned yet
-	struct cal_event *ce;
-	while (NULL != (ce = LIST_FIRST(&cf->new_events))) {
-		assert(ce->version == 0);
-		cal_event_del(ce);
-	}
-	// Then we ask for the newer or not synched events
-	mdir_patch_list(cf->mdir, cf->last_version+1, false, add_event_cb, cf);
+	mdir_patch_list(cf->mdir, false, add_event_cb, cf);
 }
 
 void refresh(void)
