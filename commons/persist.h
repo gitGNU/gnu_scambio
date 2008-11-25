@@ -21,12 +21,25 @@
 #ifndef PERSIST_H_080628
 #define PERSIST_H_080628
 
+#include <inttypes.h>
+
 struct persist {
 	size_t size;
 	void *data;
+	int fd;
 };
 
 void persist_ctor(struct persist *, size_t size, char const *fname);
 void persist_dtor(struct persist *);
+void persist_ctor_sequence(struct persist *p, char const *fname);
+void persist_lock(struct persist *);
+void persist_unlock(struct persist *);
+static inline void const *persist_read(struct persist *persist)
+{
+	return persist->data;
+}
+
+void persist_write(struct persist *, void *);
+uint64_t persist_read_inc_sequence(struct persist *);
 
 #endif

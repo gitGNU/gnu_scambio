@@ -121,7 +121,8 @@ static struct mdir *mdir_new(char const *id, bool create)
 static struct mdir *mdir_create(bool transient)
 {
 	debug("create a new mdir");
-	uint64_t id = (*(uint64_t *)dirid_seq.data)++;	// FIXME: must be atomic
+	uint64_t id;
+	if_fail (id = persist_read_inc_sequence(&dirid_seq)) return NULL;
 	char id_str[1+20+1];
 	snprintf(id_str, sizeof(id_str), "%s%"PRIu64, transient ? "_":"", id);
 	struct mdir *mdir = mdir_new(id_str, true);
@@ -205,8 +206,8 @@ void mdir_begin(void)
 	char root_path[PATH_MAX];
 	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
 	if_fail (Mkdir(root_path)) return;
-	persist_ctor(&dirid_seq, sizeof(uint64_t), conf_get_str("MDIR_DIRSEQ"));
-	persist_ctor(&transient_version, sizeof(mdir_version), conf_get_str("MDIR_TRANSIENTSEQ"));
+	persist_ctor_sequence(&dirid_seq, conf_get_str("MDIR_DIRSEQ"));
+	persist_ctor_sequence(&transient_version, conf_get_str("MDIR_TRANSIENTSEQ"));
 }
 
 void mdir_end(void)
@@ -432,8 +433,9 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 		if (error_code() == EEXIST) error_clear();
 		else return;
 	}
-	snprintf(temp+len, sizeof(temp)-len, "%c%"PRIversion, action == MDIR_ADD ? '+':'-', *(mdir_version *)transient_version.data);
-	(*(mdir_version *)transient_version.data)++;
+	mdir_version tver;
+	if_fail (tver = persist_read_inc_sequence(&transient_version)) return;
+	snprintf(temp+len, sizeof(temp)-len, "%c%"PRIversion, action == MDIR_ADD ? '+':'-', tver);
 	int fd = open(temp, O_WRONLY|O_CREAT|O_EXCL, 0440);
 	if (fd < 0) with_error(errno, "Cannot create transient patch in %s", temp) return;
 	header_write(h, fd);
