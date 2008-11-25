@@ -33,8 +33,8 @@
  * Data Definitions
  */
 
-char *mdir_name;
-char *local_path;
+char const *mdir_name;
+char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
 static struct persist last_time_stamp;
@@ -119,6 +119,8 @@ static void last_ts_save(void)
 int main(int nb_args, char const **args)
 {
 	if_fail(init()) return EXIT_FAILURE;
+	mdir_name = conf_get_str("SC_MEREFS_MDIR");
+	local_path = conf_get_str("SC_MEREFS_PATH");
 	struct option const options[] = {
 		{
 			'm', "mdir", OPT_STRING, &mdir_name, "The mdir path to track", {},

@@ -25,8 +25,8 @@
 #include "scambio/channel.h"
 #include "file.h"
 
-extern char *mdir_name;
-extern char *local_path;
+extern char const *mdir_name;
+extern char const *local_path;
 extern unsigned local_path_len;
 extern struct mdir *mdir;
 extern bool quit;
