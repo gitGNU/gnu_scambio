@@ -33,8 +33,7 @@ static int open_or_create(char const *fname, size_t size, void const *default_va
 	if (errno != ENOENT) with_error(errno, "Cannot open '%s'", fname) return -1;
 	fd = open(fname, O_RDWR|O_CREAT|O_EXCL, 0660);
 	if (fd < 0) with_error(errno, "Cannot create '%s'", fname) return -1;
-	if (0 != write(fd, default_value, size)) {
-		error_push(errno, "Cannot write default value onto '%s'", fname);
+	if_fail (WriteTo(fd, 0, default_value, size)) {
 		(void)close(fd);
 		return -1;
 	}
