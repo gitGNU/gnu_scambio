@@ -94,7 +94,7 @@ static void init(void)
 
 time_t last_run_start(void)
 {
-	return *(time_t *)last_time_stamp.data;
+	return *(time_t *)persist_read(&last_time_stamp);
 }
 
 static void loop(void)
@@ -106,7 +106,7 @@ static void loop(void)
 		if_fail (reread_mdir()) break;	// Will append to unmatched list the new entry
 		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
 		if_fail (create_unmatched_files()) break;	// Will add to local tree the new entries
-		*(time_t *)last_time_stamp.data = current_run_start;
+		persist_write(&last_time_stamp, &current_run_start);
 		pth_sleep(1);	// will schedule other threads and prevent us from eating the CPU
 	}
 }

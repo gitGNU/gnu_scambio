@@ -26,7 +26,6 @@
 #include "scambio.h"
 #include "scambio/cnx.h"
 #include "scambio/header.h"
-#include "persist.h"
 #include "digest.h"
 #include "c2l.h"
 
