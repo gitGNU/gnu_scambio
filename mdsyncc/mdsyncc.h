@@ -39,6 +39,7 @@ void writer_end(void);
 void connecter_begin(void);
 void connecter_end(void);
 struct command;
+struct c2l_map;
 void finalize_sub  (struct mdir_cmd *cmd, void *user_data);
 void finalize_unsub(struct mdir_cmd *cmd, void *user_data);
 void finalize_put  (struct mdir_cmd *cmd, void *user_data);
@@ -52,6 +53,7 @@ struct mdirc {
  	// The writer will add entries to these lists while the reader will remove them once completed,
 	// and perform the proper final action for these commands.
 	LIST_HEAD(commands, command) commands;
+	LIST_HEAD(c2l_maps, c2l_map) c2l_maps;
 	bool subscribed;
 	pth_rwlock_t command_lock;	// protects all the previous commands + command lists
 	LIST_HEAD(patches, patch) patches;

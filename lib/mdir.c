@@ -492,6 +492,15 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				on_error return;
 				if (! h) continue;
 				bool skip = false;
+				char const *localid = header_search(h, SC_LOCALID_FIELD);
+				if (localid) {	// then the local file does not exist anymore, but we may already have reported it when it was present
+					mdir_version local = mdir_str2version(localid);
+					on_error {
+						error_clear();
+					} else {
+						if (local <= mdir->last_listed_unsync) skip = true;	// we already reported it
+					}
+				}
 				if (action == MDIR_REM) {	// don't report removals of patches we did not report
 					mdir_version target = get_target(h);
 					on_error {
