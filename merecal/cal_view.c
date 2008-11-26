@@ -184,7 +184,7 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 		struct cal_event *ce = g_value_get_pointer(&gevent);
 		g_value_unset(&gevent);
 		replaced = ce->version;
-		if (replaced == 0) {
+		if (replaced < 0) {
 			alert(GTK_MESSAGE_ERROR, "Cannot edit a transient event");
 			return;
 		}
@@ -214,7 +214,7 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 	gtk_tree_model_get_value(GTK_TREE_MODEL(event_store), &iter, FIELD_EVENT, &gevent);
 	struct cal_event *ce = g_value_get_pointer(&gevent);
 	g_value_unset(&gevent);
-	if (ce->version == 0) {
+	if (ce->version < 0) {
 		alert(GTK_MESSAGE_ERROR, "Cannot delete a transient event");
 		return;
 	}
@@ -300,10 +300,10 @@ GtkWidget *make_cal_window(void)
 	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
 #	else
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
+	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
 #	endif
 	gtk_container_add(GTK_CONTAINER(vbox), calendar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), calendar, FALSE, TRUE, 1, GTK_PACK_END);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
 
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 

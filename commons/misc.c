@@ -92,7 +92,7 @@ void Read(void *buf, int fd, size_t len)
 	assert(done == len);
 }
 
-void WriteTo(int fd, off_t offset, void *buf, size_t len)
+void WriteTo(int fd, off_t offset, void const *buf, size_t len)
 {
 	debug("WriteTo(%d, %u, %p, %zu)", fd, (unsigned)offset, buf, len);
 	size_t done = 0;

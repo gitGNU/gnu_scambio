@@ -87,7 +87,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	struct header *h = header_new();
 	on_error return;
 	do {
-		char date_str[4+1+2+1+2+1+2+1+2+1];
+		char date_str[] = "XXXX XX XX XX XX XX";
 		struct cal_date date;
 		if_fail (header_add_field(h, SC_TYPE_FIELD, SC_CAL_TYPE)) break;
 		// From
@@ -170,8 +170,12 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(vbox), table);
 	gtk_container_add(GTK_CONTAINER(vbox), descr_text);
+#	ifdef WITH_MAEMO
+	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
+#	else
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+#	endif
 	gtk_box_set_child_packing(GTK_BOX(vbox), table, FALSE, TRUE, 1, GTK_PACK_START);
 	gtk_box_set_child_packing(GTK_BOX(vbox), descr_text, TRUE, TRUE, 1, GTK_PACK_START);
 

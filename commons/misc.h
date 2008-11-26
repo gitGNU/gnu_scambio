@@ -28,7 +28,7 @@ void Write_strs(int fd, ...)
 ;
 void Read(void *buf, int fd, size_t len);
 void ReadFrom(void *buf, int fd, off_t offset, size_t len);
-void WriteTo(int fd, off_t offset, void *buf, size_t len);
+void WriteTo(int fd, off_t offset, void const *buf, size_t len);
 void Copy(int dest, int src);
 void Mkdir(char const *path);
 void Mkdir_for_file(char *path);

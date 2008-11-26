@@ -49,20 +49,22 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *path)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *folder)
 {
-	assert(new);
+	assert(version < 0);	// as the patch is transient
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked
-	// but may already have been sent nonetheless.
+	// and as patch_list returns patches only once we a certain we did not sent it already
 	char const *kw = action == MDIR_ADD ? kw_put:kw_rem;
-	struct command *cmd = command_get_by_path(mdirc, kw, param.path);
-	if (! cmd) {
-		// FIXME : grasp cnx write lock
-		(void)command_new(kw, mdirc, (char const *)path, param.path);
-		unless_error header_write(header, cnx.fd);
-		// FIXME : release cnx write lock
+	char filename[PATH_MAX];
+	snprintf(filename, sizeof(filename), "%s/.tmp/%c%"PRIversion, mdir->path, action == MDIR_ADD ? '+':'-', -version);
+	// FIXME : grasp cnx write lock
+	(void)command_new(kw, mdirc, folder, filename);
+	unless_error {
+		mdirc->nb_pending_acks ++;	// Notice : header_write may schedule the reader thread which may receive the answer before we run again. So must have to inc nb_pending_acks _before_ calling header_write
+		header_write(header, cnx.fd);
 	}
+	// FIXME : release cnx write lock
 }
 
 // Subscribe to the directory, then scan it
@@ -88,7 +90,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	}
 	// Synchronize up its content
 	debug("list patches");
-	mdir_patch_list(&mdirc->mdir, 0, true, ls_patch, path);
+	mdir_patch_list(&mdirc->mdir, true, ls_patch, path);
 	on_error return;
 	// Recurse
 	debug("list folders");

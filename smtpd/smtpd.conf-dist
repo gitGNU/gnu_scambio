@@ -33,16 +33,14 @@
 
 ## Where the meta-data are stored
 #export MDIR_ROOT_DIR=/var/lib/scambio/mdir
-export MDIR_ROOT_DIR=/var/lib/scambio/client/mdir
 
 ## How many messages a file is allowed to store
 #export MDIR_MAX_JNL_SIZE=2000
 
-## A filename used to store a sequence number
+## Some filenames used to store sequence numbers (will be mmaped)
 #export MDIR_DIRSEQ=/var/lib/scambio/mdir/.dirid.seq
-export MDIR_DIRSEQ=$MDIR_ROOT_DIR/.dirid.seq
+#export MDIR_TRANSIENTSEQ=/var/lib/scambio/mdir/.transient.seq
 
 ## Where the users definition files are stored
 #export MDIR_USERS_DIR=/var/lib/scambio/users
-export MDIR_USERS_DIR=$MDIR_ROOT_DIR/users
 

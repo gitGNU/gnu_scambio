@@ -26,8 +26,8 @@
 #include "scambio.h"
 #include "scambio/cnx.h"
 #include "scambio/header.h"
-#include "persist.h"
 #include "digest.h"
+#include "c2l.h"
 
 /* The reader listens for command answers.
  * On a put response, it renames the temporary filename stored in the action to
@@ -66,18 +66,19 @@ void finalize_unsub(struct mdir_cmd *cmd, void *user_data)
 	command_del(command);
 }
 
-static void rename_temp(char const *path, char const *compl)
+static void remember_version_map(struct mdirc *mdirc, char const *central_str, char const *local_file)
 {
-	char new_path[PATH_MAX];
-	int len = snprintf(new_path, sizeof(new_path), "%s", path);
-	assert(len > 0 && len < (int)sizeof(new_path));
-	char *c = new_path + len;
-	while (*(c-1) != '+' && *(c-1) != '-') {
-		if (c == new_path || *c == '/') with_error(0, "Bad filename for command : '%s'", path) return;
-		c--;
-	}
-	snprintf(c, sizeof(new_path)-(c - new_path), "=%s", compl);
-	if (0 != rename(path, new_path)) error_push(errno, "rename %s -> %s", path, new_path);
+	// Removes the local file
+	debug("Removing local file '%s'", local_file);
+	if (0 != unlink(local_file)) with_error(errno, "unlink(%s)", local_file) return;
+	// Then stores the mapping between central and local version
+	mdir_version central, local;
+	if_fail (central = mdir_str2version(central_str)) return;
+	char const *c = local_file + strlen(local_file);
+	while (c > local_file && *(c-1) != '/') c--;
+	if (c == local_file) with_error(0, "Bad filename : %s", local_file) return;
+	if_fail (local = mdir_str2version(c+1)) return;
+	(void)c2l_new(&mdirc->c2l_maps, central, local);
 }
 
 void finalize_put(struct mdir_cmd *cmd, void *user_data)
@@ -86,11 +87,15 @@ void finalize_put(struct mdir_cmd *cmd, void *user_data)
 	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
 	struct command *const command = DOWNCAST(sq, sq, command);
+	assert(command->mdirc->nb_pending_acks > 0);
+	command->mdirc->nb_pending_acks--;
 	int status = cmd->args[0].integer;
 	char const *compl = cmd->args[1].string;
 	debug("put %s : %d", command->filename, status);
+	assert(command->filename[0] != '\0');
 	if (status == 200) {
-		rename_temp(command->filename, compl);
+		remember_version_map(command->mdirc, compl, command->filename);
+		error_clear();
 	}
 	command_del(command);
 }
@@ -101,11 +106,15 @@ void finalize_rem(struct mdir_cmd *cmd, void *user_data)
 	struct mdir_sent_query *const sq = mdir_cnx_query_retrieve(cnx, cmd);
 	on_error return;
 	struct command *const command = DOWNCAST(sq, sq, command);
+	assert(command->mdirc->nb_pending_acks > 0);
+	command->mdirc->nb_pending_acks--;
 	int status = cmd->args[0].integer;
 	char const *compl = cmd->args[1].string;
 	debug("rem %s : %d", command->filename, status);
+	assert(command->filename[0] != '\0');
 	if (status == 200) {
-		rename_temp(command->filename, compl);
+		remember_version_map(command->mdirc, compl, command->filename);
+		error_clear();
 	}
 	command_del(command);
 }
@@ -155,6 +164,12 @@ static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version ol
 		header_del(patch->header);
 		return;
 	}
+	struct c2l_map *c2l = c2l_search(&mdirc->c2l_maps, new_version);
+	if (c2l) {
+		debug("version %"PRIversion" found to match local version %"PRIversion, new_version, c2l->local);
+		header_add_field(patch->header, SC_LOCALID_FIELD, mdir_version2str(c2l->local));
+		c2l_del(c2l);
+	}
 	// Insert this patch into this mdir
 	struct patch *p, *prev_p = NULL;
 	LIST_FOREACH(p, &mdirc->patches, entry) {
@@ -182,12 +197,20 @@ static void patch_del(struct patch *patch)
 
 static void try_apply(struct mdirc *mdirc)	// try to apply some of the stored patches
 {
+	if (mdirc->nb_pending_acks > 0) {
+		// mdir_patch_list() is in trouble is we receive a PATCH for a local transient
+		// file before the acks gives us its version. Here is our work arnound this :
+		debug("Do not apply patches because we still wait for %u acks", mdirc->nb_pending_acks);
+		return;
+	}
 	debug("try to apply received patch(es)");
 	struct patch *patch;
 	while (NULL != (patch = LIST_FIRST(&mdirc->patches)) && mdir_last_version(&mdirc->mdir) == patch->old_version) {
 		assert(patch->new_version > patch->old_version);
 		unsigned nb_deleted = patch->new_version - patch->old_version - 1;
-		if_fail ((void)mdir_patch(&mdirc->mdir, patch->action, patch->header, nb_deleted)) break;
+		mdir_version version;
+		if_fail (version = mdir_patch(&mdirc->mdir, patch->action, patch->header, nb_deleted)) break;
+		assert(version == patch->new_version);
 		patch_del(patch);
 	}
 }

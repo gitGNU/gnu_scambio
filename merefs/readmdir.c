@@ -19,8 +19,6 @@
 #include "scambio/header.h"
 #include "merefs.h"
 
-static mdir_version last_read;
-
 /*
  * Initial Read
  */
@@ -45,7 +43,7 @@ static void remove_remote_file(mdir_version to_del)
 	};
 }
 
-static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_action action, bool new, union mdir_list_param param, void *data)
+static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
 {
 	(void)mdir;
 	(void)data;
@@ -73,16 +71,13 @@ static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_
 	} else {
 		debug("...this name is new");
 	}
-	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0, new ? 0:param.version)) return;	// new files do not need a version : we use version only for deletion and transient patch cant be deleted (since they have no version to target)
-	if (! new && param.version > last_read) last_read = param.version;
+	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0, version)) return;
 }
 
 // Will read the whole mdir and create an entry (on unmatched list) for each file
 void start_read_mdir(void)
 {
-	last_read = 0;
-	if_fail (mdir_patch_list(mdir, 0, false, add_remote_file, NULL)) return;
-	debug("We've now read up to version %"PRIversion, last_read);
+	if_fail (mdir_patch_list(mdir, false, add_remote_file, NULL)) return;
 }
 
 /*
@@ -92,9 +87,7 @@ void start_read_mdir(void)
 // Will append to unmatched list the new entry
 void reread_mdir(void)
 {
-	debug("Reread patches, last one was version %"PRIversion, last_read);
-	if_fail (mdir_patch_list(mdir, last_read+1, false, add_remote_file, NULL)) return;
-	debug("We've now read up to version %"PRIversion, last_read);
+	if_fail (mdir_patch_list(mdir, false, add_remote_file, NULL)) return;
 }
 
 // If some remote files are still unmatched, create them

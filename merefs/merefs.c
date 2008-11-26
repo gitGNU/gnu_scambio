@@ -33,8 +33,8 @@
  * Data Definitions
  */
 
-char *mdir_name;
-char *local_path;
+char const *mdir_name;
+char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
 static struct persist last_time_stamp;
@@ -84,7 +84,6 @@ static void init(void)
 	if_fail(init_log()) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	if_fail (daemonize("sc_merefs")) return;
 	if_fail (files_begin()) return;
 	if_fail (init_chn()) return;
 }
@@ -95,7 +94,7 @@ static void init(void)
 
 time_t last_run_start(void)
 {
-	return *(time_t *)last_time_stamp.data;
+	return *(time_t *)persist_read(&last_time_stamp);
 }
 
 static void loop(void)
@@ -107,7 +106,7 @@ static void loop(void)
 		if_fail (reread_mdir()) break;	// Will append to unmatched list the new entry
 		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
 		if_fail (create_unmatched_files()) break;	// Will add to local tree the new entries
-		*(time_t *)last_time_stamp.data = current_run_start;
+		persist_write(&last_time_stamp, &current_run_start);
 		pth_sleep(1);	// will schedule other threads and prevent us from eating the CPU
 	}
 }
@@ -120,6 +119,8 @@ static void last_ts_save(void)
 int main(int nb_args, char const **args)
 {
 	if_fail(init()) return EXIT_FAILURE;
+	mdir_name = conf_get_str("SC_MEREFS_MDIR");
+	local_path = conf_get_str("SC_MEREFS_PATH");
 	struct option const options[] = {
 		{
 			'm', "mdir", OPT_STRING, &mdir_name, "The mdir path to track", {},
@@ -130,13 +131,15 @@ int main(int nb_args, char const **args)
 	if_fail (option_parse(nb_args, args, options, sizeof_array(options))) return EXIT_FAILURE;
 	if (! mdir_name) option_missing("mdir");
 	if (! local_path) option_missing("path");
+	if_fail (daemonize("sc_merefs")) return EXIT_FAILURE;
 	debug("Keeping mdir '%s' in synch with path '%s'", mdir_name, local_path);
 	local_path_len = strlen(local_path);
 	if_fail (mdir = mdir_lookup(mdir_name)) return EXIT_FAILURE;
 	// Init time_stamp file
 	char persistant_ts_file[PATH_MAX];
 	snprintf(persistant_ts_file, sizeof(persistant_ts_file), "%s/.sc_merefs_ts", local_path);
-	if_fail (persist_ctor(&last_time_stamp, sizeof(time_t), persistant_ts_file)) return EXIT_FAILURE;
+	time_t default_ts = 0;
+	if_fail (persist_ctor(&last_time_stamp, sizeof(default_ts), persistant_ts_file, &default_ts)) return EXIT_FAILURE;
 	atexit(last_ts_save);
 
 	if_fail (loop()) return EXIT_FAILURE;

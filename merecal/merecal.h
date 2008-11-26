@@ -52,16 +52,13 @@ struct cal_folder {
 	char path[PATH_MAX];
 	char *name;	// points onto path
 	struct mdir *mdir;
-	mdir_version last_version;
-	LIST_HEAD(cal_events, cal_event) new_events;	// we keep an eye on those that are not synched yet
 	bool displayed;
 };
 
-extern struct cal_events cal_events;
+extern LIST_HEAD(cal_events, cal_event) cal_events;
 
 struct cal_event {
 	LIST_ENTRY(cal_event) entry;	// cal_events are ordered according to (day, hour)
-	LIST_ENTRY(cal_event) new_entry;	// if version=0, we are on the new_event of our folder
 	struct cal_folder *folder;
 	struct cal_date start, stop;
 	char *description;

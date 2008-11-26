@@ -36,6 +36,7 @@
 #include "mdsyncc.h"
 #include "command.h"
 #include "auth.h"
+#include "c2l.h"
 
 /*
  * mdirc allocator
@@ -48,8 +49,10 @@ static struct mdir *mdirc_alloc(void)
 	struct mdirc *mdirc = malloc(sizeof(*mdirc));
 	if (! mdirc) with_error(ENOMEM, "malloc mdirc") return NULL;
 	mdirc->subscribed = false;
+	mdirc->nb_pending_acks = 0;
 	LIST_INIT(&mdirc->commands);
 	LIST_INIT(&mdirc->patches);
+	LIST_INIT(&mdirc->c2l_maps);
 	(void)pth_rwlock_init(&mdirc->command_lock);
 	return &mdirc->mdir;
 }
@@ -60,6 +63,10 @@ static void mdirc_free(struct mdir *mdir)
 	struct command *cmd;
 	while (NULL != (cmd = LIST_FIRST(&mdirc->commands))) {
 		command_del(cmd);
+	}
+	struct c2l_map *c2l;
+	while (NULL != (c2l = LIST_FIRST(&mdirc->c2l_maps))) {
+		c2l_del(c2l);
 	}
 	free(mdirc);
 }

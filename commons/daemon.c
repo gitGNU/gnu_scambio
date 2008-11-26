@@ -67,6 +67,7 @@ static void make_pidfile(void)
 
 void daemonize(char const *log_ident)
 {
+	if (conf_get_str("SC_DEBUG")) return;
 	pid_t pid;
 	(void)umask(0);
 	if ((pid = fork()) < 0) with_error(errno, "fork") return;

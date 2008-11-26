@@ -15,29 +15,34 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef MEREFS_H_081112
-#define MEREFS_H_081112
-
-#include <stdbool.h>
-#include <time.h>
+#include <stdlib.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
-#include "scambio/channel.h"
-#include "file.h"
+#include "c2l.h"
+#include "mdsyncc.h"
 
-extern char const *mdir_name;
-extern char const *local_path;
-extern unsigned local_path_len;
-extern struct mdir *mdir;
-extern bool quit;
-extern struct chn_cnx ccnx;
+struct c2l_map *c2l_new(struct c2l_maps *list, mdir_version central, mdir_version local)
+{
+	debug("local version %"PRIversion" corresponds to central version %"PRIversion, local, central);
+	struct c2l_map *c2l = malloc(sizeof(*c2l));
+	if (! c2l) with_error(ENOMEM, "malloc(c2l)") return NULL;
+	c2l->central = central;
+	c2l->local = local;
+	LIST_INSERT_HEAD(list, c2l, entry);
+	return c2l;
+}
 
-time_t last_run_start(void);
-void start_read_mdir(void);
-void reread_mdir(void);
-void unmatch_all(void);
-void traverse_local_path(void);
-void create_unmatched_files(void);
-void create_local_file(struct file *file);
+void c2l_del(struct c2l_map *c2l)
+{
+	LIST_REMOVE(c2l, entry);
+	free(c2l);
+}
 
-#endif
+struct c2l_map *c2l_search(struct c2l_maps *list, mdir_version central)
+{
+	struct c2l_map *c2l;
+	LIST_FOREACH(c2l, list, entry) {
+		if (c2l->central == central) return c2l;
+	}
+	return NULL;
+}
