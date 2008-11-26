@@ -176,7 +176,9 @@ static void decode_in_varbuf(struct varbuf *vb, size_t size, char *msg, struct h
 		};
 		for (unsigned e=0; e<sizeof_array(possible_encodings); e++) {
 			if (0 != strcasecmp(encoding, possible_encodings[e].name)) continue;
+			debug("decoding %s, size = %zu", encoding, size);
 			possible_encodings[e].decode(vb, size, msg);
+			debug("output size : %zu", vb->used);
 			return;
 		}
 	}
