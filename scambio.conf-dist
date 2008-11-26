@@ -17,7 +17,7 @@ export SC_LOG_DIR=$HOME/scambio/log
 
 ## MDSYNC server location
 #export MDIRD_HOST=localhost
-#export MDIRD_PORT=21435
+#export MDIRD_PORT=21654
 
 ## FILE server location
 #export SC_FILED_HOST=localhost
