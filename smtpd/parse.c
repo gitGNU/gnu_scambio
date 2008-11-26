@@ -65,6 +65,7 @@ static void parse_multipart(struct msg_tree *node, char *msg, size_t size, char 
 		if (! first_boundary) {
 			struct msg_tree *part = parse_mail_rec(msg, delim_pos - msg);
 			unless_error SLIST_INSERT_HEAD(&node->content.parts, part, entry);
+			error_clear();
 		}
 		first_boundary = false;
 		msg = delim_pos + boundary_len;
@@ -149,9 +150,9 @@ static void decode_base64(struct varbuf *vb, size_t size, char *msg)
 			}
 		}
 		if (nb_vals + nb_pads >= sizeof_array(vals)) {	// output the result
-			char output[3] = {
+			unsigned char output[3] = {
 				(vals[0] << 2) | (vals[1] >> 4),
-				(vals[1] << 4) | (vals[2] >> 4),
+				(vals[1] << 4) | (vals[2] >> 2),
 				(vals[2] << 6) | vals[3],
 			};
 			if_fail (varbuf_append(vb, sizeof(output)-nb_pads, output)) return;
@@ -164,7 +165,7 @@ static void decode_base64(struct varbuf *vb, size_t size, char *msg)
 
 static void decode_in_varbuf(struct varbuf *vb, size_t size, char *msg, struct header *header)
 {
-	char const *encoding = header_search(header, "content-transfert-encoding");
+	char const *encoding = header_search(header, "content-transfer-encoding");
 	on_error return;
 	if (encoding) {
 		static const struct {
@@ -329,10 +330,7 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 	// First read the header
 	if_fail (node->header = header_new()) return;
 	size_t header_size;
-	if_fail (header_size = header_parse(node->header, msg)) {
-		header_del(node->header);
-		return;
-	}
+	if_fail (header_size = header_parse(node->header, msg)) return;
 	assert(header_size <= size);
 	// Find out weither the body is total with a decoding method, or
 	// is another message up to a given boundary.
@@ -361,6 +359,10 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 
 static void msg_tree_dtor(struct msg_tree *node)
 {
+	if (node->header) {
+		header_del(node->header);
+		node->header = NULL;
+	}
 	switch (node->type) {
 		case CT_NONE:
 			break;
@@ -376,6 +378,7 @@ static void msg_tree_dtor(struct msg_tree *node)
 			}
 			break;
 	}
+	node->type = CT_NONE;
 }
 
 void msg_tree_del(struct msg_tree *node)
