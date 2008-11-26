@@ -29,7 +29,6 @@
 
 #ifdef WITH_MAEMO
 #include <libosso.h>
-#define PACKAGE_DBUS_NAME "org.maemo." PACKAGE_NAME
 
 static HildonProgram *hildon_program;
 osso_context_t *osso_ctx;
@@ -62,14 +61,16 @@ static void deinit_osso(void)
 }
 #endif
 
-void init(char const *name, int nb_args, char *args[])
+void init(char const *app_name_, int nb_args, char *args[])
 {
-	app_name = name;	// FIXME: merecal.log is not sexy as an app name
+	app_name = app_name_;
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail(init_conf()) return;
-	if_fail(init_log(name)) return;
+	char logfname[PATH_MAX];
+	snprintf(logfname, sizeof(logfname), "%s.log", app_name);
+	if_fail(init_log(logfname)) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 #	ifdef WITH_MAEMO
@@ -77,7 +78,9 @@ void init(char const *name, int nb_args, char *args[])
 	gtk_init(&nb_args, &args);
 	g_set_application_name(app_name);
 	hildon_program = HILDON_PROGRAM(hildon_program_get_instance());
-	osso_ctx = osso_initialize(PACKAGE_DBUS_NAME, PACKAGE_VERSION, TRUE, NULL);
+	char servname[PATH_MAX];
+	snprintf(servname, sizeof(servname), "org.maemo.%s", app_name);
+	osso_ctx = osso_initialize(servname, PACKAGE_VERSION, TRUE, NULL);
 	if (! osso_ctx) with_error(0, "osso_initialize") return;
 	if (0 != atexit(deinit_osso)) with_error(0, "atexit") return;
 #	else
