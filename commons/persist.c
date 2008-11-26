@@ -45,10 +45,17 @@ void persist_ctor(struct persist *p, size_t size, char const *fname, void const 
 	p->size = size;
 	p->fd = open_or_create(fname, size, default_value);
 	on_error return;
-	p->data = mmap(NULL, size, PROT_READ, MAP_SHARED, p->fd, 0);
+	// We need a read only filedescr to mmap read only for this to work on jffs2 FS
+	int ro_fd = open(fname, O_RDONLY);
+	if (ro_fd < 0) {
+		(void)close(p->fd);
+		with_error(errno, "open RO(%s)", fname) return;
+	}
+	p->data = mmap(NULL, size, PROT_READ, MAP_SHARED, ro_fd, 0);
+	(void)close(ro_fd);
 	if (MAP_FAILED == p->data) {
 		(void)close(p->fd);
-		error_push(errno, "Cannot mmap(file='%s', size=%zu)", fname, size);
+		with_error(errno, "Cannot mmap(file='%s', size=%zu)", fname, size) return;
 	}
 }
 

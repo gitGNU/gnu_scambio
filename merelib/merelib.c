@@ -28,7 +28,11 @@
  */
 
 #ifdef WITH_MAEMO
+#include <libosso.h>
+#define PACKAGE_DBUS_NAME "org.maemo." PACKAGE_NAME
+
 static HildonProgram *hildon_program;
+osso_context_t *osso_ctx;
 #endif
 static char const *app_name;
 
@@ -51,9 +55,16 @@ static void init_log(char const *filename)
 	debug("Setting log level to %d", log_level);
 }
 
+#ifdef WITH_MAEMO
+static void deinit_osso(void)
+{
+	osso_deinitialize(osso_ctx);
+}
+#endif
+
 void init(char const *name, int nb_args, char *args[])
 {
-	app_name = name;
+	app_name = name;	// FIXME: merecal.log is not sexy as an app name
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
@@ -61,10 +72,16 @@ void init(char const *name, int nb_args, char *args[])
 	if_fail(init_log(name)) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	gtk_init(&nb_args, &args);
 #	ifdef WITH_MAEMO
-	hildon_program = HILDON_PROGRAM(hildon_program_get_instance());
+//	if (! gnome_vfs_init()) with_error(0, "gnome_vfs_init") return;
+	gtk_init(&nb_args, &args);
 	g_set_application_name(app_name);
+	hildon_program = HILDON_PROGRAM(hildon_program_get_instance());
+	osso_ctx = osso_initialize(PACKAGE_DBUS_NAME, PACKAGE_VERSION, TRUE, NULL);
+	if (! osso_ctx) with_error(0, "osso_initialize") return;
+	if (0 != atexit(deinit_osso)) with_error(0, "atexit") return;
+#	else
+	gtk_init(&nb_args, &args);
 #	endif
 }
 

@@ -171,7 +171,7 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	gtk_container_add(GTK_CONTAINER(vbox), table);
 	gtk_container_add(GTK_CONTAINER(vbox), descr_text);
 #	ifdef WITH_MAEMO
-	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
+	hildon_window_add_toolbar(HILDON_WINDOW(editor->window), GTK_TOOLBAR(toolbar));
 #	else
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);

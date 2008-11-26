@@ -74,6 +74,8 @@ AC_CONFIG_FILES([
 	merelib/Makefile
 	meremail/Makefile
 	merecal/Makefile
+	merecal/merecal.desktop
+	merecal/org.maemo.merecal.service
 	merenotifier/Makefile
 	tools/Makefile
 ])
