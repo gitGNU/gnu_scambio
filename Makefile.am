@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools merefs merenotifier @GTK_SUBDIRS@ icons
+SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools merefs merenotifier @GTK_SUBDIRS@
 
 .PHONY: cscope loc
 

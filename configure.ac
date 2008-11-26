@@ -31,12 +31,12 @@ AC_ARG_WITH([desktop],
 AS_IF(
 	[test "x$DO_GTKAPPS" = xgtk],
 		[
-			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")
+			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal icons")
 			AC_SUBST(MAEMO_CPPFLAGS, "")
 		],
 	[test "x$DO_GTKAPPS" = xmaemo],
 		[
-			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")
+			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal icons")
 			AC_SUBST(MAEMO_CPPFLAGS, "-DWITH_MAEMO")
 		],
 	[test "x$DO_GTKAPPS" = xno],
