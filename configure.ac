@@ -74,5 +74,9 @@ AC_CONFIG_FILES([
 	merecal/org.maemo.merecal.service
 	merenotifier/Makefile
 	tools/Makefile
+	icons/Makefile
+	icons/26x26/Makefile
+	icons/40x40/Makefile
+	icons/scalable/Makefile
 ])
 AC_OUTPUT
