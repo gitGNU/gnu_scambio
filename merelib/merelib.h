@@ -27,6 +27,7 @@
 
 void init(char const *name, int nb_args, char *args[]);
 void destroy_cb(GtkWidget *widget, gpointer data);
+void exit_when_closed(GtkWidget *);
 void alert(GtkMessageType type, char const *text);
 bool confirm(char const *);
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
