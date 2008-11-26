@@ -5,4 +5,4 @@ Type=Application
 Name=MereCal
 Exec=@prefix@/bin/merecal
 X-Osso-Service=org.maemo.merecal
-Icon=qgn_list_gene_default_app
+Icon=merecal

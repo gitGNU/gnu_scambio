@@ -3,10 +3,12 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -I$(top_srcdir)/me
 
 dbusdir=$(datadir)/dbus-1/services
 desktopdir=$(datadir)/applications/hildon
+icondir=$(datadir)/icons/hicolor/26x26/
 
 bin_PROGRAMS = merecal
 dbus_DATA=org.maemo.merecal.service
 desktop_DATA=merecal.desktop
+icon_DATA=merecal.png
 
 merecal_SOURCES = \
 	merecal.c \
