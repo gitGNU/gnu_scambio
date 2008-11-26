@@ -377,6 +377,7 @@ int main(int nb_args, char *args[])
 	refresh();
 	GtkWidget *cal_window = make_cal_window();
 	if (! cal_window) return EXIT_FAILURE;
+	exit_when_closed(cal_window);
 	gtk_widget_show_all(cal_window);
 	gtk_main();
 	return EXIT_SUCCESS;

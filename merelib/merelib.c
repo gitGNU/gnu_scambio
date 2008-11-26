@@ -92,6 +92,12 @@ void init(char const *app_name_, int nb_args, char *args[])
  * Gtk Helpers
  */
 
+void exit_when_closed(GtkWidget *widget)
+{
+	g_signal_connect(widget, "delete-event", G_CALLBACK(destroy_cb), NULL);
+	g_signal_connect(widget, "destroy", G_CALLBACK(destroy_cb), NULL);
+}
+
 void destroy_cb(GtkWidget *widget, gpointer data)
 {
 	(void)widget;
