@@ -397,6 +397,7 @@ static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
 	enum mdir_action action;
 	struct header *target = jnl_read(old_jnl, to_del - old_jnl->version, &action);
 	on_error return;
+	if (! target) return;	// we remove something that was already removed
 	do {
 		if (action != MDIR_ADD) with_error(0, "Bad patch type for deletion") break;
 		if (header_is_directory(target)) {
