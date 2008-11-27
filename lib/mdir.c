@@ -387,7 +387,7 @@ static void insert_blank_patches(struct mdir *mdir, unsigned nb)
 	}
 }
 
-static void mdir_prepare_add(struct mdir *mdir, struct header *header)
+static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
 {
 	mdir_version to_del = header_target(header);
 	on_error return;
@@ -407,7 +407,7 @@ static void mdir_prepare_add(struct mdir *mdir, struct header *header)
 	header_del(target);
 }
 
-static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
+static void mdir_prepare_add(struct mdir *mdir, struct header *header)
 {
 	if (header_is_directory(header)) {
 		mdir_link(mdir, header, false);
