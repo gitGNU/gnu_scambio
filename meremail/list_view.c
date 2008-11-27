@@ -95,11 +95,10 @@ GtkWidget *make_list_window(char const *folder)
 	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
 	
 	GtkWidget *toolbar = make_toolbar(6,
-		GTK_STOCK_DIRECTORY, NULL,     NULL,
-		GTK_STOCK_EDIT,      NULL,     NULL,
-		GTK_STOCK_JUMP_TO,   NULL,     NULL,
-		GTK_STOCK_DELETE,    NULL,     NULL,
-		GTK_STOCK_FIND,      NULL,     NULL,
+		GTK_STOCK_EDIT,      NULL,     NULL,	// View
+		GTK_STOCK_JUMP_TO,   NULL,     NULL,	// Forward
+		GTK_STOCK_DELETE,    NULL,     NULL,	// Delete
+		GTK_STOCK_FIND,      NULL,     NULL,	// Find
 		GTK_STOCK_QUIT,      close_cb, window);
 
 #	ifdef WITH_MAEMO
