@@ -168,7 +168,7 @@ static struct mdir *lookup_abs(char const *path)
 	debug("lookup absolute path '%s'", path);
 	char slink[PATH_MAX];
 	ssize_t len = readlink(path, slink, sizeof(slink));
-	if (len == -1) with_error(errno, "readlink %s", path) return NULL;
+	if (len == -1) with_error(errno, "readlink(%s)", path) return NULL;
 	if (len == 0 || len >= (int)sizeof(slink) || len <= (int)mdir_root_len+1) with_error(0, "bad symlink for %s", path) return NULL;
 	slink[len] = '\0';
 	return mdir_lookup_by_id(slink+mdir_root_len+1, false);	// symlinks points to "mdir_root/id"
@@ -307,7 +307,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		char prev_link[PATH_MAX];
 		ssize_t len = readlink(path, prev_link, sizeof(prev_link));
 		if (len == -1) {
-			if (errno != ENOENT) with_error(errno, "Cannot readlink %s", path) return;
+			if (errno != ENOENT) with_error(errno, "readlink(%s)", path) return;
 			// does not exist : then create a new one
 			child = mdir_lookup_by_id(dirid, true);
 		} else {	// the symlink exist
@@ -395,7 +395,7 @@ static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
 	on_error return;
 	if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) return;
 	enum mdir_action action;
-	struct header *target = jnl_read(old_jnl, to_del, &action);
+	struct header *target = jnl_read(old_jnl, to_del - old_jnl->version, &action);
 	on_error return;
 	do {
 		if (action != MDIR_ADD) with_error(0, "Bad patch type for deletion") break;
