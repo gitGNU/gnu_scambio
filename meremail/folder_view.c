@@ -112,7 +112,7 @@ static void add_subfolder_rec(struct mdir *parent, struct mdir *child, bool sync
 	gtk_tree_store_append(folder_store, &iter, parent_iter);
 	gtk_tree_store_set(folder_store, &iter,
 		FOLDER_STORE_NAME, name,
-		FOLDER_STORE_SIZE, (guint)mdir_size(child),
+		FOLDER_STORE_SIZE, (guint)mdir_size(child, false),
 		-1);
 	fill_folder_store_rec(child, &iter);
 }

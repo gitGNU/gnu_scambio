@@ -121,6 +121,8 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
 // list all patches of a mdir. When called again, list only new patches.
 // (will also list unconfirmed patches, once, with a unique version < 0)
+// (will also list directory patches - otherwise you'd never know when a
+// dir is removed)
 void mdir_patch_list(struct mdir *, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version version, void *data), void *data);
 
 // Forget about previous lists to restart listing all available patches.
@@ -142,7 +144,7 @@ mdir_version mdir_str2version(char const *str);
 char const *mdir_action2str(enum mdir_action action);
 enum mdir_action mdir_str2action(char const *str);
 bool mdir_is_transient(struct mdir *mdir);
-unsigned mdir_size(struct mdir *);
+unsigned mdir_size(struct mdir *, bool unsync_only);
 struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h);
 
 #endif
