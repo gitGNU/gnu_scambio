@@ -387,6 +387,33 @@ static void insert_blank_patches(struct mdir *mdir, unsigned nb)
 	}
 }
 
+static void mdir_prepare_add(struct mdir *mdir, struct header *header)
+{
+	mdir_version to_del = header_target(header);
+	on_error return;
+	struct jnl *old_jnl = find_jnl(mdir, to_del);
+	on_error return;
+	if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) return;
+	enum mdir_action action;
+	struct header *target = jnl_read(old_jnl, to_del, &action);
+	on_error return;
+	do {
+		if (action != MDIR_ADD) with_error(0, "Bad patch type for deletion") break;
+		if (header_is_directory(target)) {
+			if_fail (mdir_unlink(mdir, target)) break;
+		}
+		if_fail (jnl_mark_del(old_jnl, to_del)) break;
+	} while (0);
+	header_del(target);
+}
+
+static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
+{
+	if (header_is_directory(header)) {
+		mdir_link(mdir, header, false);
+	}
+}
+
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
 {
 	debug("patch mdir %s (with %u dels)", mdir_id(mdir), nb_deleted);
@@ -398,22 +425,11 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		if (nb_deleted) if_fail (insert_blank_patches(mdir, nb_deleted)) break;
 		// If it's a removal, check the header and the deleted version
 		if (action == MDIR_REM) {
-			mdir_version to_del = header_target(header);
-			on_error break;
-			struct jnl *old_jnl = find_jnl(mdir, to_del);
-			on_error break;
-			if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) break;
-			if_fail (jnl_mark_del(old_jnl, to_del)) break;
+			mdir_prepare_rem(mdir, header);
+		} else {
+			mdir_prepare_add(mdir, header);
 		}
-		// if its for a subfolder, performs the (un)linking
-		if (header_is_directory(header)) {
-			if (action == MDIR_ADD) {
-				mdir_link(mdir, header, false);
-			} else {
-				mdir_unlink(mdir, header);
-			}
-			on_error break;
-		}
+		on_error break;
 		// Either use the last journal, or create a new one
 		struct jnl *jnl = last_jnl(mdir);
 		on_error break;
