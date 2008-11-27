@@ -47,17 +47,17 @@ static void close_cb(GtkToolButton *button, gpointer user_data)
 
 static void add_patch_to_store(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
 {
-	if (action != MDIR_ADD) return;
+	if (action != MDIR_ADD) return;	// FIXME: if REM, remove this one from the store
+	if (! header_has_type(header, SC_MAIL_TYPE)) return;
 	char const *from = header_search(header, SC_FROM_FIELD);
 	char const *subject = header_search(header, SC_DESCR_FIELD);
-	if (! from || ! subject) return;	// not an email
 	
 	(void)mdir;
 	GtkListStore *msg_store = (GtkListStore *)data;
 	GtkTreeIter iter;
 	gtk_list_store_insert_with_values(msg_store, &iter, G_MAXINT,
-		MSG_STORE_FROM, from,
-		MSG_STORE_SUBJECT, subject,
+		MSG_STORE_FROM, from ? from:"Unknown",
+		MSG_STORE_SUBJECT, subject ? subject:"No Subject",
 		MSG_STORE_VERSION, version,
 		-1);
 }
