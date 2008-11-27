@@ -94,20 +94,20 @@ GtkWidget *make_list_window(char const *folder)
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
 	
-	GtkWidget *toolbar = make_toolbar(5,
-		GTK_STOCK_DIRECTORY, NULL, NULL,
-		GTK_STOCK_EDIT,      NULL, NULL,
-		GTK_STOCK_JUMP_TO,   NULL, NULL,
-		GTK_STOCK_DELETE,    NULL, NULL,
-		GTK_STOCK_FIND,      NULL, NULL);
+	GtkWidget *toolbar = make_toolbar(6,
+		GTK_STOCK_DIRECTORY, NULL,     NULL,
+		GTK_STOCK_EDIT,      NULL,     NULL,
+		GTK_STOCK_JUMP_TO,   NULL,     NULL,
+		GTK_STOCK_DELETE,    NULL,     NULL,
+		GTK_STOCK_FIND,      NULL,     NULL,
+		GTK_STOCK_QUIT,      close_cb, window);
 
-	GtkToolItem *button_close = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);
-	g_signal_connect(G_OBJECT(button_close), "clicked", G_CALLBACK(close_cb), window);
-
+#	ifdef WITH_MAEMO
+	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
+#	else
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
-
+#	endif
 	return window;
 }
 
