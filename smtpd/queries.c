@@ -135,7 +135,7 @@ static void set_forward_path(struct cnx_env *env, char const *forward_path)
 	if_fail (set_address(&env->forward_path, forward_path)) return;
 	// Check the mailbox exists
 	char folder[PATH_MAX];
-	snprintf(folder, sizeof(folder), "/smtpd/mailboxes/%s", env->forward_path);
+	snprintf(folder, sizeof(folder), "/mailboxes/Incoming/%s", env->forward_path);
 	if_fail (env->mailbox = mdir_lookup(folder)) unset_address(&env->forward_path);
 }
 void exec_helo(struct mdir_cmd *cmd, void *user_data)

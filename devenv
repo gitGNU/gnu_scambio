@@ -30,17 +30,17 @@ function send_content {
 1 auth Alice
 2 put /
 sc-type: dir
-sc-name: smtpd
-
-3 put /smtpd
-sc-type: dir
 sc-name: mailboxes
 
-4 put /smtpd
+3 put /mailboxes
+sc-type: dir
+sc-name: Incoming
+
+4 put /mailboxes
 sc-type: dir
 sc-name: To Send
 
-5 put /smtpd
+5 put /mailboxes
 sc-type: dir
 sc-name: Sent
 
@@ -48,9 +48,9 @@ sc-name: Sent
 sc-type: dir
 sc-name: calendars
 
-7 put smtpd/mailboxes
+7 put mailboxes/Incoming
 sc-type: dir
-sc-name: rixed@happyleptic.org
+sc-name: rixed@dangi.happyleptic.org
 
 8 put calendars
 sc-type: dir
