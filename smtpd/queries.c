@@ -93,53 +93,50 @@ void answer(struct mdir_cnx *cnx, int status, char const *cmpl)
  * HELO
  */
 
+static void unset_address(char **addr)
+{
+	if (*addr) {
+		free(*addr);
+		*addr = NULL;
+	}
+}
 static void reset_state(struct cnx_env *env)
 {
-	if (env->domain) {
-		free(env->domain);
-		env->domain = NULL;
-	}
-	if (env->reverse_path) {
-		free(env->reverse_path);
-		env->reverse_path = NULL;
-	}
-	if (env->forward_path) {
-		free(env->forward_path);
-		env->forward_path = NULL;
-	}
+	unset_address(&env->domain);
+	unset_address(&env->reverse_path);
+	unset_address(&env->forward_path);
 }
 static void set_domain(struct cnx_env *env, char const *id)
 {
 	reset_state(env);
+	unset_address(&env->domain);
 	env->domain = strdup(id);
 }
-static void set_reverse_path(struct cnx_env *env, char const *reverse_path)
+static void set_address(char **addr, char const *value)
 {
-	if (env->reverse_path) free(env->reverse_path);
-	env->reverse_path = strdup(reverse_path);
-}
-static void set_forward_path(struct cnx_env *env, char const *forward_path)
-{
-	size_t len = strlen(forward_path);
+	size_t len = strlen(value);
 	bool strip_last = false;
-	if (forward_path[0] == '<' && forward_path[len-1] == '>') {
-		debug("remove '<>' from forward path '%s'", forward_path);
-		forward_path ++;
+	if (value[0] == '<' && value[len-1] == '>') {
+		value ++;
 		len -=2;
 		strip_last = true;
 	}
-	if (env->forward_path) free(env->forward_path);
-	env->forward_path = strdup(forward_path);
-	if (! env->forward_path) with_error(ENOMEM, "strdup()") return;
-	if (strip_last) env->forward_path[len] = '\0';
+	unset_address(addr);
+	*addr = strdup(value);
+	if (! *addr) with_error(ENOMEM, "strdup()") return;
+	if (strip_last) (*addr)[len] = '\0';
+}
+static void set_reverse_path(struct cnx_env *env, char const *reverse_path)
+{
+	set_address(&env->reverse_path, reverse_path);
+}
+static void set_forward_path(struct cnx_env *env, char const *forward_path)
+{
+	if_fail (set_address(&env->forward_path, forward_path)) return;
 	// Check the mailbox exists
 	char folder[PATH_MAX];
 	snprintf(folder, sizeof(folder), "/smtpd/mailboxes/%s", env->forward_path);
-	if_fail (env->mailbox = mdir_lookup(folder)) {
-		free(env->forward_path);
-		env->forward_path = NULL;
-		return;
-	}
+	if_fail (env->mailbox = mdir_lookup(folder)) unset_address(&env->forward_path);
 }
 void exec_helo(struct mdir_cmd *cmd, void *user_data)
 {
