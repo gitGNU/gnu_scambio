@@ -22,7 +22,9 @@
 
 int main(int nb_args, char *args[])
 {
-	if_fail(init("meremail.log", nb_args, args)) return EXIT_FAILURE;
+	if_fail (init("meremail.log", nb_args, args)) return EXIT_FAILURE;
+	if_fail (maildir_init()) return EXIT_FAILURE;
+	if_fail (mail_view_init()) return EXIT_FAILURE;
 	GtkWidget *folder_window = make_folder_window("/");
 	if (! folder_window) return EXIT_FAILURE;
 	exit_when_closed(folder_window);

@@ -91,3 +91,23 @@ void sc_gmfield2uint(char const *str, unsigned *year, unsigned *month, unsigned 
 		debug("UTC '%s' converted to local '%u %u %u %u %u %u'", str, *year, *month, *day, *hour, *min, *sec);
 	} else with_error(0, "Cannot convert string '%s' to date", str) return;
 }
+
+time_t sc_gmfield2ts(char const *str, bool *hour_set)
+{
+	unsigned year, month, day, hour, min, sec;
+	if_fail (sc_gmfield2uint(str, &year, &month, &day, &hour, &min, &sec, hour_set)) return 0;
+	struct tm tm;
+	memset(&tm, 0, sizeof(tm));
+	tm.tm_year = year - 1900;
+	tm.tm_mon  = month - 1;
+	tm.tm_mday = day;
+	if (*hour_set) {
+		tm.tm_hour = hour;
+		tm.tm_min  = min;
+		tm.tm_sec  = sec;
+	}
+	time_t ts = mktime(&tm);
+	if ((time_t)-1 == ts) with_error(0, "mktime") return 0;
+	return ts;
+}
+

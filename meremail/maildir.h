@@ -15,18 +15,39 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef MEREMAIL_H_081007
-#define MEREMAIL_H_081007
+#ifndef MSGMDIR_H_081128
+#define MSGMDIR_H_081128
 
-#include "merelib.h"
+#include <time.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
-#include "scambio/header.h"
-#include "maildir.h"
 
-void mail_view_init(void);
-GtkWidget *make_list_window(char const *folder);
-GtkWidget *make_folder_window(char const *parent);
-GtkWidget *make_mail_window(struct msg *);
+struct maildir;
+struct msg {
+	LIST_ENTRY(msg) entry;
+	struct maildir *maildir;	// backlink for ease
+	char *from;
+	char *descr;
+	time_t date;
+	mdir_version version;
+};
+
+struct maildir {
+//	LIST_ENTRY(maildir) entry;	// in maildirs
+	struct mdir mdir;
+	LIST_HEAD(msgs, msg) msgs;
+	unsigned nb_msgs;
+};
+
+//LIST_HEAD(maildirs, maildir) maildirs;
+
+static inline struct maildir *mdir2maildir(struct mdir *mdir)
+{
+	return DOWNCAST(mdir, mdir, maildir);
+}
+
+void maildir_init(void);
+void maildir_refresh(struct maildir *maildir);
+char const *ts2staticstr(time_t ts);
 
 #endif

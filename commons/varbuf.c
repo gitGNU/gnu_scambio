@@ -18,6 +18,10 @@
 #include <string.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <pth.h>
 #include "varbuf.h"
 #include "misc.h"
@@ -144,4 +148,18 @@ void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 void varbuf_write(struct varbuf const *vb, int fd)
 {
 	Write(fd, vb->buf, vb->used);
+}
+
+void varbuf_ctor_from_file(struct varbuf *vb, char const *filename)
+{
+	debug("make varbuf from '%s'", filename);
+	int fd = open(filename, O_RDONLY);
+	if (fd < 0) with_error(errno, "open(%s)", filename) return;
+	off_t size = filesize(fd);
+	if_succeed (varbuf_ctor(vb, size, false)) {
+		if_succeed (varbuf_put(vb, size)) {
+			Read(vb->buf, fd, size);
+		}
+	}
+	(void)close(fd);
 }

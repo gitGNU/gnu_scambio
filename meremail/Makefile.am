@@ -6,7 +6,9 @@ bin_PROGRAMS = meremail
 meremail_SOURCES = \
 	meremail.c \
 	list_view.c \
-	folder_view.c
+	folder_view.c \
+	mail_view.c \
+	maildir.c
 
 meremail_LDADD = ../merelib/libgui.la ../lib/libscambio.la ../commons/libcommons.la $(GTKS_LIBS)
 

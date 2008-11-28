@@ -31,6 +31,7 @@ enum {
 };
 
 static GtkTreeStore *folder_store;
+static struct mdir *root_mdir;
 
 /*
  * Callbacks
@@ -97,22 +98,21 @@ static void enter_cb(GtkToolButton *button, gpointer user_data)
 	}
 }
 
-/*
- * Build the view
- */
-
 static void fill_folder_store_rec(struct mdir *mdir, GtkTreeIter *iter);
 static void add_subfolder_rec(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data)
 {
 	(void)parent;
 	(void)synched;	// TODO: display this in a way or another (italic ?)
+	// Refresh this mdir content
+	struct maildir *maildir = mdir2maildir(child);
+	if_fail (maildir_refresh(maildir)) return;
 	// Add this name as a child of the given iterator
 	GtkTreeIter *parent_iter = (GtkTreeIter *)data;
 	GtkTreeIter iter;
 	gtk_tree_store_append(folder_store, &iter, parent_iter);
 	gtk_tree_store_set(folder_store, &iter,
 		FOLDER_STORE_NAME, name,
-		FOLDER_STORE_SIZE, (guint)mdir_size(child, false),
+		FOLDER_STORE_SIZE, maildir->nb_msgs,
 		-1);
 	fill_folder_store_rec(child, &iter);
 }
@@ -122,9 +122,21 @@ static void fill_folder_store_rec(struct mdir *mdir, GtkTreeIter *iter)
 	mdir_folder_list(mdir, false, add_subfolder_rec, iter);
 }
 
+static void refresh_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	(void)user_data;
+	gtk_tree_store_clear(folder_store);
+	fill_folder_store_rec(root_mdir, NULL);
+}
+
+/*
+ * Build the view
+ */
+
 GtkWidget *make_folder_window(char const *parent)
 {
-	struct mdir *mdir = mdir_lookup(parent);
+	root_mdir = mdir_lookup(parent);
 	on_error return NULL;
 
 	GtkWidget *window = make_window(destroy_cb);
@@ -132,11 +144,10 @@ GtkWidget *make_folder_window(char const *parent)
 	// The list of messages
 	folder_store = gtk_tree_store_new(NB_FOLDER_STORES, G_TYPE_STRING, G_TYPE_UINT);
 	// Fill this store
-	fill_folder_store_rec(mdir, NULL);
-	on_error return NULL;
+	if_fail (fill_folder_store_rec(root_mdir, NULL)) return NULL;
 	
 	GtkWidget *folder_tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(folder_store));
-	g_object_unref(G_OBJECT(folder_store));
+	gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(folder_tree), TRUE);
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(folder_tree), FALSE);
 	gtk_tree_view_expand_all(GTK_TREE_VIEW(folder_tree));
 
@@ -156,10 +167,10 @@ GtkWidget *make_folder_window(char const *parent)
 	gtk_container_add(GTK_CONTAINER(vbox), folder_tree);
 	
 	GtkWidget *toolbar = make_toolbar(4,
-		GTK_STOCK_OK,      enter_cb, GTK_TREE_VIEW(folder_tree),
-		GTK_STOCK_ADD,     NULL,     NULL,
-		GTK_STOCK_DELETE,  NULL,     NULL,
-		GTK_STOCK_REFRESH, NULL,     NULL);
+		GTK_STOCK_OK,      enter_cb,   GTK_TREE_VIEW(folder_tree),
+		GTK_STOCK_ADD,     NULL,       NULL,
+		GTK_STOCK_DELETE,  NULL,       NULL,
+		GTK_STOCK_REFRESH, refresh_cb, NULL);
 
 	GtkToolItem *button_quit = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_quit, -1);

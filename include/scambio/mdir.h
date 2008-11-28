@@ -131,6 +131,9 @@ void mdir_patch_reset(struct mdir *);
 // returns only the symlinks.
 void mdir_folder_list(struct mdir *, bool new_only, void (*cb)(struct mdir *parent, struct mdir *child, bool new, char const *name, void *data), void *data);
 
+// Return that very patch
+struct header *mdir_read(struct mdir *, mdir_version, enum mdir_action *);
+
 // returns the header, action and version following the given version
 // or NULL if no other patches are found
 struct header *mdir_read_next(struct mdir *, mdir_version *, enum mdir_action *);
@@ -144,7 +147,6 @@ mdir_version mdir_str2version(char const *str);
 char const *mdir_action2str(enum mdir_action action);
 enum mdir_action mdir_str2action(char const *str);
 bool mdir_is_transient(struct mdir *mdir);
-unsigned mdir_size(struct mdir *, bool unsync_only);
 struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h);
 
 #endif

@@ -46,4 +46,6 @@ void path_pop(char path[]);
 #include <sys/types.h>
 off_t filesize(int fd);
 
+char *Strdup(char const *orig);
+
 #endif

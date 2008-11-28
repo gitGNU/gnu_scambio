@@ -73,5 +73,6 @@ void varbuf_clean(struct varbuf *);
 void varbuf_stringify(struct varbuf *vb);
 void varbuf_destringify(struct varbuf *vb);
 void varbuf_write(struct varbuf const *vb, int fd);
+void varbuf_ctor_from_file(struct varbuf *vb, char const *filename);
 
 #endif

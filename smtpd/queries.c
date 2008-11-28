@@ -212,12 +212,11 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 	(void)close(fd);
 }
 
-static void store_file(struct header *header, struct varbuf *vb, char const *name, struct header *global_header)
+static void store_file(struct varbuf *vb, char const *name, struct header *global_header)
 {
 	// TODO: Instead of sending it to another file server, be our own file server
 	char resource[PATH_MAX];
 	debug("Creating a resource for");
-	header_debug(header);
 	if_fail (chn_create(&ccnx, resource, false)) return;
 	debug("Obtained resource '%s', now upload it", resource);
 	if_fail (send_varbuf(&ccnx, resource, vb)) return;
@@ -229,7 +228,7 @@ static void store_file(struct header *header, struct varbuf *vb, char const *nam
 static void store_file_rec(struct msg_tree *const tree, struct header *global_header)
 {
 	if (tree->type == CT_FILE) {
-		store_file(tree->header, &tree->content.file.data, tree->content.file.name, global_header);
+		store_file(&tree->content.file.data, tree->content.file.name, global_header);
 		return;
 	}
 	assert(tree->type == CT_MULTIPART);
@@ -237,6 +236,19 @@ static void store_file_rec(struct msg_tree *const tree, struct header *global_he
 	SLIST_FOREACH(subtree, &tree->content.parts, entry) {
 		if_fail (store_file_rec(subtree, global_header)) return;
 	}
+}
+
+static void store_header(struct header *to_save, struct header *global_header)
+{
+	struct varbuf vb;
+	if_fail (varbuf_ctor(&vb, 1024, true)) return;
+	do {
+		if_fail (header_dump(to_save, &vb)) break;
+		if_fail (store_file(&vb, "header", global_header)) break;
+	} while (0);
+	error_save();
+	varbuf_dtor(&vb);
+	error_restore();
 }
 
 static void process_mail(struct cnx_env *env)
@@ -250,6 +262,8 @@ static void process_mail(struct cnx_env *env)
 		do {
 			if_fail (header_add_field(h, SC_TYPE_FIELD, SC_MAIL_TYPE)) break;
 			if_fail (header_add_field(h, SC_FROM_FIELD, env->reverse_path)) break;
+			// Store the upper header in the filed
+			if_fail (store_header(msg_tree->header, h)) break;
 			// Store each file in the filed
 			if_fail (store_file_rec(msg_tree, h)) break;
 			// Attach some more meta informations

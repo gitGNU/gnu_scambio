@@ -263,7 +263,7 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
 	return header;
 }
 
-static struct header *get_header(struct mdir *mdir, mdir_version version, enum mdir_action *action)
+struct header *mdir_read(struct mdir *mdir, mdir_version version, enum mdir_action *action)
 {
 	struct jnl *jnl;
 	struct header *header;
@@ -628,7 +628,7 @@ struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h)
 	struct header *header;
 	enum mdir_action action;
 	if_fail (version = get_target(h)) return NULL;
-	if_fail (header = get_header(mdir, version, &action)) return NULL;
+	if_fail (header = mdir_read(mdir, version, &action)) return NULL;
 	if (action != MDIR_ADD) with_error(0, "Target header was not an addition !") return NULL;
 	return header;
 }
@@ -693,25 +693,3 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
-// count only the patch that are not removed
-static void count_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
-{
-	(void)mdir;
-	(void)version;
-	unsigned *size = (unsigned *)data;
-	if (header_is_directory(header)) return; // exclude directories
-	assert(action == MDIR_ADD || version < 0);
-	(*size) += action == MDIR_ADD ? 1:-1;
-}
-
-unsigned mdir_size(struct mdir *mdir, bool unsync_only)
-{
-	unsigned size = 0;
-	mdir_version last_listed_sync_bkp = mdir->last_listed_sync;
-	mdir_version last_listed_unsync_bkp = mdir->last_listed_unsync;
-	mdir_patch_reset(mdir);
-	mdir_patch_list(mdir, unsync_only, count_patch, &size);
-	mdir->last_listed_sync = last_listed_sync_bkp;
-	mdir->last_listed_unsync = last_listed_unsync_bkp;
-	return size;
-}

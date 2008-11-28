@@ -34,5 +34,6 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
 GtkWidget *make_labeled_hbox(char const *label, GtkWidget *other);
 GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...);
 GtkWidget *make_toolbar(unsigned nb_buttons, ...);
+GtkWidget *make_frame(char const *title, GtkWidget *wdg);
 
 #endif

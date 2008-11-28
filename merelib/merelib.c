@@ -176,3 +176,10 @@ GtkWidget *make_toolbar(unsigned nb_buttons, ...)
 	va_end(ap);
 	return toolbar;
 }
+
+GtkWidget *make_frame(char const *title, GtkWidget *wdg)
+{
+	GtkWidget *frame = gtk_frame_new(title);
+	gtk_container_add(GTK_CONTAINER(frame), wdg);
+	return frame;
+}

@@ -218,7 +218,13 @@ off_t filesize(int fd)
 	off_t size = lseek(fd, 0, SEEK_END);
 	if ((off_t)-1 == size) error_push(errno, "lseek(end)");
 	if ((off_t)-1 == lseek(fd, 0, SEEK_SET)) error_push(errno, "lseek(start)");
+	debug("filesize of fd %d is %u", fd, (unsigned)size);
 	return size;
 }
 
-
+char *Strdup(char const *orig)
+{
+	char *ret = strdup(orig);
+	if (! ret) with_error(errno, "strdup") return NULL;
+	return ret;
+}
