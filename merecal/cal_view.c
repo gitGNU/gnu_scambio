@@ -175,7 +175,7 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 		GtkTreeSelection *selection = gtk_tree_view_get_selection(list);
 		GtkTreeIter iter;
 		if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
-			error("No events selected");
+			alert(GTK_MESSAGE_ERROR, "Select an event to display");
 			return;
 		}
 		GValue gevent;

@@ -161,7 +161,7 @@ void header_del(struct header *h)
 
 char const **header_search_all(struct header const *h, char const *name, unsigned *nb)
 {
-	debug("looking for all%s in header @%p", name, h);
+	debug("looking for all %s in header @%p", name, h);
 	*nb = 0;
 	struct varbuf vb;
 	if_fail (varbuf_ctor(&vb, 10*sizeof(char *), true)) return NULL;

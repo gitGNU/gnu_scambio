@@ -135,7 +135,7 @@ static void init_server(void)
 	exec_begin();
 	on_error return;
 	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
-	if_fail(auth_begin()) return;
+	if_fail (auth_begin()) return;
 	if (0 != atexit(auth_end)) with_error(0, "atexit") return;
 }
 

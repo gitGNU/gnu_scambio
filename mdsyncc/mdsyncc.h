@@ -26,6 +26,7 @@
 #include "command.h"
 #include "scambio/cmd.h"
 #include "scambio/cnx.h"
+#include "miscmac.h"
 
 typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
@@ -62,7 +63,7 @@ struct mdirc {
 
 static inline struct mdirc *mdir2mdirc(struct mdir *mdir)
 {
-	return (struct mdirc *)((char *)mdir - offsetof(struct mdirc, mdir));
+	return DOWNCAST(mdir, mdir, mdirc);
 }
 
 void push_path(char const *path);
