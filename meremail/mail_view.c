@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <glib.h>
 #include "merelib.h"
 #include "meremail.h"
 #include "varbuf.h"
@@ -59,30 +60,55 @@ static void wait_complete(void)
 	while (! chn_cnx_all_tx_done(&ccnx)) pth_nanosleep(&ts, NULL);
 }
 
-static void make_varbuf_from_resource(struct varbuf *vb, char const *resource)
+static GtkWidget *make_framed_widget(char const *title, char const *type, char const *resource, bool expander)
 {
+	debug("title='%s', type='%s', resource='%s'", title, type, resource);
+	GtkWidget *widget = NULL;
+	struct varbuf vb;
+	// First try to get the resource
 	char filename[PATH_MAX];
 	if_fail (chn_get_file(&ccnx, filename, resource)) {
-		char *errstr = strdup(error_str());
+		widget = gtk_label_new(NULL);
+		char *str = g_markup_printf_escaped("<b>Cannot fetch remote resource</b> <i>%s</i> : %s", resource, error_str());
+		gtk_label_set_markup(GTK_LABEL(widget), str);
+		g_free(str);
 		error_clear();	// replace by an error text
-		if_succeed (varbuf_ctor(vb, 1024, true)) {
-			varbuf_append_strs(vb, "Cannot get resource '", resource, "' : ", errstr, NULL);
-			on_error varbuf_dtor(vb);
-		}
-		free(errstr);
-		return;
+		goto q;
 	}
 	wait_complete();
-	if_fail (varbuf_ctor_from_file(vb, filename)) return;
-}
-
-static GtkWidget *make_framed_text_buffer(char const *title, struct varbuf *vb)
-{
-	GtkTextBuffer *buffer = gtk_text_buffer_new(NULL);
-	gtk_text_buffer_set_text(GTK_TEXT_BUFFER(buffer), vb->buf, vb->used);
-	GtkWidget *widget = gtk_text_view_new_with_buffer(buffer);
-	g_object_unref(G_OBJECT(buffer));
-	return make_frame(title, widget);
+	// For text files, display in a text widget (after utf8 conversion)
+	// For html, use GtkHtml,
+	// For image, display as an image
+	// For other types, display a launcher for external app
+	if (0 == strncmp(type, "text/plain", 10)) {
+		GtkTextBuffer *buffer = gtk_text_buffer_new(NULL);
+		char charset[64];	// wild guess
+		if_fail (header_copy_parameter("charset", type, sizeof(charset), charset)) {
+			if (error_code() == ENOENT) {
+				error_clear();
+				snprintf(charset, sizeof(charset), "us-ascii");
+			} else return NULL;
+		}
+		if_fail (varbuf_ctor_from_file(&vb, filename)) return NULL;
+		// convert to UTF-8
+		gsize utf8size;
+		gchar *utf8text = g_convert_with_fallback(vb.buf, vb.used, "UTF-8", charset, NULL, NULL, &utf8size, NULL);
+		varbuf_dtor(&vb);
+		if (! utf8text) with_error(0, "Cannot convert from '%s' to utf8", charset) return NULL;
+		gtk_text_buffer_set_text(GTK_TEXT_BUFFER(buffer), utf8text, utf8size);
+		widget = gtk_text_view_new_with_buffer(buffer);
+		g_object_unref(G_OBJECT(buffer));
+		g_free(utf8text);
+	} else if (0 == strncmp(type, "image", 5)) {
+		widget = gtk_image_new_from_file(filename);	// Oh! All mighty gtk !
+	}
+	if (! widget) {
+		widget = gtk_label_new(NULL);
+		char *str = g_markup_printf_escaped("<b>Cannot display this part</b> which have type <i>%s</i>", type);
+		gtk_label_set_markup(GTK_LABEL(widget), str);
+		g_free(str);
+	}
+q:	return (expander ? make_expander : make_frame)(title, widget);
 }
 
 GtkWidget *make_mail_window(struct msg *msg)
@@ -115,21 +141,28 @@ GtkWidget *make_mail_window(struct msg *msg)
 	g_free(title_str);
 	gtk_container_add(GTK_CONTAINER(vbox), title);
 
-	// For each other resources, add a Frame
+	// Add a frame for each resources
 	for (unsigned n = 0; n < nb_resources; n++) {
-		struct varbuf vb;
-		char name[PATH_MAX];
-		if_fail (header_copy_parameter("name", resources[n], sizeof(name), name)) {
+		char resource[PATH_MAX];
+		char title[64];
+		char type[128];	// wild guess
+		bool expander = false;
+		if_fail (header_stripped_value(resources[n], sizeof(resource), resource)) break;
+		if_fail (header_copy_parameter("name", resources[n], sizeof(title), title)) {
 			if (error_code() == ENOENT) {	// smtp header have no filename
 				error_clear();
-				name[0] = '\0';
-			} else {
-				break;
-			}
+				snprintf(title, sizeof(title), "Headers");
+				expander = true;
+			} else break;
 		}
-		if_fail (make_varbuf_from_resource(&vb, resources[n])) break;
-		gtk_container_add(GTK_CONTAINER(vbox), make_framed_text_buffer(name, &vb));
-		varbuf_dtor(&vb);
+		if_fail (header_copy_parameter("type", resources[n], sizeof(type), type)) {
+			if (error_code() == ENOENT) {
+				error_clear();
+				type[0] = '\0';
+			} else break;
+		}
+		GtkWidget *widget = make_framed_widget(title, type, resource, expander);
+		if (widget) gtk_container_add(GTK_CONTAINER(vbox), widget);
 	}
 
 	free(resources);

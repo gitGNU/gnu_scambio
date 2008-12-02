@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <assert.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
@@ -177,9 +178,25 @@ GtkWidget *make_toolbar(unsigned nb_buttons, ...)
 	return toolbar;
 }
 
+GtkWidget *make_scrollable(GtkWidget *wdg)
+{
+	GtkWidget *scrolwin = gtk_scrolled_window_new(NULL, NULL);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolwin), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolwin), wdg);
+	return scrolwin;
+}
+
 GtkWidget *make_frame(char const *title, GtkWidget *wdg)
 {
 	GtkWidget *frame = gtk_frame_new(title);
-	gtk_container_add(GTK_CONTAINER(frame), wdg);
+	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
+	return frame;
+}
+
+GtkWidget *make_expander(char const *title, GtkWidget *wdg)
+{
+	GtkWidget *frame = gtk_expander_new(title);
+	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
+	gtk_expander_set_expanded(GTK_EXPANDER(frame), FALSE);
 	return frame;
 }

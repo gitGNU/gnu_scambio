@@ -354,6 +354,19 @@ void header_copy_parameter(char const *name, char const *field_value, size_t max
 	value[str_len] = '\0';
 }
 
+size_t header_stripped_value(char const *field_value, size_t max_len, char *value)
+{
+	char const *v = field_value;
+	size_t len = 0;
+	while (*v != '\0' && len < max_len-1) {
+		if (*v == ';') break;
+		value[len++] = *v++;
+	}
+	while (len > 0 && isspace(value[len-1])) len--;
+	value[len] = '\0';
+	return len;
+}
+
 void header_digest(struct header *header, size_t size, char *buffer)
 {
 	(void)size;	// FIXME: not me but the digest interface

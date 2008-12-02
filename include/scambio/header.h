@@ -72,6 +72,9 @@ size_t header_find_parameter(char const *name, char const *field_value, char con
 // value will always be nul terminated
 void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
 
+// If a value have some parameters, you may want a copy of the value without these parameters
+size_t header_stripped_value(char const *field_value, size_t max_len, char *value);
+
 #include "digest.h"
 void header_digest(struct header *h, size_t, char *buffer);
 struct header *header_from_file(char const *filename);
