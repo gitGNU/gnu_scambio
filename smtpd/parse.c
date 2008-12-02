@@ -298,7 +298,7 @@ static size_t append_param(char *params, size_t maxlen, size_t len, char const *
 		warning("parameter string too short to fit all params");
 		return len;
 	}
-	len += snprintf(params+len, maxlen-len, "%s%s=\"%.*s\"", len ? "; ":"", pname, plen, pval);
+	len += snprintf(params+len, maxlen-len, "%s%s=\"%.*s\"", len ? "; ":"", pname, (int)plen, pval);
 	return len;
 }
 
