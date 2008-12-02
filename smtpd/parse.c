@@ -388,8 +388,8 @@ static void msg_tree_dtor(struct msg_tree *node)
 			break;
 		case CT_MULTIPART:
 			{
-				struct msg_tree *sub;
-				SLIST_FOREACH(sub, &node->content.parts, entry) {
+				struct msg_tree *sub, *tmp;
+				SLIST_FOREACH_SAFE(sub, &node->content.parts, entry, tmp) {
 					msg_tree_del(sub);
 				}
 			}
