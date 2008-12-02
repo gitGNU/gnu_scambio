@@ -212,7 +212,7 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 	(void)close(fd);
 }
 
-static void store_file(struct varbuf *vb, char const *name, struct header *global_header)
+static void store_file(struct varbuf *vb, char const *params, struct header *global_header)
 {
 	// TODO: Instead of sending it to another file server, be our own file server ?
 	char resource[PATH_MAX];
@@ -223,8 +223,8 @@ static void store_file(struct varbuf *vb, char const *name, struct header *globa
 	debug("Adding this resource info onto the env header");
 	struct varbuf res_vb;
 	if_fail (varbuf_ctor(&res_vb, MAX_HEADLINE_LENGTH, false)) return;
-	if (name) {
-		varbuf_append_strs(&res_vb, resource, "; name=\"", name, "\"", NULL);
+	if (params && params[0] != '\0') {
+		varbuf_append_strs(&res_vb, resource, "; ", params, NULL);
 	} else {
 		varbuf_append_strs(&res_vb, resource, NULL);
 	}
@@ -235,7 +235,7 @@ static void store_file(struct varbuf *vb, char const *name, struct header *globa
 static void store_file_rec(struct msg_tree *const tree, struct header *global_header)
 {
 	if (tree->type == CT_FILE) {
-		store_file(&tree->content.file.data, tree->content.file.name, global_header);
+		store_file(&tree->content.file.data, tree->content.file.params, global_header);
 		return;
 	}
 	assert(tree->type == CT_MULTIPART);
@@ -251,7 +251,7 @@ static void store_header(struct header *to_save, struct header *global_header)
 	if_fail (varbuf_ctor(&vb, 1024, true)) return;
 	do {
 		if_fail (header_dump(to_save, &vb)) break;
-		if_fail (store_file(&vb, NULL, global_header)) break;
+		if_fail (store_file(&vb, "type=text/plain", global_header)) break;
 	} while (0);
 	error_save();
 	varbuf_dtor(&vb);

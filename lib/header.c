@@ -279,7 +279,6 @@ void header_dump(struct header const *h, struct varbuf *vb)
 	for (unsigned f=0; f<h->nb_fields; f++) {
 		field_dump(h->fields+f, vb);
 	}
-	varbuf_stringify(vb);	// so that empty headers leads to empty lines
 }
 
 void header_debug(struct header *h)
@@ -288,6 +287,7 @@ void header_debug(struct header *h)
 	varbuf_ctor(&vb, 1000, true);
 	on_error return;
 	header_dump(h, &vb);
+	varbuf_stringify(&vb);
 	if (! is_error()) debug("header : %s", vb.buf);
 	varbuf_dtor(&vb);
 }
