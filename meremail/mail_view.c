@@ -101,9 +101,6 @@ GtkWidget *make_mail_window(struct msg *msg)
 	unsigned nb_resources;
 	char const **resources = header_search_all(h, SC_RESOURCE_FIELD, &nb_resources);
 	on_error goto q1;
-	unsigned nb_names;
-	char const **names = header_search_all(h, SC_NAME_FIELD, &nb_names);
-	on_error goto q2;
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(win), vbox);
@@ -118,30 +115,23 @@ GtkWidget *make_mail_window(struct msg *msg)
 	g_free(title_str);
 	gtk_container_add(GTK_CONTAINER(vbox), title);
 
-	// Look for a resource named "header"
-	unsigned head_idx;
-	for (head_idx = 0; head_idx < nb_names; head_idx++) {
-		if (0 == strcmp(names[head_idx], "header")) break;
-	}
-	while (head_idx < nb_names && head_idx < nb_resources) {	// Try to add a header frame
+	// For each other resources, add a Frame
+	for (unsigned n = 0; n < nb_resources; n++) {
 		struct varbuf vb;
-		if_fail (make_varbuf_from_resource(&vb, resources[head_idx])) break;
-		gtk_container_add(GTK_CONTAINER(vbox), make_framed_text_buffer("Header", &vb));
-		varbuf_dtor(&vb);
-	}
-
-	// For each other resources, add a Widget
-	for (unsigned n = 0; n < nb_names; n++) {
-		if (n == head_idx) continue;
-		struct varbuf vb;
+		char name[PATH_MAX];
+		if_fail (header_copy_parameter("name", resources[n], sizeof(name), name)) {
+			if (error_code() == ENOENT) {	// smtp header have no filename
+				error_clear();
+				name[0] = '\0';
+			} else {
+				break;
+			}
+		}
 		if_fail (make_varbuf_from_resource(&vb, resources[n])) break;
-		gtk_container_add(GTK_CONTAINER(vbox), make_framed_text_buffer(names[n], &vb));
+		gtk_container_add(GTK_CONTAINER(vbox), make_framed_text_buffer(name, &vb));
 		varbuf_dtor(&vb);
 	}
 
-//q3:
-	free(names);
-q2:
 	free(resources);
 q1:
 	header_del(h);

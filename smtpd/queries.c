@@ -214,15 +214,22 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 
 static void store_file(struct varbuf *vb, char const *name, struct header *global_header)
 {
-	// TODO: Instead of sending it to another file server, be our own file server
+	// TODO: Instead of sending it to another file server, be our own file server ?
 	char resource[PATH_MAX];
 	debug("Creating a resource for");
 	if_fail (chn_create(&ccnx, resource, false)) return;
 	debug("Obtained resource '%s', now upload it", resource);
 	if_fail (send_varbuf(&ccnx, resource, vb)) return;
-	debug("That's great, now adding this info onto the env header");
-	if_fail (header_add_field(global_header, SC_RESOURCE_FIELD, resource)) return;
-	if_fail (header_add_field(global_header, SC_NAME_FIELD, name)) return;
+	debug("Adding this resource info onto the env header");
+	struct varbuf res_vb;
+	if_fail (varbuf_ctor(&res_vb, MAX_HEADLINE_LENGTH, false)) return;
+	if (name) {
+		varbuf_append_strs(&res_vb, resource, "; name=\"", name, "\"", NULL);
+	} else {
+		varbuf_append_strs(&res_vb, resource, NULL);
+	}
+	header_add_field(global_header, SC_RESOURCE_FIELD, res_vb.buf);
+	varbuf_dtor(&res_vb);
 }
 
 static void store_file_rec(struct msg_tree *const tree, struct header *global_header)
@@ -244,7 +251,7 @@ static void store_header(struct header *to_save, struct header *global_header)
 	if_fail (varbuf_ctor(&vb, 1024, true)) return;
 	do {
 		if_fail (header_dump(to_save, &vb)) break;
-		if_fail (store_file(&vb, "header", global_header)) break;
+		if_fail (store_file(&vb, NULL, global_header)) break;
 	} while (0);
 	error_save();
 	varbuf_dtor(&vb);
