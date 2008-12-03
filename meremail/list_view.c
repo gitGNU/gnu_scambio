@@ -34,14 +34,6 @@ enum {
  * Callbacks
  */
 
-static void close_cb(GtkToolButton *button, gpointer user_data)
-{
-	(void)button;
-	debug("close");
-	GtkWidget *window = (GtkWidget *)user_data;
-	gtk_widget_destroy(window);
-}
-
 static void view_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
