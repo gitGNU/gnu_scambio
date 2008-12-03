@@ -90,6 +90,7 @@ mdir_version header_target(struct header *h);
 #define SC_DIRID_FIELD    "sc-dirId"
 #define SC_NAME_FIELD     "sc-name"
 #define SC_FROM_FIELD     "sc-from"
+#define SC_TO_FIELD       "sc-to"
 #define SC_DESCR_FIELD    "sc-descr"
 #define SC_SENT_DATE      "sc-sent-at"
 #define SC_EXTID_FIELD    "sc-extid"
@@ -98,6 +99,7 @@ mdir_version header_target(struct header *h);
 #define SC_STOP_FIELD     "sc-stop"
 #define SC_PERIOD_FIELD   "sc-period"
 #define SC_LOCALID_FIELD  "sc-localid"
+#define SC_STATUS_FIELD   "sc-status"
 
 // Common values for type field
 #define SC_DIR_TYPE       "dir"

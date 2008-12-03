@@ -266,9 +266,9 @@ struct header *jnl_read(struct jnl *jnl, unsigned index, enum mdir_action *actio
 		on_error break;
 		if (buf[1] != '\n' || buf[size-2] != '\n' || buf [size-1] != '\n') with_error(0, "Invalid patch @%lu", (unsigned long)offset) break;
 		if (buf[0] == '+' || buf[0] == '%') {
-			*action = MDIR_ADD;
+			if (action) *action = MDIR_ADD;
 		} else if (buf[0] == '-') {
-			*action = MDIR_REM;
+			if (action) *action = MDIR_REM;
 		} else {
 			with_error(0, "Unknown action @%lu", (unsigned long)offset) break;
 		}

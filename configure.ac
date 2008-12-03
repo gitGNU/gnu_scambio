@@ -66,6 +66,7 @@ AC_CONFIG_FILES([
 	mdsyncc/Makefile
 	filed/Makefile
 	smtpd/Makefile
+	sendmail/Makefile
 	merefs/Makefile
 	merelib/Makefile
 	meremail/Makefile

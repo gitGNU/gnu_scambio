@@ -36,6 +36,11 @@ char const *sc_tm2gmfield(struct tm *tm, bool with_hour)
 	return field;
 }
 
+char const *sc_ts2gmfield(time_t ts, bool with_hour)
+{
+	return sc_tm2gmfield(localtime(&ts), with_hour);
+}
+
 // Yngvar Folling's function appeared in comp.lang.c.moderated on 2000/04/16
 static time_t mkgmtime(struct tm *utc_tm)
 {

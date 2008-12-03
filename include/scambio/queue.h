@@ -114,8 +114,7 @@
  * _REMOVE			+	+	+	+
  *
  */
-#define	QUEUE_MACRO_DEBUG 0
-#if QUEUE_MACRO_DEBUG
+#ifndef NDEBUG
 /* Store the last 2 places the queue element or head was altered */
 struct qm_trace {
 	char * lastfile;
@@ -146,7 +145,7 @@ struct qm_trace {
 #define	QMD_TRACE_HEAD(head)
 #define	TRACEBUF
 #define	TRASHIT(x)
-#endif	/* QUEUE_MACRO_DEBUG */
+#endif	/* NDEBUG */
 
 /*
  * Singly-linked List declarations.

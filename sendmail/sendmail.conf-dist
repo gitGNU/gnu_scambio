@@ -17,11 +17,12 @@
 ## SC_FILED server location
 #export SC_FILED_HOST=localhost
 #export SC_FILED_PORT=21436
-#export SC_USERNAME=smtpd
+#export SC_USERNAME=sendmail
 #export SC_FILES_DIR=/var/lib/scambio/files
 
-## Port sc_smtpd listens at
-#export SC_SMTPD_PORT=25
+## Relay SMTP messages to
+#export SC_SMTP_RELAY_HOST=localhost
+#export SC_SMTP_RELAY_PORT=25
 
 ## System user/group to setuid to
 #export SC_RUNASUSER=scambio

@@ -38,7 +38,7 @@ sc-name: Incoming
 
 4 put /mailboxes
 sc-type: dir
-sc-name: To Send
+sc-name: To_Send
 
 5 put /mailboxes
 sc-type: dir
