@@ -33,12 +33,20 @@ void crawler_end(void);
 
 // Forwarder API consists of the management of the forward queues
 TAILQ_HEAD(forwards, forward);
+struct part {
+	TAILQ_ENTRY(part) entry;
+	char filename[PATH_MAX];	// on cache
+	char name[128];	// suggested name
+	char type[128];	// content type
+	struct chn_tx *tx;
+};
 struct forward {
 	// Description of the email
 	char *from, *to, *subject;	// strduped
-	// etc...
+	TAILQ_HEAD(parts, part) parts;
 	// SMTP status
 	struct forwards *list;	// the list we are on, or NULL if we are still constructed
+	unsigned nb_parts;
 	TAILQ_ENTRY(forward) entry;
 	int status;	// 0 if still unknown
 	mdir_version version;

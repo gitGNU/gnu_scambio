@@ -292,6 +292,7 @@ struct command {
 	time_t sent;
 	int status;
 	struct stream *stream;	// NULL for creat
+	struct chn_tx *tx;
 	pth_cond_t cond;
 	pth_mutex_t condmut;
 };
@@ -304,6 +305,7 @@ static void command_ctor(struct chn_cnx *cnx, struct command *command, char cons
 	command->sent = time(NULL);
 	command->status = 0;
 	command->stream = stream;
+	command->tx = NULL;
 	mdir_sent_query_ctor(&command->sq);
 	if (stream) stream_ref(stream);
 	debug("locking condition mutex");
@@ -491,11 +493,10 @@ static void finalize_txstart(struct mdir_cmd *cmd, void *user_data)
 	struct command *command = DOWNCAST(sq, sq, command);
 	command->status = cmd->args[0].integer;
 	if (200 == command->status) {
-		struct chn_tx *tx;
 		if (command->keyword == kw_write) {
-			tx = chn_tx_new_sender(ccnx, cmd->seq, command->stream);
+			command->tx = chn_tx_new_sender(ccnx, cmd->seq, command->stream);
 		} else {
-			tx = chn_tx_new_receiver(ccnx, cmd->seq, command->stream);
+			command->tx = chn_tx_new_receiver(ccnx, cmd->seq, command->stream);
 		}
 		error_clear();
 	}
@@ -897,19 +898,21 @@ static void *tx_checker(void *arg)
  * Get a file from cache (download it first if necessary)
  */
 
-static void fetch_file_with_cnx(struct chn_cnx *cnx, char *name, struct stream *stream)
+static struct chn_tx *fetch_file_with_cnx(struct chn_cnx *cnx, char *name, struct stream *stream)
 {
 	assert(cnx && name && stream);
 	assert(! server);
 	struct command *command;
-	if_fail (command = command_new(cnx, kw_read, name, stream, false)) return;
+	if_fail (command = command_new(cnx, kw_read, name, stream, false)) return NULL;
 	command_wait(command);
 	if (command->status != 200) error_push(0, "Cannot get file '%s'", name);
+	struct chn_tx *tx = command->tx;
 	command_del(command);
 	// Remember that the transfert is still in progress !
+	return tx;
 }
 
-void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
+struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 {
 	assert(localfile && name);
 	debug("Try to get resource '%s'", name);
@@ -920,31 +923,33 @@ void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name)
 		debug("found in cache file '%s'", localfile);
 		// TODO: Touch it
 		(void)close(fd);
-		return;
+		return NULL;
 	}
-	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return;
+	if (errno != ENOENT) with_error(errno, "Cannot open(%s)", localfile) return NULL;
 	// So lets fetch it
 	debug("not in cache, need to fetch it");
-	if (! cnx) with_error(0, "Cannot fetch and not local") return;
-	if_fail (Mkdir_for_file(localfile)) return;
+	if (! cnx) with_error(0, "Cannot fetch and not local") return NULL;
+	if_fail (Mkdir_for_file(localfile)) return NULL;
 	fd = creat(localfile, 0640);
-	if (fd < 0) with_error(errno, "Cannot creat(%s)", localfile) return;
+	if (fd < 0) with_error(errno, "Cannot creat(%s)", localfile) return NULL;
 	(void)close(fd);
 	struct stream *stream = stream_lookup(name);
-	on_error return;
-	fetch_file_with_cnx(cnx, (char *)name, stream);
+	on_error return NULL;
+	struct chn_tx *tx = fetch_file_with_cnx(cnx, (char *)name, stream);
 	stream_unref(stream);
 	on_error {
 		// delete the file if the transfert failed for some reason
 		if (0 != unlink(localfile)) error_push(errno, "Failed to download %s, but cannot unlink it", localfile);
+		return NULL;
 	}
+	return tx;
 }
 
 /*
  * Send a local file to a channel (and copy it into cache while we are at it)
  */
 
-void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
+struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 {
 	// FIXME: instead of copying it into the cache, hardlink it to the cache and
 	// then close the file, and use the cache as the stream source.
@@ -954,17 +959,19 @@ void chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 	struct stream *stream = stream_lookup(name);
 	unless_error {
 		stream_unref(stream);
-		with_error(0, "Resource '%s' already exists", name) return;
+		with_error(0, "Resource '%s' already exists", name) return NULL;
 	}
 	error_clear();
-	if_fail (stream = stream_new_from_fd(name, fd)) return;
+	if_fail (stream = stream_new_from_fd(name, fd)) return NULL;
 	struct command *command;
-	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return;
+	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return NULL;
 	stream_unref(stream);
 	command_wait(command);
 	if (command->status != 200) error_push(0, "Cannot send file '%s'", name);
+	struct chn_tx *tx = command->tx;
 	command_del(command);
 	// Remember that the transfert is still in progress !
+	return tx;
 }
 
 /*

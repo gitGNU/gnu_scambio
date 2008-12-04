@@ -72,8 +72,9 @@ void chn_cnx_del(struct chn_cnx *cnx);
  * TODO: The file might be removed by the cache cleaner after this call
  * and before a subsequent open. Its touched to lower the risks.
  * localfile must be at least MAX_PATH chars long.
+ * Return the associated chn_tx, or NULL if the file was already local.
  */
-void chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name);
+struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name);
 
 /* Request a new channel, optionnaly for realtime.
  * Will wait untill creation or timeout.
@@ -86,7 +87,7 @@ void chn_create(struct chn_cnx *cnx, char *name, bool rt);
 
 /* Write a local file to a channel
  */
-void chn_send_file(struct chn_cnx *cnx, char const *name, int fd);
+struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name, int fd);
 
 /* Low level API */
 

@@ -22,6 +22,7 @@
 #include <time.h>
 #include <pth.h>
 #include "scambio.h"
+#include "scambio/header.h"
 #include "misc.h"
 #include "varbuf.h"
 #include "sendmail.h"
@@ -37,7 +38,7 @@ static struct forwards delivered_forwards;	// not necessarily successfully of co
 
 #define CNX_IDLE_TIMEOUT 15	// close useless SMTP cnx after this delay in secs.
 static int sock_fd;
-static time_t sock_opened_at;
+static time_t sock_last_used;
 static char my_hostname[256];
 
 static pth_t forwarder_thread;
@@ -178,13 +179,13 @@ static void may_open_connection(void)
 		sock_fd = -1;
 		with_error(0, "Cannot HELO to SMTP relay : status %d", status) return;
 	}
-	sock_opened_at = time(NULL);
+	sock_last_used = time(NULL);
 }
 
 static void may_close_connection(void)
 {
 	if (sock_fd == -1) return;
-	unsigned delay = time(NULL) - sock_opened_at;
+	unsigned delay = time(NULL) - sock_last_used;
 	if (delay > CNX_IDLE_TIMEOUT) {
 		debug("Closing idle SMTP cnx");
 		(void)smtp_cmd(sock_fd, "QUIT", NULL);
@@ -204,10 +205,10 @@ static int send_forward(struct forward *fwd)
 	if (status < 250 || status > 252) return status;
 	if_fail (status = smtp_cmd(sock_fd, "DATA", NULL)) return 0;
 	if (status != 354) return status;
-	// TODO
 	if_fail (send_smtp_strs(sock_fd, "From: ", fwd->from, NULL)) return 0;
 	if_fail (send_smtp_strs(sock_fd, "To: ", fwd->to, NULL)) return 0;
 	if_fail (send_smtp_strs(sock_fd, "Subject: ", fwd->subject, NULL)) return 0;
+	// TODO
 	if_fail (send_smtp_strs(sock_fd, "", NULL)) return 0;
 	if_fail (send_smtp_strs(sock_fd, "Scambio is fun !", NULL)) return 0;
 	if_fail (status = smtp_cmd(sock_fd, ".", NULL)) return 0;
@@ -218,19 +219,37 @@ static int send_forward(struct forward *fwd)
  * Forwarder thread
  */
 
+static bool transfers_done(struct forward *fwd)
+{
+	struct part *part;
+	TAILQ_FOREACH(part, &fwd->parts, entry) {
+		if (! part->tx) continue;
+		int tx_status = chn_tx_status(part->tx);
+		if (tx_status == 0) continue;
+		if (tx_status != 200) {
+			fwd->status = tx_status;
+			return true;	// no need to wait further
+		}
+	}
+	return true;
+}
+
 static void *forwarder(void *dummy)
 {
 	(void)dummy;
-	struct forward *fwd;
+	struct forward *fwd, *tmp;
 	while (! is_error() && ! terminate) {
-		while (NULL != (fwd = list_first(&waiting_forwards))) {
-			if_fail (may_open_connection()) goto q;	// if not already connected
-			if_fail (fwd->status = send_forward(fwd)) {
-				error_clear();	// will try later
-				break;
+		TAILQ_FOREACH_SAFE(fwd, &waiting_forwards, entry, tmp) {
+			if (transfers_done(fwd)) continue;	// may set fwd->status in case of error
+			if (fwd->status == 0) {
+				if_fail (may_open_connection()) goto q;	// if not already connected
+				if_fail (fwd->status = send_forward(fwd)) {
+					error_clear();	// will try later
+					break;
+				}
 			}
 			list_move_to(&delivered_forwards, fwd);
-			sock_opened_at = time(NULL);
+			sock_last_used = time(NULL);
 		}
 		may_close_connection();
 		pth_sleep(1);	// TODO: a signal when this list becomes non empty
@@ -272,16 +291,60 @@ void forwarder_end(void)
 }
 
 /*
- * Forward
+ * Forward & parts Ction/Dtion
  */
 
-// Ction/Dtion
+static void part_ctor(struct part *part, struct forward *fwd, char const *resource)
+{
+	// First get the resource values
+	char resource_stripped[PATH_MAX];
+	if_fail (header_stripped_value(resource, sizeof(resource_stripped), resource_stripped)) return;
+	if_fail (header_copy_parameter("name", resource, sizeof(part->name), part->name)) {
+		if (error_code() == ENOENT) {
+			error_clear();
+		} else return;
+	}
+	if_fail (header_copy_parameter("type", resource, sizeof(part->type), part->type)) {
+		if (error_code() == ENOENT) {
+			error_clear();
+		} else return;
+	}
+	if_fail (part->tx = chn_get_file(&ccnx, part->filename, resource_stripped)) return;
+	// we do not wait here for the transfert to complete, but will skip the delivery while the transfert is ongoing
+	TAILQ_INSERT_TAIL(&fwd->parts, part, entry);
+	fwd->nb_parts++;
+}
+
+static struct part *part_new(struct forward *fwd, char const *resource)
+{
+	struct part *part = malloc(sizeof(*part));
+	if (! part) with_error(ENOMEM, "malloc part") return NULL;
+	if_fail (part_ctor(part, fwd, resource)) {
+		(void)free(part);
+		part = NULL;
+	}
+	return part;
+}
+
+static void part_dtor(struct part *part, struct forward *fwd)
+{
+	TAILQ_REMOVE(&fwd->parts, part, entry);
+	fwd->nb_parts--;
+}
+
+static void part_del(struct part *part, struct forward *fwd)
+{
+	part_dtor(part, fwd);
+	free(part);
+}
 
 static void forward_ctor(struct forward *fwd, mdir_version version, char const *from, char const *to, char const *subject)
 {
 	if_fail (fwd->from = Strdup(from)) return;
 	if_fail (fwd->to = Strdup(to)) return;
 	if_fail (fwd->subject = Strdup(subject)) return;
+	TAILQ_INIT(&fwd->parts);
+	fwd->nb_parts = 0;
 	fwd->list = NULL;
 	fwd->status = 0;
 	fwd->version = version;
@@ -309,6 +372,11 @@ static void forward_dtor(struct forward *fwd)
 	FreeIfSet(&fwd->from);
 	FreeIfSet(&fwd->to);
 	FreeIfSet(&fwd->subject);
+	struct part *part;
+	while (NULL != (part = TAILQ_FIRST(&fwd->parts))) {
+		part_del(part, fwd);
+	}
+	assert(fwd->nb_parts == 0);
 }
 
 void forward_del(struct forward *fwd)
@@ -321,8 +389,7 @@ void forward_del(struct forward *fwd)
 
 void forward_part_new(struct forward *fwd, char const *resource)
 {
-	(void)fwd;
-	(void)resource;
+	(void)part_new(fwd, resource);
 }
 
 void forward_submit(struct forward *fwd)
