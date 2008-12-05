@@ -20,6 +20,10 @@
 #include <assert.h>
 #include <unistd.h>
 #include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/header.h"
@@ -78,11 +82,6 @@ static void list_move_to(struct forwards *list, struct forward *fwd)
 	TAILQ_INSERT_TAIL(list, fwd, entry);
 	fwd->list = list;
 	list_unlock();
-}
-
-static struct forward *list_first(struct forwards *list)
-{
-	return TAILQ_FIRST(list);
 }
 
 /*
@@ -195,23 +194,85 @@ static void may_close_connection(void)
 	}
 }
 
-static int send_forward(struct forward *fwd)
+static void send_file(int out, char const *filename)
 {
-	(void)fwd;
+	static const unsigned char b64[64] = {
+		[0] = 'A',  [1] = 'B',  [2] = 'C',  [3] = 'D',  [4] = 'E',  [5] = 'F', 
+		[6] = 'G',  [7] = 'H',  [8] = 'I',  [9] = 'J',  [10] = 'K', [11] = 'L',
+		[12] = 'M', [13] = 'N', [14] = 'O', [15] = 'P', [16] = 'Q', [17] = 'R',
+		[18] = 'S', [19] = 'T', [20] = 'U', [21] = 'V', [22] = 'W', [23] = 'X',
+		[24] = 'Y', [25] = 'Z', [26] = 'a', [27] = 'b', [28] = 'c', [29] = 'd',
+		[30] = 'e', [31] = 'f', [32] = 'g', [33] = 'h', [34] = 'i', [35] = 'j',
+		[36] = 'k', [37] = 'l', [38] = 'm', [39] = 'n', [40] = 'o', [41] = 'p',
+		[42] = 'q', [43] = 'r', [44] = 's', [45] = 't', [46] = 'u', [47] = 'v',
+		[48] = 'w', [49] = 'x', [50] = 'y', [51] = 'z', [52] = '0', [53] = '1',
+		[54] = '2', [55] = '3', [56] = '4', [57] = '5', [58] = '6', [59] = '7',
+		[60] = '8', [61] = '9', [62] = '+', [63] = '/',
+  	};
+	ssize_t len;
+	unsigned width = 0;
+	int in = open(filename, O_RDONLY);
+	if (in < 0) with_error(errno, "open(%s)", filename) return;
+	do {
+		unsigned char inbuf[3];
+		memset(inbuf, 0, sizeof(inbuf));
+		len = pth_read(in, inbuf, sizeof(inbuf));
+		if (len < 0) with_error(errno, "read(%s)", filename) break;
+		if (len == 0) break;
+		unsigned char outbuf[4] = {
+			b64[inbuf[0] >> 2],
+			b64[((inbuf[0] & 0x3) << 4) | (inbuf[1] >> 4)],
+			len > 1 ? b64[((inbuf[1] & 0xF) << 2) | (inbuf[2] >> 6)] : '=',
+			len == 3 ? b64[inbuf[2] & 0x3F] : '=',
+		};
+		width += 4;
+		if (width >= 76) {
+			if_fail (Write(out, CRLF, 2)) break;
+			width = 0;
+		}
+		if_fail (Write(out, outbuf, sizeof(outbuf))) break;
+	} while (len == 3);
+	(void)close(in);
+}
+
+static void send_part(int fd, struct part *part)
+{
+	if_fail (send_smtp_strs(fd, "Content-Transfer-Encoding: base64", NULL)) return;
+	if (part->type[0] != '\0') {
+		if_fail (send_smtp_strs(fd, "Content-Type: ", part->type, ";", NULL)) return;
+		if (part->name[0] != '\0') {
+			if_fail (send_smtp_strs(fd, "\tname=\"", part->name, "\"", NULL)) return;
+		}
+	}
+	if_fail (send_smtp_strs(fd, "", NULL)) return;
+	if_fail (send_file(fd, part->filename)) return;
+}
+
+static int send_forward(int fd, struct forward *fwd)
+{
 	int status;
-	if_fail (status = smtp_cmd(sock_fd, "MAIL FROM:<", fwd->from, ">", NULL)) return 0;
+	if_fail (status = smtp_cmd(fd, "MAIL FROM:<", fwd->from, ">", NULL)) return 0;
 	if (status != 250) return status;
-	if_fail (status = smtp_cmd(sock_fd, "RCPT TO:<", fwd->to, ">", NULL)) return 0;
+	if_fail (status = smtp_cmd(fd, "RCPT TO:<", fwd->to, ">", NULL)) return 0;
 	if (status < 250 || status > 252) return status;
-	if_fail (status = smtp_cmd(sock_fd, "DATA", NULL)) return 0;
+	if_fail (status = smtp_cmd(fd, "DATA", NULL)) return 0;
 	if (status != 354) return status;
-	if_fail (send_smtp_strs(sock_fd, "From: ", fwd->from, NULL)) return 0;
-	if_fail (send_smtp_strs(sock_fd, "To: ", fwd->to, NULL)) return 0;
-	if_fail (send_smtp_strs(sock_fd, "Subject: ", fwd->subject, NULL)) return 0;
-	// TODO
-	if_fail (send_smtp_strs(sock_fd, "", NULL)) return 0;
-	if_fail (send_smtp_strs(sock_fd, "Scambio is fun !", NULL)) return 0;
-	if_fail (status = smtp_cmd(sock_fd, ".", NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "From: ", fwd->from, NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "To: ", fwd->to, NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "Subject: ", fwd->subject, NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "Message-Id: <", mdir_version2str(fwd->version), "@", my_hostname, ">", NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "Mime-Version: 1.0", NULL)) return 0;
+	char const *boundary = "Do-Noy-Cross-Criminal-Scene";
+	if_fail (send_smtp_strs(fd, "Content-Type: multipart/mixed; boundary=", boundary, NULL)) return 0;
+	struct part *part;
+	TAILQ_FOREACH(part, &fwd->parts, entry) {
+		if_fail (send_smtp_strs(fd, "", NULL)) return 0;
+		if_fail (send_smtp_strs(fd, "--", boundary, NULL)) return 0;
+		if_fail (send_part(fd, part)) break;
+	}
+	if_fail (send_smtp_strs(fd, "", NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "--", boundary, "--", NULL)) return 0;
+	if_fail (status = smtp_cmd(fd, ".", NULL)) return 0;
 	return status;
 }
 
@@ -243,7 +304,7 @@ static void *forwarder(void *dummy)
 			if (transfers_done(fwd)) continue;	// may set fwd->status in case of error
 			if (fwd->status == 0) {
 				if_fail (may_open_connection()) goto q;	// if not already connected
-				if_fail (fwd->status = send_forward(fwd)) {
+				if_fail (fwd->status = send_forward(sock_fd, fwd)) {
 					error_clear();	// will try later
 					break;
 				}
@@ -402,6 +463,6 @@ void forward_submit(struct forward *fwd)
 
 struct forward *forward_oldest_completed(void)
 {
-	return list_first(&delivered_forwards);
+	return TAILQ_FIRST(&delivered_forwards);
 }
 
