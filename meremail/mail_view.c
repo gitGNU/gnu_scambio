@@ -23,32 +23,6 @@
 #include "merelib.h"
 #include "meremail.h"
 #include "varbuf.h"
-#include "auth.h"
-#include "scambio/channel.h"
-
-/*
- * Data Definitions
- */
-
-struct chn_cnx ccnx;
-
-/*
- * Init
- */
-
-void mail_view_init(void)
-{
-	if_fail (auth_begin()) return;
-	atexit(auth_end);
-	if_fail (chn_begin(false)) return;
-	atexit(chn_end);
-	// TODO: we could also put the filed host/port on the resource line, and use a pool of ccnx ?
-	conf_set_default_str("SC_FILED_HOST", "localhost");
-	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
-	conf_set_default_str("SC_USERNAME", "Alice");
-	on_error return;
-	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
-}
 
 /*
  * Make a Window to display a mail
