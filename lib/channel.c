@@ -847,8 +847,8 @@ static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 		return;
 	}
 	if_fail (stream = stream_lookup(name)) {
-		error_clear();	// FIXME: error_str() cant work after error_clear()
-		mdir_cnx_answer(cnx, cmd, 500, error_str());
+		error_clear();
+		mdir_cnx_answer(cnx, cmd, 500, "Cannot lookup this name");
 		return;
 	}
 	if (reader) {
@@ -1040,7 +1040,7 @@ unsigned chn_send_all(struct chn_cnx *cnx)
 		ssize_t ref_path_len = readlink(path, ref_path, sizeof(ref_path));
 		assert(ref_path_len < (int)sizeof(ref_path));
 		ref_path[ref_path_len] = '\0';
-		if (ref_path_len <= chn_files_root_len+1) {
+		if (ref_path_len <= (ssize_t)chn_files_root_len+1) {
 			warning("Dubious file in putdir : %s -> %s", path, ref_path);
 			continue;
 		}

@@ -150,16 +150,17 @@ void Mkdir(char const *path_)
 	Mkdir_single(path);
 }
 
-void Mkdir_for_file(char *path)
+void Mkdir_for_file(char const *path)
 {
-	char *last_sep = NULL;
-	for (char *c = path; *c; c++) {
-		if (*c == '/') last_sep = c;
+	char p[PATH_MAX];
+	int last_sep = -1;
+	for (unsigned c = 0; path[c]; c++) {
+		if (path[c] == '/') last_sep = c;
+		p[c] = path[c];
 	}
-	if (last_sep) {
-		*last_sep = '\0';
-		Mkdir(path);
-		*last_sep = '/';
+	if (last_sep >= 0) {
+		p[last_sep] = '\0';
+		Mkdir(p);
 	}
 }
 

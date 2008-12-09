@@ -38,6 +38,7 @@ struct stream {
 	LIST_ENTRY(stream) entry;	// in the list of all loaded streams
 	LIST_HEAD(readers, chn_tx) readers;
 	bool has_writer;
+	bool was_created;	// if the underlying file (if not RT) was created at stream creation (allowed only for refs)
 	int count;	// each reader/writer count as 1
 	int fd;	// may be -1 if not mapped to a file
 	time_t last_used;	// usefull for RT streams

@@ -43,11 +43,15 @@ unsigned chn_putdir_len;
  * Helpers
  */
 
+static bool name_is_ref(char const *name)
+{
+	debug("Is name '%s' a ref ?", name);
+	return 0 == strncmp("refs/", name, 5);
+}
+
 static bool path_is_ref(char const *path)
 {
-	// This is forbidden to write to a stream opened using its ref name, because then the refname
-	// would be changed.
-	return 0 == strncmp("refs/", path + chn_files_root_len+1, 5);
+	return name_is_ref(path + chn_files_root_len+1);
 }
 
 static bool stream_is_ref(struct stream const *stream)
@@ -97,7 +101,8 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 	stream->count = 1;	// the one who asks
 	snprintf(stream->path, sizeof(stream->path), "%s/%s", chn_files_root, name);
 	stream->last_used = time(NULL);
-	bool is_ref = path_is_ref(name);
+	bool is_ref = name_is_ref(name);
+	stream->was_created = false;	// useless for RT, BTW
 	if (rt) {
 		if (is_ref) with_error(0, "RT streams cannot use references") return;
 		stream->fd = -1;
@@ -105,7 +110,12 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 	} else {
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
-		stream->fd = open(path, O_RDWR | (is_ref ? O_CREAT:0));	// we can write straight into refs
+		stream->fd = open(path, O_RDWR);
+		if (stream->fd < 0 && errno == ENOENT && is_ref) {
+			if_fail (Mkdir_for_file(path)) return;
+			stream->fd = open(path, O_RDWR | O_CREAT, 0644);	// we can write straight into refs
+			stream->was_created = true;
+		}
 		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
 		// FIXME: in stream_add_reader if stream->fd != -1 ?
 		stream->pth = pth_spawn(PTH_ATTR_DEFAULT, stream_push, stream);
@@ -217,7 +227,7 @@ void stream_add_writer(struct stream *stream)
 {
 	debug("stream@%p", stream);
 	if (stream->has_writer) with_error(0, "a stream cannot have more than one writer") return;
-	if (stream_is_ref(stream)) with_error(0, "Cannot write to a stream opened by ref") return;
+	if (stream_is_ref(stream) && !stream->was_created) with_error(0, "Cannot write to a stream opened by ref") return;
 	stream->last_used = time(NULL);
 	stream->has_writer = true;
 	stream_ref(stream);
@@ -229,7 +239,7 @@ void stream_remove_writer(struct stream *stream)
 	assert(stream->has_writer);
 	stream->has_writer = false;
 	stream_unref(stream);
-	if (stream->fd != -1) {	// Make/Renew the SHA ref
+	if (stream->fd != -1 && !stream_is_ref(stream)) {	// Make/Renew the SHA ref
 		char digest[CHN_REF_LEN];
 		if_fail (chn_ref_from_file(stream->path, digest)) return;
 		char ref[PATH_MAX]; 

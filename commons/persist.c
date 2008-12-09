@@ -28,6 +28,7 @@
 
 static int open_or_create(char const *fname, size_t size, void const *default_value)
 {
+	if_fail (Mkdir_for_file(fname)) return -1;
 	int fd = open(fname, O_RDWR);
 	if (fd >= 0) return fd;	// FIXME: check size nonetheless
 	if (errno != ENOENT) with_error(errno, "Cannot open '%s'", fname) return -1;
