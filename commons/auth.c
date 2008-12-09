@@ -96,6 +96,11 @@ struct mdir_user *mdir_user_load(char const *name)
 	return usr;
 }
 
+struct header *mdir_user_header(struct mdir_user *user)
+{
+	return user->header;
+}
+
 /*
  * Initialization
  */

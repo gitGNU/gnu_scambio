@@ -15,6 +15,7 @@ function auth_user {
 	cat > $dir/$name <<EOF
 key: 1234567890DEADBEAF
 method: 3des
+smtp-from: rixed@dangi.happyleptic.org
 
 EOF
 }
