@@ -1,0 +1,7 @@
+* 2008-12-05 Authenticating patches
+
+All patches received by mdird should be tagged with the user name so that
+we known for sure who sent something.
+
+Then, sendmail should use this field to check that the user has the permission to
+use the from address value.

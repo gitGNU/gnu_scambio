@@ -47,5 +47,8 @@ void path_pop(char path[]);
 off_t filesize(int fd);
 
 char *Strdup(char const *orig);
+void FreeIfSet(char **ptr);
+
+int Connect(char const *host, char const *service);
 
 #endif

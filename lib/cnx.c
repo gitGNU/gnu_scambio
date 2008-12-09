@@ -20,7 +20,6 @@
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
-#include <netdb.h>
 #include "scambio.h"
 #include "scambio/cnx.h"
 #include "varbuf.h"
@@ -115,53 +114,6 @@ static void cnx_ctor_common(struct mdir_cnx *cnx, struct mdir_syntax *syntax, bo
 	LIST_INIT(&cnx->sent_queries);
 }
 
-static char const *gaierr2str(int err)
-{
-	switch (err) {
-		case EAI_SYSTEM:     return strerror(errno);
-		case EAI_ADDRFAMILY: return "No addr in family";
-		case EAI_BADFLAGS:   return "Bad flags";
-		case EAI_FAIL:       return "DNS failed";
-		case EAI_FAMILY:     return "Bad family";
-		case EAI_MEMORY:     return "No mem";
-		case EAI_NODATA:     return "No address";
-		case EAI_NONAME:     return "No such name";
-		case EAI_SERVICE:    return "Not in this socket type";
-		case EAI_SOCKTYPE:   return "Bad socket type";
-	}
-	return "Unknown error";
-}
-
-static void cnx_connect(struct mdir_cnx *cnx, char const *host, char const *service)
-{
-	// Resolve hostname into sockaddr
-	debug("Connecting to %s:%s", host, service);
-	struct addrinfo *info_head, *ainfo;
-	struct addrinfo hints;
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;	// AF_UNSPEC to allow IPv6
-	hints.ai_socktype = SOCK_STREAM;	// TODO: configure this
-	int err;
-	if (0 != (err = getaddrinfo(host, service, &hints, &info_head))) {
-		// TODO: check that freeaddrinfo is not required in this case
-		with_error(0, "Cannot getaddrinfo : %s", gaierr2str(err)) return;
-	}
-	err = ENOENT;
-	for (ainfo = info_head; ainfo; ainfo = ainfo->ai_next) {
-		cnx->fd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
-		if (cnx->fd == -1) continue;
-		if (0 == connect(cnx->fd, ainfo->ai_addr, ainfo->ai_addrlen)) {
-			info("Connected to %s:%s", host, service);
-			break;
-		}
-		err = errno;
-		(void)close(cnx->fd);
-		cnx->fd = -1;
-	}
-	if (! ainfo) error_push(err, "No suitable address found for host %s:%s", host, service);
-	freeaddrinfo(info_head);
-}
-
 struct auth_sent_query {
 	struct mdir_sent_query sq;
 	bool done;
@@ -179,7 +131,7 @@ static void auth_answ(struct mdir_cmd *cmd, void *user_data)
 void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, char const *host, char const *service, char const *username)
 {
 	cnx_ctor_common(cnx, syntax, true);
-	if_fail (cnx_connect(cnx, host, service)) return;
+	if_fail (cnx->fd = Connect(host, service)) return;
 	cnx->user = NULL;
 	if (username) do {
 		struct mdir_cmd_def auth_def = MDIR_CNX_ANSW_REGISTER(kw_auth, auth_answ);

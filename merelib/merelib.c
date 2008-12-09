@@ -120,6 +120,14 @@ bool confirm(char const *text)
 	return ret;
 }
 
+void close_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	debug("close");
+	GtkWidget *window = (GtkWidget *)user_data;
+	gtk_widget_destroy(window);
+}
+
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 {
 #	ifdef WITH_MAEMO
@@ -200,3 +208,4 @@ GtkWidget *make_expander(char const *title, GtkWidget *wdg)
 	gtk_expander_set_expanded(GTK_EXPANDER(frame), FALSE);
 	return frame;
 }
+

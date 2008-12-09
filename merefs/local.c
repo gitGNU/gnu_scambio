@@ -47,10 +47,8 @@ static void upload_file(struct file *file, char const *filename)
 {
 	int fd = open(filename, O_RDONLY);
 	if (fd < 0) with_error(errno, "open(%s)", filename) return;
-	// Create a resource
-	if_fail (chn_create(&ccnx, file->resource, false)) return;
 	// Send file contents for this resource
-	if_fail (chn_send_file(&ccnx, file->resource, fd)) return;
+	if_fail (chn_send_file_request(&ccnx, filename, file->resource)) return;
 	wait_complete();
 	// Now patch the mdir : send a patch to advertize the new file
 	struct header *header;

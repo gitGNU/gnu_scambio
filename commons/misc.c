@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <netdb.h>
 #include <pth.h>
 #include "scambio.h"
 #include "misc.h"
@@ -227,4 +228,60 @@ char *Strdup(char const *orig)
 	char *ret = strdup(orig);
 	if (! ret) with_error(errno, "strdup") return NULL;
 	return ret;
+}
+
+void FreeIfSet(char **ptr)
+{
+	if (NULL == *ptr) return;
+	free(*ptr);
+	*ptr = NULL;
+}
+
+static char const *gaierr2str(int err)
+{
+	switch (err) {
+		case EAI_SYSTEM:     return strerror(errno);
+		case EAI_ADDRFAMILY: return "No addr in family";
+		case EAI_BADFLAGS:   return "Bad flags";
+		case EAI_FAIL:       return "DNS failed";
+		case EAI_FAMILY:     return "Bad family";
+		case EAI_MEMORY:     return "No mem";
+		case EAI_NODATA:     return "No address";
+		case EAI_NONAME:     return "No such name";
+		case EAI_SERVICE:    return "Not in this socket type";
+		case EAI_SOCKTYPE:   return "Bad socket type";
+	}
+	return "Unknown error";
+}
+
+int Connect(char const *host, char const *service)
+{
+	int fd = -1;
+	// Resolve hostname into sockaddr
+	debug("Connecting to %s:%s", host, service);
+	struct addrinfo *info_head, *ainfo;
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;	// AF_UNSPEC to allow IPv6
+	hints.ai_socktype = SOCK_STREAM;	// TODO: configure this
+	int err;
+	if (0 != (err = getaddrinfo(host, service, &hints, &info_head))) {
+		// TODO: check that freeaddrinfo is not required in this case
+		with_error(0, "Cannot getaddrinfo : %s", gaierr2str(err)) return -1;
+	}
+	err = ENOENT;
+	for (ainfo = info_head; ainfo; ainfo = ainfo->ai_next) {
+		fd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
+		if (fd == -1) continue;
+		if (0 == connect(fd, ainfo->ai_addr, ainfo->ai_addrlen)) {
+			info("Connected to %s:%s", host, service);
+			break;
+		}
+		err = errno;
+		(void)close(fd);
+		fd = -1;
+	}
+	if (! ainfo) error_push(err, "No suitable address found for host %s:%s", host, service);
+	freeaddrinfo(info_head);
+	return fd;
 }

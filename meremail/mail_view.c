@@ -19,35 +19,10 @@
 #include <assert.h>
 #include <string.h>
 #include <glib.h>
+#include <gtkhtml/gtkhtml.h>
 #include "merelib.h"
 #include "meremail.h"
 #include "varbuf.h"
-#include "auth.h"
-#include "scambio/channel.h"
-
-/*
- * Data Definitions
- */
-
-struct chn_cnx ccnx;
-
-/*
- * Init
- */
-
-void mail_view_init(void)
-{
-	if_fail (auth_begin()) return;
-	atexit(auth_end);
-	if_fail (chn_begin(false)) return;
-	atexit(chn_end);
-	// TODO: we could also put the filed host/port on the resource line, and use a pool of ccnx ?
-	conf_set_default_str("SC_FILED_HOST", "localhost");
-	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
-	conf_set_default_str("SC_USERNAME", "Alice");
-	on_error return;
-	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
-}
 
 /*
  * Make a Window to display a mail
@@ -80,7 +55,11 @@ static GtkWidget *make_framed_widget(char const *title, char const *type, char c
 	// For html, use GtkHtml,
 	// For image, display as an image
 	// For other types, display a launcher for external app
-	if (0 == strncmp(type, "text/plain", 10)) {
+	if (0 == strncmp(type, "text/html", 9)) {
+		if_fail (varbuf_ctor_from_file(&vb, filename)) return NULL;
+		widget = gtk_html_new_from_string(vb.buf, vb.used);
+		varbuf_dtor(&vb);
+	} else if (0 == strncmp(type, "text/", 5)) {	// all other text types are treated the same
 		GtkTextBuffer *buffer = gtk_text_buffer_new(NULL);
 		char charset[64];	// wild guess
 		if_fail (header_copy_parameter("charset", type, sizeof(charset), charset)) {
@@ -92,14 +71,14 @@ static GtkWidget *make_framed_widget(char const *title, char const *type, char c
 		if_fail (varbuf_ctor_from_file(&vb, filename)) return NULL;
 		// convert to UTF-8
 		gsize utf8size;
-		gchar *utf8text = g_convert_with_fallback(vb.buf, vb.used, "UTF-8", charset, NULL, NULL, &utf8size, NULL);
+		gchar *utf8text = g_convert_with_fallback(vb.buf, vb.used, "utf-8", charset, NULL, NULL, &utf8size, NULL);
 		varbuf_dtor(&vb);
 		if (! utf8text) with_error(0, "Cannot convert from '%s' to utf8", charset) return NULL;
 		gtk_text_buffer_set_text(GTK_TEXT_BUFFER(buffer), utf8text, utf8size);
 		widget = gtk_text_view_new_with_buffer(buffer);
 		g_object_unref(G_OBJECT(buffer));
 		g_free(utf8text);
-	} else if (0 == strncmp(type, "image", 5)) {
+	} else if (0 == strncmp(type, "image/", 6)) {
 		widget = gtk_image_new_from_file(filename);	// Oh! All mighty gtk !
 	}
 	if (! widget) {
@@ -131,15 +110,19 @@ GtkWidget *make_mail_window(struct msg *msg)
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(win), vbox);
 
+	// The header
 	GtkWidget *title = gtk_label_new(NULL);
 	char *title_str = g_markup_printf_escaped(
-		"<b>From</b> <i>%s</i>\n"
-		"<b>Received on</b> <i>%s</i>\n"
-		"%s",
+		"<b>From</b> <i>%s</i>, <b>Received on</b> <i>%s</i>\n"
+		"<b>Subject :</b> %s",
 		msg->from, ts2staticstr(msg->date), msg->descr);
 	gtk_label_set_markup(GTK_LABEL(title), title_str);
+	gtk_misc_set_alignment(GTK_MISC(title), 0, 0);
+	gtk_label_set_line_wrap(GTK_LABEL(title), TRUE);
+	gtk_label_set_line_wrap_mode(GTK_LABEL(title), PANGO_WRAP_WORD_CHAR);
 	g_free(title_str);
 	gtk_container_add(GTK_CONTAINER(vbox), title);
+	gtk_box_set_child_packing(GTK_BOX(vbox), title, FALSE, FALSE, 1, GTK_PACK_START);
 
 	// Add a frame for each resources
 	for (unsigned n = 0; n < nb_resources; n++) {
@@ -162,10 +145,26 @@ GtkWidget *make_mail_window(struct msg *msg)
 			} else break;
 		}
 		GtkWidget *widget = make_framed_widget(title, type, resource, expander);
-		if (widget) gtk_container_add(GTK_CONTAINER(vbox), widget);
+		if (widget) {
+			gtk_container_add(GTK_CONTAINER(vbox), widget);
+			gtk_box_set_child_packing(GTK_BOX(vbox), widget, expander ? FALSE:TRUE, TRUE, 1, GTK_PACK_START);
+		}
 	}
 
 	free(resources);
+
+	GtkWidget *toolbar = make_toolbar(3,
+		GTK_STOCK_JUMP_TO, NULL,     NULL,	// Forward
+		GTK_STOCK_DELETE,  NULL,     NULL,	// Delete
+		GTK_STOCK_QUIT,    close_cb, win);
+
+#	ifdef WITH_MAEMO
+	hildon_window_add_toolbar(HILDON_WINDOW(win), toolbar);
+#	else
+	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
+	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+#	endif
+
 q1:
 	header_del(h);
 	return win;

@@ -68,7 +68,7 @@ void header_add_field(struct header *h, char const *name, char const *value);
 // Return a pointer to the beginning of the value.
 // Return the length of the value if *value!=NULL.
 size_t header_find_parameter(char const *name, char const *field_value, char const **value);
-// Same result. Error may be EMSGSIZE or ENOENT
+// Same result. Error may be EMSGSIZE or ENOENT, in which case value is set to "".
 // value will always be nul terminated
 void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value);
 
@@ -90,6 +90,7 @@ mdir_version header_target(struct header *h);
 #define SC_DIRID_FIELD    "sc-dirId"
 #define SC_NAME_FIELD     "sc-name"
 #define SC_FROM_FIELD     "sc-from"
+#define SC_TO_FIELD       "sc-to"
 #define SC_DESCR_FIELD    "sc-descr"
 #define SC_SENT_DATE      "sc-sent-at"
 #define SC_EXTID_FIELD    "sc-extid"
@@ -98,6 +99,7 @@ mdir_version header_target(struct header *h);
 #define SC_STOP_FIELD     "sc-stop"
 #define SC_PERIOD_FIELD   "sc-period"
 #define SC_LOCALID_FIELD  "sc-localid"
+#define SC_STATUS_FIELD   "sc-status"
 
 // Common values for type field
 #define SC_DIR_TYPE       "dir"

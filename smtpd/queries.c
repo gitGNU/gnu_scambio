@@ -194,7 +194,7 @@ void exec_rcpt(struct mdir_cmd *cmd, void *user_data)
  * DATA
  */
 
-static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf *vb)
+static void send_varbuf(struct chn_cnx *cnx, char ref[PATH_MAX], struct varbuf *vb)
 {
 	// Do it a temp file, sends the file, removes the file !
 	char tmpfile[PATH_MAX] = "/tmp/vbXXXXXX";	// FIXME
@@ -207,7 +207,7 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 	}
 	do {
 		if_fail(varbuf_write(vb, fd)) break;
-		chn_send_file(cnx, resource, fd);
+		chn_send_file_request(cnx, tmpfile, ref);
 	} while (0);
 	(void)close(fd);
 }
@@ -215,18 +215,15 @@ static void send_varbuf(struct chn_cnx *cnx, char const *resource, struct varbuf
 static void store_file(struct varbuf *vb, char const *params, struct header *global_header)
 {
 	// TODO: Instead of sending it to another file server, be our own file server ?
-	char resource[PATH_MAX];
-	debug("Creating a resource for");
-	if_fail (chn_create(&ccnx, resource, false)) return;
-	debug("Obtained resource '%s', now upload it", resource);
-	if_fail (send_varbuf(&ccnx, resource, vb)) return;
+	char ref[PATH_MAX];
+	if_fail (send_varbuf(&ccnx, ref, vb)) return;
 	debug("Adding this resource info onto the env header");
 	struct varbuf res_vb;
 	if_fail (varbuf_ctor(&res_vb, MAX_HEADLINE_LENGTH, false)) return;
 	if (params && params[0] != '\0') {
-		varbuf_append_strs(&res_vb, resource, "; ", params, NULL);
+		varbuf_append_strs(&res_vb, ref, "; ", params, NULL);
 	} else {
-		varbuf_append_strs(&res_vb, resource, NULL);
+		varbuf_append_strs(&res_vb, ref, NULL);
 	}
 	header_add_field(global_header, SC_RESOURCE_FIELD, res_vb.buf);
 	varbuf_dtor(&res_vb);

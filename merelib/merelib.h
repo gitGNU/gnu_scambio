@@ -30,6 +30,7 @@ void destroy_cb(GtkWidget *widget, gpointer data);
 void exit_when_closed(GtkWidget *);
 void alert(GtkMessageType type, char const *text);
 bool confirm(char const *);
+void close_cb(GtkToolButton *button, gpointer user_data);	// a simple callback that just deletes the given window
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
 GtkWidget *make_labeled_hbox(char const *label, GtkWidget *other);
 GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...);

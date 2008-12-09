@@ -1,5 +1,5 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = commons lib mdsyncd mdsyncc filed smtpd tools merefs merenotifier @GTK_SUBDIRS@
+SUBDIRS = commons lib mdsyncd mdsyncc filed filec smtpd sendmail tools merefs merenotifier @GTK_SUBDIRS@
 
 .PHONY: cscope loc
 
@@ -10,7 +10,7 @@ cscope:
 	cd $(top_srcdir) && cscope -Rb $(CPPFLAGS)
 
 loc:
-	@echo `find $(top_srcdir) -name '*.c' -o -name '*.h' | xargs cat | wc -l` lines
+	@echo "You spent : "`find $(top_srcdir) -name '*.c' -o -name '*.h' | xargs cat | wc -l` lines
 
 distclean-local:
 	rm -f cscope.out core

@@ -18,6 +18,7 @@
 #ifndef CNX_H_081016
 #define CNX_H_081016
 #include <scambio/cmd.h>
+#include <limits.h>
 
 /* These store the keywords usefull for the mdir protocol.
  * Keyword are compared by address so it's usefull to have all these here.

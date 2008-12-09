@@ -347,6 +347,8 @@ size_t header_find_parameter(char const *name, char const *field_value, char con
 void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value)
 {
 	char const *str;
+	assert(max_len > 0);
+	value[0] = '\0';
 	int str_len = header_find_parameter(name, field_value, &str);
 	on_error return;
 	if (str_len >= (int)max_len) with_error(EMSGSIZE, "parameter length is %d while buf size is %zu", str_len, max_len) return;

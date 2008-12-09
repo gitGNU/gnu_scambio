@@ -36,6 +36,24 @@
 static LIST_HEAD(streams, stream) streams;	// list of all loaded streams
 char const *chn_files_root;
 unsigned chn_files_root_len;
+char chn_putdir[PATH_MAX];
+unsigned chn_putdir_len;
+
+/*
+ * Helpers
+ */
+
+static bool path_is_ref(char const *path)
+{
+	// This is forbidden to write to a stream opened using its ref name, because then the refname
+	// would be changed.
+	return 0 == strncmp("refs/", path + chn_files_root_len+1, 5);
+}
+
+static bool stream_is_ref(struct stream const *stream)
+{
+	return stream->fd != -1 && path_is_ref(stream->path);
+}
 
 /*
  * Create/Delete
@@ -52,8 +70,7 @@ static void *stream_push(void *arg)
 			pth_cancel_point();
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
-			int content_fd = stream->backstore == -1 ? stream->fd : stream->backstore;
-			off_t totsize = filesize(content_fd);
+			off_t totsize = filesize(stream->fd);
 			size_t size = STREAM_READ_BLOCK;
 			if ((off_t)size + tx->end_offset >= totsize) {
 				size = totsize - tx->end_offset;
@@ -62,11 +79,7 @@ static void *stream_push(void *arg)
 			debug("write %zu bytes / %u", size, (unsigned)totsize);
 			struct chn_box *box;
 			if_fail (box = chn_box_alloc(size)) return NULL;
-			if_fail (ReadFrom(box->data, content_fd, tx->end_offset, size)) return NULL;
-			// If we took data from the backstore instead of the cache file, write to the cache file as well
-			if (stream->backstore != -1) {
-				if_fail (WriteTo(stream->fd, tx->end_offset, box->data, size)) return NULL;
-			}
+			if_fail (ReadFrom(box->data, stream->fd, tx->end_offset, size)) return NULL;
 			chn_tx_write(tx, size, box, eof);
 			chn_box_unref(box);
 			on_error return NULL;
@@ -76,37 +89,24 @@ static void *stream_push(void *arg)
 	return NULL;
 }
 
-static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd)
+static void stream_ctor(struct stream *stream, char const *name, bool rt)
 {
-	debug("stream @%p with name=%s, rt=%c, fd=%d", stream, name, rt ? 'y':'n', fd);
+	debug("stream @%p with name=%s, rt=%c", stream, name, rt ? 'y':'n');
 	LIST_INIT(&stream->readers);
-	stream->writer = NULL;
+	stream->has_writer = false;
 	stream->count = 1;	// the one who asks
-	snprintf(stream->name, sizeof(stream->name), "%s", name);
+	snprintf(stream->path, sizeof(stream->path), "%s/%s", chn_files_root, name);
 	stream->last_used = time(NULL);
-	stream->backstore = -1;
+	bool is_ref = path_is_ref(name);
 	if (rt) {
+		if (is_ref) with_error(0, "RT streams cannot use references") return;
 		stream->fd = -1;
 		stream->pth = NULL;
 	} else {
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
-		if (fd == -1) {	// no backstore file for content : the file must be present in cache
-			stream->fd = open(path, O_RDWR);
-			if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
-		} else {	// the file must not exist, we have a backstore fd for its content
-			stream->backstore = dup(fd);
-			if (stream->backstore < 0) with_error(errno, "dup(%d)", fd) return;
-			if_fail (Mkdir_for_file(path)) {
-				(void)close(stream->backstore);
-				return;
-			}
-			stream->fd = creat(path, 0640);
-			if (stream->fd < 0) {
-				(void)close(stream->backstore);
-				with_error(errno, "creat(%s)", path) return;
-			}
-		}
+		stream->fd = open(path, O_RDWR | (is_ref ? O_CREAT:0));	// we can write straight into refs
+		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
 		// FIXME: in stream_add_reader if stream->fd != -1 ?
 		stream->pth = pth_spawn(PTH_ATTR_DEFAULT, stream_push, stream);
 		if (! stream->pth) {
@@ -117,11 +117,11 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
 
-static struct stream *stream_new(char const *name, bool rt, int fd)
+struct stream *stream_new(char const *name, bool rt)
 {
 	struct stream *stream = malloc(sizeof(*stream));
 	if (! stream) with_error(ENOMEM, "malloc(stream)") return NULL;
-	if_fail (stream_ctor(stream, name, rt, fd)) {
+	if_fail (stream_ctor(stream, name, rt)) {
 		free(stream);
 		stream = NULL;
 	}
@@ -133,7 +133,7 @@ static void stream_dtor(struct stream *stream)
 	debug("stream @%p", stream);
 	LIST_REMOVE(stream, entry);
 	assert(LIST_EMPTY(&stream->readers));
-	assert(! stream->writer);
+	assert(! stream->has_writer);
 	assert(stream->count <= 0);
 	if (stream->pth) {
 		debug("cancelling stream thread");
@@ -143,10 +143,6 @@ static void stream_dtor(struct stream *stream)
 	if (stream->fd != -1) {
 		(void)close(stream->fd);
 		stream->fd = -1;
-	}
-	if (stream->backstore != -1) {
-		(void)close(stream->backstore);
-		stream->backstore = -1;
 	}
 }
 
@@ -170,6 +166,7 @@ void stream_begin(void)
 	chn_files_root = conf_get_str("SC_FILES_DIR");
 	chn_files_root_len = strlen(chn_files_root);
 	Mkdir(chn_files_root);
+	chn_putdir_len = snprintf(chn_putdir, sizeof(chn_putdir), "%s/.put", chn_files_root);
 }
 
 void stream_end(void)
@@ -186,21 +183,12 @@ void stream_end(void)
 struct stream *stream_lookup(char const *name)
 {
 	debug("name=%s", name);
+	if (name[0] == '.') with_error(0, "Resource not allowed to start with '.'") return NULL;
 	struct stream *stream;
 	LIST_FOREACH(stream, &streams, entry) {
-		if (0 == strcmp(stream->name, name)) return stream_ref(stream);
+		if (0 == strcmp(stream->path + chn_files_root_len + 1, name)) return stream_ref(stream);
 	}
-	return stream_new(name, false, -1);
-}
-
-struct stream *stream_new_rt(char const *name)
-{
-	return stream_new(name, true, -1);
-}
-
-struct stream *stream_new_from_fd(char const *name, int fd)
-{
-	return stream_new(name, false, fd);
+	return stream_new(name, false);
 }
 
 /*
@@ -211,6 +199,7 @@ struct stream *stream_new_from_fd(char const *name, int fd)
 
 void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_box *box, bool eof)
 {
+	assert(stream->has_writer);
 	debug("Writing to stream which fd = %d", stream->fd);
 	stream->last_used = time(NULL);
 	if (stream->fd != -1) {	// append to file
@@ -221,6 +210,52 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
 	LIST_FOREACH(tx, &stream->readers, reader_entry) {
 		assert(tx->stream == stream);
 		chn_tx_write(tx, size, box, eof);
+	}
+}
+
+void stream_add_writer(struct stream *stream)
+{
+	debug("stream@%p", stream);
+	if (stream->has_writer) with_error(0, "a stream cannot have more than one writer") return;
+	if (stream_is_ref(stream)) with_error(0, "Cannot write to a stream opened by ref") return;
+	stream->last_used = time(NULL);
+	stream->has_writer = true;
+	stream_ref(stream);
+}
+
+void stream_remove_writer(struct stream *stream)
+{
+	debug("stream@%p", stream);
+	assert(stream->has_writer);
+	stream->has_writer = false;
+	stream_unref(stream);
+	if (stream->fd != -1) {	// Make/Renew the SHA ref
+		char digest[CHN_REF_LEN];
+		if_fail (chn_ref_from_file(stream->path, digest)) return;
+		char ref[PATH_MAX]; 
+		snprintf(ref, sizeof(ref), "%s/%s", chn_files_root, digest);
+		if (0 != unlink(ref)) {	// for the case where this ref already pointed to another file
+			if (errno != ENOENT) with_error(errno, "unlink(%s)", ref) return;
+		}
+		if_fail (Mkdir_for_file(ref)) return;
+		/* Now two cases : the resource may be a new one, in which case the file is a regular file,
+		 * and we have to create a ref, remove the file and make it a symlink to this ref, or
+		 * the file is already a symlink, and we then have to remove the former ref and relink to the
+		 * new one.
+		 */
+		char old_link[PATH_MAX];
+		ssize_t old_link_len  = readlink(stream->path, old_link, sizeof(old_link));
+		if (old_link_len > 0) {	// already a symlink : rename the previous ref (content is already updated)
+			old_link[old_link_len] = '\0';
+			if (0 != rename(old_link, ref)) with_error(errno, "rename(%s, %s)", old_link, ref) return;
+			if (0 != unlink(stream->path)) with_error(errno, "unlink(%s)", stream->path) return;
+		} else {
+			if (errno != EINVAL) with_error(errno, "readlink(%s)", stream->path) return;
+			// not a symlink : rename the path to the ref file
+			if (0 != rename(stream->path, ref)) with_error(errno, "rename(%s, %s)", stream->path, ref) return;
+		}
+		// Make the resource name a symlink to the ref
+		if (0 != symlink(ref, stream->path)) with_error(errno, "symlink(%s, %s)", ref, stream->path) return;
 	}
 }
 
@@ -236,12 +271,13 @@ void stream_add_reader(struct stream *stream, struct chn_tx *tx)
 		// we should start a reader thread (add its pth_tid to the struct stream)
 	}
 	LIST_INSERT_HEAD(&stream->readers, tx, reader_entry);
+	stream_ref(stream);
 }
 
 void stream_remove_reader(struct stream *stream, struct chn_tx *tx)
 {
-	(void)stream;
 	debug("stream@%p, reader@%p", stream, tx);
 	LIST_REMOVE(tx, reader_entry);
+	stream_unref(stream);;
 }
 

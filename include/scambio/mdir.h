@@ -131,7 +131,7 @@ void mdir_patch_reset(struct mdir *);
 // returns only the symlinks.
 void mdir_folder_list(struct mdir *, bool new_only, void (*cb)(struct mdir *parent, struct mdir *child, bool new, char const *name, void *data), void *data);
 
-// Return that very patch
+// Return that very patch (action may be NULL)
 struct header *mdir_read(struct mdir *, mdir_version, enum mdir_action *);
 
 // returns the header, action and version following the given version

@@ -63,6 +63,19 @@ static int make_path_name_rec(char *path, size_t max, GtkTreePath *tp)
 	return len;
 }
 
+static void new_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	(void)user_data;
+	GtkWidget *new_win = make_compose_window(NULL, NULL, NULL);
+	on_error {
+		alert(GTK_MESSAGE_ERROR, error_str());
+		error_clear();
+	} else {
+		gtk_widget_show_all(new_win);
+	}
+}
+
 static void enter_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
@@ -168,7 +181,7 @@ GtkWidget *make_folder_window(char const *parent)
 	
 	GtkWidget *toolbar = make_toolbar(4,
 		GTK_STOCK_OK,      enter_cb,   GTK_TREE_VIEW(folder_tree),
-		GTK_STOCK_ADD,     NULL,       NULL,
+		GTK_STOCK_ADD,     new_cb,     NULL,
 		GTK_STOCK_DELETE,  NULL,       NULL,
 		GTK_STOCK_REFRESH, refresh_cb, NULL);
 
