@@ -235,7 +235,9 @@ static void store_file(struct varbuf *vb, char const *params, struct header *glo
 static void store_file_rec(struct msg_tree *const tree, struct header *global_header)
 {
 	if (tree->type == CT_FILE) {
-		store_file(&tree->content.file.data, tree->content.file.params, global_header);
+		if (tree->content.file.data.used > 0) {	// Many mailers add useless empty parts
+			store_file(&tree->content.file.data, tree->content.file.params, global_header);
+		}
 		return;
 	}
 	assert(tree->type == CT_MULTIPART);
