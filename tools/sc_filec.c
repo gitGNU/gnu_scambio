@@ -44,10 +44,9 @@ static void do_creat(void)
 
 static void do_send(void)
 {
-	int fd = open(filename, O_RDONLY);
-	if (fd < 0) with_error(errno, "open(%s)", filename) return;
-	chn_send_file(cnx, resource, fd);
-	(void)close(fd);
+	char ref[PATH_MAX];
+	chn_send_file_request(cnx, filename, ref);
+	unless_error puts(ref);
 }
 
 static void do_get(void)
@@ -89,10 +88,9 @@ int main(int nb_args, char const**args)
 			"local file name to send", {},
 		},
 	};
-	option_parse(nb_args, args, options, sizeof_array(options));
-	on_error return EXIT_FAILURE;
+	if_fail (option_parse(nb_args, args, options, sizeof_array(options))) return EXIT_FAILURE;
 	if (action == NONE) option_missing("action");
-	if (action != CREAT && !resource) option_missing("resource");
+	if (action == GET && !resource) option_missing("resource");
 	if (action == SEND && !filename) option_missing("file");
 
 	// Connect

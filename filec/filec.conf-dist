@@ -10,33 +10,15 @@
 ## Log level goes from 0 (nothing but important errors) to 5 (debug)
 #export SC_LOG_LEVEL=3
 
-## MDSYNC server location
-#export MDIR_HOST=localhost
-#export MDIRD_PORT=21435
-
 ## SC_FILED server location
 #export SC_FILED_HOST=localhost
 #export SC_FILED_PORT=21436
-#export SC_USERNAME=sendmail
+#export SC_USERNAME=Alice
 #export SC_FILES_DIR=/var/lib/scambio/files
-
-## Relay SMTP messages to
-#export SC_SMTP_RELAY_HOST=localhost
-#export SC_SMTP_RELAY_PORT=25
 
 ## System user/group to setuid to
 #export SC_RUNASUSER=
 #export SC_RUNASGROUP=
-
-## Where the meta-data are stored
-#export MDIR_ROOT_DIR=/var/lib/scambio/mdir
-
-## How many messages a file is allowed to store
-#export MDIR_MAX_JNL_SIZE=2000
-
-## Some filenames used to store sequence numbers (will be mmaped)
-#export MDIR_DIRSEQ=/var/lib/scambio/mdir/.dirid.seq
-#export MDIR_TRANSIENTSEQ=/var/lib/scambio/mdir/.transient.seq
 
 ## Where the users definition files are stored
 #export MDIR_USERS_DIR=/var/lib/scambio/users

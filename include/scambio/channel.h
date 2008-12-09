@@ -85,9 +85,21 @@ struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *na
  */
 void chn_create(struct chn_cnx *cnx, char *name, bool rt);
 
-/* Write a local file to a channel
+/* Write a local file to the cache and to a channel if cnx is !NULL.
+ * Will fill cached with the reference to the file (relative to files root)
  */
-struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name, int fd);
+void chn_send_file_request(struct chn_cnx *cnx, char const *fname, char cached[PATH_MAX]);
+
+/* Send a file to a cnx (which must be outbound connected.
+ * The file must be in the cache already. Use chn_send_file_request if it's not
+ * the case.
+ */
+struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name);
+
+/* Send all local files (in the cache) that were not already sent to the file server.
+ * Returns the number of files uploaded.
+ */
+unsigned chn_send_all(struct chn_cnx *cnx);
 
 /* Low level API */
 
@@ -185,6 +197,7 @@ int chn_tx_status(struct chn_tx *tx);
 void chn_tx_dtor(struct chn_tx *tx);
 
 /* Files (not RT) are accessible both from their resource names and a content hash ref
+ * (some are available only via their hash ref).
  */
 #define CHN_REF_LEN (64+5+2+1)
 size_t chn_ref_from_file(char const *filename, char digest[CHN_REF_LEN]);

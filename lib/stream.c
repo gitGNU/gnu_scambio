@@ -36,6 +36,24 @@
 static LIST_HEAD(streams, stream) streams;	// list of all loaded streams
 char const *chn_files_root;
 unsigned chn_files_root_len;
+char chn_putdir[PATH_MAX];
+unsigned chn_putdir_len;
+
+/*
+ * Helpers
+ */
+
+static bool path_is_ref(char const *path)
+{
+	// This is forbidden to write to a stream opened using its ref name, because then the refname
+	// would be changed.
+	return 0 == strncmp("refs/", path + chn_files_root_len+1, 5);
+}
+
+static bool stream_is_ref(struct stream const *stream)
+{
+	return stream->fd != -1 && path_is_ref(stream->path);
+}
 
 /*
  * Create/Delete
@@ -52,8 +70,7 @@ static void *stream_push(void *arg)
 			pth_cancel_point();
 #			define STREAM_READ_BLOCK 10000
 			bool eof = false;
-			int content_fd = stream->backstore == -1 ? stream->fd : stream->backstore;
-			off_t totsize = filesize(content_fd);
+			off_t totsize = filesize(stream->fd);
 			size_t size = STREAM_READ_BLOCK;
 			if ((off_t)size + tx->end_offset >= totsize) {
 				size = totsize - tx->end_offset;
@@ -62,11 +79,7 @@ static void *stream_push(void *arg)
 			debug("write %zu bytes / %u", size, (unsigned)totsize);
 			struct chn_box *box;
 			if_fail (box = chn_box_alloc(size)) return NULL;
-			if_fail (ReadFrom(box->data, content_fd, tx->end_offset, size)) return NULL;
-			// If we took data from the backstore instead of the cache file, write to the cache file as well
-			if (stream->backstore != -1) {
-				if_fail (WriteTo(stream->fd, tx->end_offset, box->data, size)) return NULL;
-			}
+			if_fail (ReadFrom(box->data, stream->fd, tx->end_offset, size)) return NULL;
 			chn_tx_write(tx, size, box, eof);
 			chn_box_unref(box);
 			on_error return NULL;
@@ -76,37 +89,24 @@ static void *stream_push(void *arg)
 	return NULL;
 }
 
-static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd)
+static void stream_ctor(struct stream *stream, char const *name, bool rt)
 {
-	debug("stream @%p with name=%s, rt=%c, fd=%d", stream, name, rt ? 'y':'n', fd);
+	debug("stream @%p with name=%s, rt=%c", stream, name, rt ? 'y':'n');
 	LIST_INIT(&stream->readers);
 	stream->has_writer = false;
 	stream->count = 1;	// the one who asks
 	snprintf(stream->path, sizeof(stream->path), "%s/%s", chn_files_root, name);
 	stream->last_used = time(NULL);
-	stream->backstore = -1;
+	bool is_ref = path_is_ref(name);
 	if (rt) {
+		if (is_ref) with_error(0, "RT streams cannot use references") return;
 		stream->fd = -1;
 		stream->pth = NULL;
 	} else {
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
-		if (fd == -1) {	// no backstore file for content : the file must be present in cache
-			stream->fd = open(path, O_RDWR);
-			if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
-		} else {	// the file must not exist, we have a backstore fd for its content
-			stream->backstore = dup(fd);
-			if (stream->backstore < 0) with_error(errno, "dup(%d)", fd) return;
-			if_fail (Mkdir_for_file(path)) {
-				(void)close(stream->backstore);
-				return;
-			}
-			stream->fd = creat(path, 0640);
-			if (stream->fd < 0) {
-				(void)close(stream->backstore);
-				with_error(errno, "creat(%s)", path) return;
-			}
-		}
+		stream->fd = open(path, O_RDWR | (is_ref ? O_CREAT:0));	// we can write straight into refs
+		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
 		// FIXME: in stream_add_reader if stream->fd != -1 ?
 		stream->pth = pth_spawn(PTH_ATTR_DEFAULT, stream_push, stream);
 		if (! stream->pth) {
@@ -117,11 +117,11 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt, int fd
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
 
-static struct stream *stream_new(char const *name, bool rt, int fd)
+struct stream *stream_new(char const *name, bool rt)
 {
 	struct stream *stream = malloc(sizeof(*stream));
 	if (! stream) with_error(ENOMEM, "malloc(stream)") return NULL;
-	if_fail (stream_ctor(stream, name, rt, fd)) {
+	if_fail (stream_ctor(stream, name, rt)) {
 		free(stream);
 		stream = NULL;
 	}
@@ -143,10 +143,6 @@ static void stream_dtor(struct stream *stream)
 	if (stream->fd != -1) {
 		(void)close(stream->fd);
 		stream->fd = -1;
-	}
-	if (stream->backstore != -1) {
-		(void)close(stream->backstore);
-		stream->backstore = -1;
 	}
 }
 
@@ -170,6 +166,7 @@ void stream_begin(void)
 	chn_files_root = conf_get_str("SC_FILES_DIR");
 	chn_files_root_len = strlen(chn_files_root);
 	Mkdir(chn_files_root);
+	chn_putdir_len = snprintf(chn_putdir, sizeof(chn_putdir), "%s/.put", chn_files_root);
 }
 
 void stream_end(void)
@@ -186,21 +183,12 @@ void stream_end(void)
 struct stream *stream_lookup(char const *name)
 {
 	debug("name=%s", name);
+	if (name[0] == '.') with_error(0, "Resource not allowed to start with '.'") return NULL;
 	struct stream *stream;
 	LIST_FOREACH(stream, &streams, entry) {
 		if (0 == strcmp(stream->path + chn_files_root_len + 1, name)) return stream_ref(stream);
 	}
-	return stream_new(name, false, -1);
-}
-
-struct stream *stream_new_rt(char const *name)
-{
-	return stream_new(name, true, -1);
-}
-
-struct stream *stream_new_from_fd(char const *name, int fd)
-{
-	return stream_new(name, false, fd);
+	return stream_new(name, false);
 }
 
 /*
@@ -223,18 +211,6 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
 		assert(tx->stream == stream);
 		chn_tx_write(tx, size, box, eof);
 	}
-}
-
-static bool path_is_ref(char const *path)
-{
-	// This is forbidden to write to a stream opened using its ref name, because then the refname
-	// would be changed.
-	return 0 == strncmp("refs/", path + chn_files_root_len+1, 5);
-}
-
-static bool stream_is_ref(struct stream const *stream)
-{
-	return stream->fd != -1 && path_is_ref(stream->path);
 }
 
 void stream_add_writer(struct stream *stream)

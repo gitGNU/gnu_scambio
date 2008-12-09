@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
@@ -32,6 +33,7 @@
 #include "misc.h"
 #include "auth.h"
 #include "stream.h"
+#include "persist.h"
 
 /*
  * Data Definitions
@@ -42,6 +44,7 @@ static bool server;
 static mdir_cmd_cb serve_copy, serve_skip, serve_miss, serve_thx, finalize_thx;	// used by client & server
 static mdir_cmd_cb finalize_creat, finalize_txstart;	// used by client
 static mdir_cmd_cb serve_creat, serve_read, serve_write, serve_quit, serve_auth;	// used by server
+static struct persist putdir_seq;
 
 #define RETRANSM_TIMEOUT 2000000//400000	// .4s
 #define OUT_FRAGS_TIMEOUT 1000000	// timeout fragments after 1 second
@@ -54,6 +57,7 @@ static mdir_cmd_cb serve_creat, serve_read, serve_write, serve_quit, serve_auth;
 void chn_end(void)
 {
 	stream_end();
+	persist_dtor(&putdir_seq);
 	mdir_syntax_dtor(&syntax);
 }
 
@@ -61,6 +65,9 @@ void chn_begin(bool server_)
 {
 	server = server_;
 	if_fail (stream_begin()) return;
+	char putdir_seq_fname[PATH_MAX];
+	snprintf(putdir_seq_fname, sizeof(putdir_seq_fname), "%s/.seq", chn_putdir);
+	if_fail (persist_ctor_sequence(&putdir_seq, putdir_seq_fname, 0)) return;
 	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	static struct mdir_cmd_def def_server[] = {
 		{
@@ -803,7 +810,7 @@ void serve_creat(struct mdir_cmd *cmd, void *user_data)
 		static unsigned rtseq = 0;
 		snprintf(path, sizeof(path), "%u_%u", (unsigned)time(NULL), rtseq++);
 		name = path;
-		(void)stream_new_rt(name);	// we drop the ref, the RT timeouter will unref if
+		(void)stream_new(name, true);	// we drop the ref, the RT timeouter will unref if
 	} else {
 		time_t now = time(NULL);
 		struct tm *tm = localtime(&now);
@@ -950,20 +957,57 @@ struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *na
  * Send a local file to a channel (and copy it into cache while we are at it)
  */
 
-struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
+// FIXME: sending a local file = copying it to the cache (under its ref name, without resource),
+// with a tag in the ".put" special directory for the uploader to deal with it (ie create a resource
+// whenever possible, then create the symlink to this ref, then upload the content, then remove
+// the tag from the ".put" directory).
+// There is then no need for the backstore monstruosity.
+// This cnx parameter is then useless.
+
+static void add_ref_path_to_putdir(char const *ref_path)
 {
-	// FIXME: instead of copying it into the cache, hardlink it to the cache and
-	// then close the file, and use the cache as the stream source.
-	// More efficient and should also be simplier.
-	assert(cnx && name && fd >= 0);
-	assert(! server);
-	struct stream *stream = stream_lookup(name);
-	unless_error {
-		stream_unref(stream);
-		with_error(0, "Resource '%s' already exists", name) return NULL;
+	char filename[PATH_MAX];
+	snprintf(filename, sizeof(filename), "%s/%"PRIu64, chn_putdir, persist_read_inc_sequence(&putdir_seq));
+	debug("storing file in %s -> %s", filename, ref_path);
+	if (0 != symlink(ref_path, filename)) with_error(errno, "symlink(%s, %s)", ref_path, filename) return;
+}
+
+void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char cached[PATH_MAX])
+{
+	debug("filename = '%s'", filename);
+	int source_fd = open(filename, O_RDONLY);
+	if (source_fd < 0) with_error(errno, "open(%s)", filename) return;
+	char ref_path[chn_files_root_len+1+CHN_REF_LEN];
+	char *ref = ref_path + snprintf(ref_path, sizeof(ref_path), "%s/", chn_files_root);
+	do {
+		// Build it's ref
+		if_fail (chn_ref_from_file(filename, ref)) break;
+		if_fail (Mkdir_for_file(ref_path)) break;
+		int ref_fd = creat(ref_path, 0644);
+		if (ref_fd < 0) with_error(errno, "creat(%s)", ref_path) break;
+		do {
+			if_fail (Copy(ref_fd, source_fd)) break;	// We must save the file from further modifications
+		} while (0);
+		(void)close(ref_fd);
+	} while (0);
+	(void)close(source_fd);
+	on_error return;
+	if (cached) snprintf(cached, sizeof(cached), "%s", ref);
+	if (! cnx) {	// we have no connection : store it for later
+		add_ref_path_to_putdir(ref_path);
+		return;
 	}
-	error_clear();
-	if_fail (stream = stream_new_from_fd(name, fd)) return NULL;
+	// We have a connection : send at once !
+	(void)chn_send_file(cnx, ref);
+}
+
+struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name)
+{
+	assert(cnx && name);
+	assert(! server);
+	debug("sending file %s", name);
+	struct stream *stream;
+	if_fail (stream = stream_new(name, false)) return NULL;
 	struct command *command;
 	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return NULL;
 	stream_unref(stream);
@@ -973,6 +1017,39 @@ struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name, int fd)
 	command_del(command);
 	// Remember that the transfert is still in progress !
 	return tx;
+}
+
+unsigned chn_send_all(struct chn_cnx *cnx)
+{
+	unsigned ret = 0;
+	assert(cnx && !server);
+	DIR *dir = opendir(chn_putdir);
+	if (dir == NULL) {
+		if (errno != ENOENT) error_push(errno, "opendir(%s)", chn_putdir);
+		return 0;
+	}
+	struct dirent *dirent;
+	while (NULL != (dirent = readdir(dir))) {
+		if (dirent->d_name[0] == '.') continue;
+		struct stat statbuf;
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s/%s", chn_putdir, dirent->d_name);
+		if (0 != lstat(path, &statbuf)) with_error(errno, "lstat(%s)", path) break;
+		if (! S_ISLNK(statbuf.st_mode)) continue;
+		char ref_path[PATH_MAX];
+		ssize_t ref_path_len = readlink(path, ref_path, sizeof(ref_path));
+		assert(ref_path_len < (int)sizeof(ref_path));
+		ref_path[ref_path_len] = '\0';
+		if (ref_path_len <= chn_files_root_len+1) {
+			warning("Dubious file in putdir : %s -> %s", path, ref_path);
+			continue;
+		}
+		(void)chn_send_file(cnx, ref_path + chn_files_root_len+1);
+		on_error break;
+		ret ++;
+	}
+	if (0 != closedir(dir)) error_push(errno, "closedir(%s)", chn_putdir);
+	return ret;
 }
 
 /*

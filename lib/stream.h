@@ -20,11 +20,14 @@
 
 #include <limits.h>
 #include <time.h>
+#include <stdbool.h>
 #include "scambio/queue.h"
 #include "scambio/channel.h"
 
 extern char const *chn_files_root;
 extern unsigned chn_files_root_len;
+extern char chn_putdir[PATH_MAX];
+extern unsigned chn_putdir_len;
 
 /* We use the abstraction of a stream, which have a name (the name used
  * as resource locator) to which we can append data or read from a
@@ -37,7 +40,6 @@ struct stream {
 	bool has_writer;
 	int count;	// each reader/writer count as 1
 	int fd;	// may be -1 if not mapped to a file
-	int backstore;	// for those streams for which the content is given by another fd to both send and create the cache file
 	time_t last_used;	// usefull for RT streams
 	char path[PATH_MAX];
 	pth_t pth;	// thread that push file onto reading TXs
@@ -46,8 +48,7 @@ struct stream {
 void stream_begin(void);
 void stream_end(void);
 struct stream *stream_lookup(char const *name);	// will find an existing stream or load a new file backed stream.
-struct stream *stream_new_rt(char const *name);	// will create a new RT stream.
-struct stream *stream_new_from_fd(char const *name, int fd);	// create a new non-RT stream, using fd as content, for reading
+struct stream *stream_new(char const *name, bool rt);	// create a new stream for reading the given resource or ref
 void stream_del(struct stream *stream);
 static inline struct stream *stream_ref(struct stream *stream)
 {
