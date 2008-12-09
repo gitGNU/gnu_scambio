@@ -118,6 +118,8 @@ GtkWidget *make_mail_window(struct msg *msg)
 		msg->from, ts2staticstr(msg->date), msg->descr);
 	gtk_label_set_markup(GTK_LABEL(title), title_str);
 	gtk_misc_set_alignment(GTK_MISC(title), 0, 0);
+	gtk_label_set_line_wrap(GTK_LABEL(title), TRUE);
+	gtk_label_set_line_wrap_mode(GTK_LABEL(title), PANGO_WRAP_WORD_CHAR);
 	g_free(title_str);
 	gtk_container_add(GTK_CONTAINER(vbox), title);
 	gtk_box_set_child_packing(GTK_BOX(vbox), title, FALSE, FALSE, 1, GTK_PACK_START);

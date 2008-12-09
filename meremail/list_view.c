@@ -119,7 +119,7 @@ GtkWidget *make_list_window(char const *folder)
 	
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
-	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
+	gtk_container_add(GTK_CONTAINER(vbox), make_scrollable(msg_list));
 	
 	GtkWidget *toolbar = make_toolbar(5,
 		GTK_STOCK_OK,      view_cb,  GTK_TREE_VIEW(msg_list),	// View
