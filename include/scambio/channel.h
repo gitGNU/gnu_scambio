@@ -184,4 +184,9 @@ int chn_tx_status(struct chn_tx *tx);
  */
 void chn_tx_dtor(struct chn_tx *tx);
 
+/* Files (not RT) are accessible both from their resource names and a content hash ref
+ */
+#define CHN_REF_LEN (64+5+2+1)
+size_t chn_ref_from_file(char const *filename, char digest[CHN_REF_LEN]);
+
 #endif

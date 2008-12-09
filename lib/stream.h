@@ -34,12 +34,12 @@ extern unsigned chn_files_root_len;
 struct stream {
 	LIST_ENTRY(stream) entry;	// in the list of all loaded streams
 	LIST_HEAD(readers, chn_tx) readers;
-	struct chn_tx *writer;	// may be NULL
+	bool has_writer;
 	int count;	// each reader/writer count as 1
 	int fd;	// may be -1 if not mapped to a file
 	int backstore;	// for those streams for which the content is given by another fd to both send and create the cache file
 	time_t last_used;	// usefull for RT streams
-	char name[PATH_MAX];
+	char path[PATH_MAX];
 	pth_t pth;	// thread that push file onto reading TXs
 };
 
@@ -60,7 +60,12 @@ static inline void stream_unref(struct stream *stream)
 		stream_del(stream);
 	}
 }
+
+/* Will fail if there is already one writer or if the stream was opened with a SHA ref */
+void stream_add_writer(struct stream *stream);
+void stream_remove_writer(struct stream *stream);
 void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_box *box, bool eof);
+
 void stream_add_reader(struct stream *stream, struct chn_tx *tx);
 void stream_remove_reader(struct stream *stream, struct chn_tx *tx);
 

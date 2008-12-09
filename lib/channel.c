@@ -144,12 +144,13 @@ static void chn_tx_ctor(struct chn_tx *tx, struct chn_cnx *cnx, bool sender, lon
 	tx->id = id;
 	tx->pth = NULL;
 	tx->stream = stream;
-	if (stream) stream_ref(stream);
 	mdir_sent_query_ctor(&tx->sent_thx);
 	if_fail (tx->ts = get_ts()) return;
-	if (sender) {
-		if (stream) {
+	if (stream) {
+		if (sender) {
 			if_fail (stream_add_reader(stream, tx)) return;
+		} else {
+			if_fail (stream_add_writer(stream)) return;
 		}
 	}
 	TAILQ_INIT(&tx->in_frags);
@@ -161,7 +162,7 @@ static void chn_tx_release_stream(struct chn_tx *tx)
 {
 	if (tx->stream) {
 		if (tx->sender) stream_remove_reader(tx->stream, tx);
-		stream_unref(tx->stream);
+		else stream_remove_writer(tx->stream);
 		tx->stream = NULL;
 	}
 }
@@ -1013,3 +1014,23 @@ bool chn_cnx_all_tx_done(struct chn_cnx *cnx)
 	return true;
 }
 
+/*
+ * SHA1 Refs
+ */
+#include "digest.h"
+
+size_t chn_ref_from_file(char const *filename, char digest[CHN_REF_LEN])
+{
+	assert(CHN_REF_LEN >= 5 + 2 + MAX_DIGEST_STRLEN + 1);
+	memcpy(digest, "refs/", 5);
+	size_t digest_len;
+	if_fail (digest_len = digest_file(digest+5+2, filename)) return 0;
+	digest[5+0] = digest[5+2];
+	digest[5+1] = digest[5+3];
+	digest[5+2] = '/';
+	digest[5+3] = digest[5+4];
+	digest[5+4] = digest[5+5];
+	digest[5+5] = '/';
+	digest[5+2+digest_len] = '\0';
+	return digest_len + 5+2+1;
+}
