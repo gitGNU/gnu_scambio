@@ -200,16 +200,11 @@ static void send_varbuf(struct chn_cnx *cnx, char ref[PATH_MAX], struct varbuf *
 	char tmpfile[PATH_MAX] = "/tmp/vbXXXXXX";	// FIXME
 	int fd = mkstemp(tmpfile);
 	if (fd == -1) with_error(errno, "mkstemp(%s)", tmpfile) return;
-	debug("Using temp file '%s' (unlinked)", tmpfile);
-	if (0 != unlink(tmpfile)) {
-		error("Cannot unlink tmp file '%s' : %s", tmpfile, strerror(errno));
-		// go ahaid
-	}
-	do {
-		if_fail(varbuf_write(vb, fd)) break;
-		chn_send_file_request(cnx, tmpfile, ref);
-	} while (0);
+	debug("Using temp file '%s'", tmpfile);
+	varbuf_write(vb, fd);
 	(void)close(fd);
+	unless_error chn_send_file_request(cnx, tmpfile, ref);
+	(void)unlink(tmpfile);
 }
 
 static void store_file(struct varbuf *vb, char const *params, struct header *global_header)
