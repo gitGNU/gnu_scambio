@@ -45,7 +45,7 @@ void ccnx_init(void)
 
 int main(int nb_args, char *args[])
 {
-	if_fail (init("meremail.log", nb_args, args)) return EXIT_FAILURE;
+	if_fail (init("meremail", nb_args, args)) return EXIT_FAILURE;
 	if_fail (maildir_init()) return EXIT_FAILURE;
 	conf_set_default_str("SC_USERNAME", "Alice");
 	if_fail (auth_begin()) return EXIT_FAILURE;

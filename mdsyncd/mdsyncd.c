@@ -73,7 +73,7 @@ static void init_conf(void)
 
 static void init_log(void)
 {
-	log_begin(conf_get_str("SC_LOG_DIR"), "mdsyncd.log");
+	log_begin(conf_get_str("SC_LOG_DIR"), "mdsyncd");
 	on_error return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;

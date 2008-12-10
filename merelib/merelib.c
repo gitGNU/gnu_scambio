@@ -47,9 +47,9 @@ static void init_conf(void)
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 }
 
-static void init_log(char const *filename)
+static void init_log(char const *appname)
 {
-	if_fail(log_begin(conf_get_str("SC_LOG_DIR"), filename)) return;
+	if_fail(log_begin(conf_get_str("SC_LOG_DIR"), appname)) return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
 	log_level = conf_get_int("SC_LOG_LEVEL");
