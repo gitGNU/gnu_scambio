@@ -112,17 +112,19 @@ void WriteTo(int fd, off_t offset, void const *buf, size_t len)
 void Copy(int dst, int src)
 {
 	debug("Copy from %d to %d", src, dst);
-	char byte;
+#	define BUFFER_SIZE 65536
+	char *buffer = malloc(BUFFER_SIZE);
+	if (! buffer) with_error(ENOMEM, "Cannot alloc buffer for copy") return;
 	do {
-		ssize_t ret = pth_read(src, &byte, 1);
+		ssize_t ret = pth_read(src, buffer, BUFFER_SIZE);
 		if (ret < 0) {
-			if (! retryable(errno)) with_error(errno, "Cannot pth_read") return;
+			if (! retryable(errno)) with_error(errno, "Cannot pth_read") break;
 			continue;
 		}
-		if (ret == 0) return;
-		Write(dst, &byte, 1);
-		on_error return;
+		if (ret == 0) break;
+		if_fail (Write(dst, buffer, ret)) break;
 	} while (1);
+	free(buffer);
 }
 
 static void Mkdir_single(char const *path)
