@@ -16,7 +16,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 SERVNAME="Scambio SMTP relayer"
 DAEMON=/usr/local/sbin/sc_sendmail
 export PIDFILE=/var/run/sc_sendmail.pid
-CONFFILE=/usr/local/etc/scambio/sendmail.conf
+CONFFILE=/usr/local/etc/scambio/smtpd.conf
 
 test -x $DAEMON || exit 5
 
