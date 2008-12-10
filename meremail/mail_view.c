@@ -35,9 +35,9 @@ static void wait_complete(void)
 	while (! chn_cnx_all_tx_done(&ccnx)) pth_nanosleep(&ts, NULL);
 }
 
-static GtkWidget *make_framed_widget(char const *title, char const *type, char const *resource, bool expander)
+static GtkWidget *make_view_widget(char const *type, char const *resource)
 {
-	debug("title='%s', type='%s', resource='%s'", title, type, resource);
+	debug("type='%s', resource='%s'", type, resource);
 	GtkWidget *widget = NULL;
 	struct varbuf vb;
 	// First try to get the resource
@@ -87,7 +87,7 @@ static GtkWidget *make_framed_widget(char const *title, char const *type, char c
 		gtk_label_set_markup(GTK_LABEL(widget), str);
 		g_free(str);
 	}
-q:	return (expander ? make_expander : make_frame)(title, widget);
+q:	return widget;
 }
 
 GtkWidget *make_mail_window(struct msg *msg)
@@ -124,18 +124,19 @@ GtkWidget *make_mail_window(struct msg *msg)
 	gtk_container_add(GTK_CONTAINER(vbox), title);
 	gtk_box_set_child_packing(GTK_BOX(vbox), title, FALSE, FALSE, 1, GTK_PACK_START);
 
-	// Add a frame for each resources
+	GtkWidget *notebook = gtk_notebook_new();
+	gtk_notebook_set_scrollable(GTK_NOTEBOOK(notebook), TRUE);
+	// A Tab for each resources, except for the header which is put in an expander above
 	for (unsigned n = 0; n < nb_resources; n++) {
 		char resource[PATH_MAX];
 		char title[64];
 		char type[128];	// wild guess
-		bool expander = false;
+		bool is_header = false;
 		if_fail (header_stripped_value(resources[n], sizeof(resource), resource)) break;
 		if_fail (header_copy_parameter("name", resources[n], sizeof(title), title)) {
 			if (error_code() == ENOENT) {	// smtp header have no filename
 				error_clear();
-				snprintf(title, sizeof(title), "Headers");
-				expander = true;
+				is_header = true;
 			} else break;
 		}
 		if_fail (header_copy_parameter("type", resources[n], sizeof(type), type)) {
@@ -144,12 +145,17 @@ GtkWidget *make_mail_window(struct msg *msg)
 				type[0] = '\0';
 			} else break;
 		}
-		GtkWidget *widget = make_framed_widget(title, type, resource, expander);
-		if (widget) {
-			gtk_container_add(GTK_CONTAINER(vbox), widget);
-			gtk_box_set_child_packing(GTK_BOX(vbox), widget, expander ? FALSE:TRUE, TRUE, 1, GTK_PACK_START);
+		GtkWidget *widget = make_view_widget(type, resource);
+		if (is_header) {
+			gtk_container_add(GTK_CONTAINER(vbox), make_expander("Headers", widget));
+			gtk_box_set_child_packing(GTK_BOX(vbox), widget, FALSE, TRUE, 1, GTK_PACK_START);
+		} else {
+			if (title[0] == '\0') snprintf(title, sizeof(title), "Untitled");
+			(void)gtk_notebook_append_page(GTK_NOTEBOOK(notebook), widget, gtk_label_new(title));
 		}
 	}
+	gtk_container_add(GTK_CONTAINER(vbox), notebook);
+	gtk_box_set_child_packing(GTK_BOX(vbox), notebook, TRUE, TRUE, 1, GTK_PACK_START);
 
 	free(resources);
 
