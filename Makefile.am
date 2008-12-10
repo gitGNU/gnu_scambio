@@ -3,7 +3,7 @@ SUBDIRS = commons lib mdsyncd mdsyncc filed filec smtpd sendmail tools merefs me
 
 .PHONY: cscope loc
 
-docdir=$(prefix)/share/doc/
+docdir=$(prefix)/share/doc/@PACKAGE@
 doc_DATA = scambio.conf-dist
 
 cscope:
