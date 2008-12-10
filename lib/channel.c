@@ -972,7 +972,7 @@ static void add_ref_path_to_putdir(char const *ref_path)
 	if (0 != symlink(ref_path, filename)) with_error(errno, "symlink(%s, %s)", ref_path, filename) return;
 }
 
-void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char cached[PATH_MAX])
+void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char *ref_)
 {
 	debug("filename = '%s'", filename);
 	int source_fd = open(filename, O_RDONLY);
@@ -992,7 +992,7 @@ void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char cache
 	} while (0);
 	(void)close(source_fd);
 	on_error return;
-	if (cached) snprintf(cached, sizeof(cached), "%s", ref);
+	if (ref_) snprintf(ref_, PATH_MAX, "%s", ref);
 	if (! cnx) {	// we have no connection : store it for later
 		add_ref_path_to_putdir(ref_path);
 		return;
