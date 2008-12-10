@@ -48,8 +48,8 @@ struct stream {
 
 void stream_begin(void);
 void stream_end(void);
-struct stream *stream_lookup(char const *name);	// will find an existing stream or load a new file backed stream.
-struct stream *stream_new(char const *name, bool rt);	// create a new stream for reading the given resource or ref
+struct stream *stream_lookup(char const *name, bool can_create);	// will find an existing stream or load a new file backed stream.
+struct stream *stream_new(char const *name, bool rt, bool can_create);	// create a new stream for reading the given resource or ref
 void stream_del(struct stream *stream);
 static inline struct stream *stream_ref(struct stream *stream)
 {
@@ -70,5 +70,7 @@ void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_b
 
 void stream_add_reader(struct stream *stream, struct chn_tx *tx);
 void stream_remove_reader(struct stream *stream, struct chn_tx *tx);
+
+bool resource_is_ref(char const *name);
 
 #endif

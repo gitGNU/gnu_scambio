@@ -810,7 +810,7 @@ void serve_creat(struct mdir_cmd *cmd, void *user_data)
 		static unsigned rtseq = 0;
 		snprintf(path, sizeof(path), "%u_%u", (unsigned)time(NULL), rtseq++);
 		name = path;
-		(void)stream_new(name, true);	// we drop the ref, the RT timeouter will unref if
+		(void)stream_new(name, true, true);	// we drop the ref, the RT timeouter will unref if
 	} else {
 		time_t now = time(NULL);
 		struct tm *tm = localtime(&now);
@@ -846,7 +846,7 @@ static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 		mdir_cnx_answer(cnx, cmd, 500, "Missing seqnum");
 		return;
 	}
-	if_fail (stream = stream_lookup(name)) {
+	if_fail (stream = stream_lookup(name, resource_is_ref(name))) {
 		error_clear();
 		mdir_cnx_answer(cnx, cmd, 500, "Cannot lookup this name");
 		return;
@@ -937,11 +937,7 @@ struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *na
 	// So lets fetch it
 	debug("not in cache, need to fetch it");
 	if (! cnx) with_error(0, "Cannot fetch and not local") return NULL;
-	if_fail (Mkdir_for_file(localfile)) return NULL;
-	fd = creat(localfile, 0640);
-	if (fd < 0) with_error(errno, "Cannot creat(%s)", localfile) return NULL;
-	(void)close(fd);
-	struct stream *stream = stream_lookup(name);
+	struct stream *stream = stream_lookup(name, true);
 	on_error return NULL;
 	struct chn_tx *tx = fetch_file_with_cnx(cnx, (char *)name, stream);
 	stream_unref(stream);
@@ -1007,7 +1003,7 @@ struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name)
 	assert(! server);
 	debug("sending file %s", name);
 	struct stream *stream;
-	if_fail (stream = stream_new(name, false)) return NULL;
+	if_fail (stream = stream_new(name, false, true)) return NULL;
 	struct command *command;
 	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return NULL;
 	stream_unref(stream);

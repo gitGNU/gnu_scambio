@@ -43,7 +43,7 @@ unsigned chn_putdir_len;
  * Helpers
  */
 
-static bool name_is_ref(char const *name)
+bool resource_is_ref(char const *name)
 {
 	debug("Is name '%s' a ref ?", name);
 	return 0 == strncmp("refs/", name, 5);
@@ -51,7 +51,7 @@ static bool name_is_ref(char const *name)
 
 static bool path_is_ref(char const *path)
 {
-	return name_is_ref(path + chn_files_root_len+1);
+	return resource_is_ref(path + chn_files_root_len+1);
 }
 
 static bool stream_is_ref(struct stream const *stream)
@@ -93,7 +93,7 @@ static void *stream_push(void *arg)
 	return NULL;
 }
 
-static void stream_ctor(struct stream *stream, char const *name, bool rt)
+static void stream_ctor(struct stream *stream, char const *name, bool rt, bool can_create)
 {
 	debug("stream @%p with name=%s, rt=%c", stream, name, rt ? 'y':'n');
 	LIST_INIT(&stream->readers);
@@ -101,7 +101,7 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 	stream->count = 1;	// the one who asks
 	snprintf(stream->path, sizeof(stream->path), "%s/%s", chn_files_root, name);
 	stream->last_used = time(NULL);
-	bool is_ref = name_is_ref(name);
+	bool is_ref = resource_is_ref(name);
 	stream->was_created = false;	// useless for RT, BTW
 	if (rt) {
 		if (is_ref) with_error(0, "RT streams cannot use references") return;
@@ -111,7 +111,7 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
 		stream->fd = open(path, O_RDWR);
-		if (stream->fd < 0 && errno == ENOENT && is_ref) {
+		if (stream->fd < 0 && errno == ENOENT && can_create) {
 			if_fail (Mkdir_for_file(path)) return;
 			stream->fd = open(path, O_RDWR | O_CREAT, 0644);	// we can write straight into refs
 			stream->was_created = true;
@@ -127,11 +127,11 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt)
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
 
-struct stream *stream_new(char const *name, bool rt)
+struct stream *stream_new(char const *name, bool rt, bool can_create)
 {
 	struct stream *stream = malloc(sizeof(*stream));
 	if (! stream) with_error(ENOMEM, "malloc(stream)") return NULL;
-	if_fail (stream_ctor(stream, name, rt)) {
+	if_fail (stream_ctor(stream, name, rt, can_create)) {
 		free(stream);
 		stream = NULL;
 	}
@@ -190,7 +190,7 @@ void stream_end(void)
  * Lookup
  */
 
-struct stream *stream_lookup(char const *name)
+struct stream *stream_lookup(char const *name, bool can_create)
 {
 	debug("name=%s", name);
 	if (name[0] == '.') with_error(0, "Resource not allowed to start with '.'") return NULL;
@@ -198,7 +198,7 @@ struct stream *stream_lookup(char const *name)
 	LIST_FOREACH(stream, &streams, entry) {
 		if (0 == strcmp(stream->path + chn_files_root_len + 1, name)) return stream_ref(stream);
 	}
-	return stream_new(name, false);
+	return stream_new(name, false, can_create);
 }
 
 /*
@@ -227,7 +227,7 @@ void stream_add_writer(struct stream *stream)
 {
 	debug("stream@%p", stream);
 	if (stream->has_writer) with_error(0, "a stream cannot have more than one writer") return;
-	if (stream_is_ref(stream) && !stream->was_created) with_error(0, "Cannot write to a stream opened by ref") return;
+	if (!stream->was_created && stream_is_ref(stream)) with_error(0, "Cannot write to a stream opened by ref") return;
 	stream->last_used = time(NULL);
 	stream->has_writer = true;
 	stream_ref(stream);
