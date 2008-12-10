@@ -286,7 +286,7 @@ static bool transfers_done(struct forward *fwd)
 	TAILQ_FOREACH(part, &fwd->parts, entry) {
 		if (! part->tx) continue;
 		int tx_status = chn_tx_status(part->tx);
-		if (tx_status == 0) continue;
+		if (tx_status == 0) return false;
 		if (tx_status != 200) {
 			fwd->status = tx_status;
 			return true;	// no need to wait further
@@ -301,7 +301,8 @@ static void *forwarder(void *dummy)
 	struct forward *fwd, *tmp;
 	while (! is_error() && ! terminate) {
 		TAILQ_FOREACH_SAFE(fwd, &waiting_forwards, entry, tmp) {
-			if (transfers_done(fwd)) continue;	// may set fwd->status in case of error
+			debug("considering waiting forward@%p", fwd);
+			if (! transfers_done(fwd)) continue;	// may set fwd->status in case of error
 			if (fwd->status == 0) {
 				if_fail (may_open_connection()) goto q;	// if not already connected
 				if_fail (fwd->status = send_forward(sock_fd, fwd)) {
@@ -401,6 +402,7 @@ static void part_del(struct part *part, struct forward *fwd)
 
 static void forward_ctor(struct forward *fwd, mdir_version version, char const *from, char const *to, char const *subject)
 {
+	debug("fwd@%p, '%s'=>'%s'", fwd, from, to);
 	if_fail (fwd->from = Strdup(from)) return;
 	if_fail (fwd->to = Strdup(to)) return;
 	if_fail (fwd->subject = Strdup(subject)) return;
@@ -424,6 +426,7 @@ struct forward *forward_new(mdir_version version, char const *from, char const *
 
 static void forward_dtor(struct forward *fwd)
 {
+	debug("fwd@%p", fwd);
 	list_lock();
 	if (fwd->list) {
 		TAILQ_REMOVE(fwd->list, fwd, entry);
