@@ -24,13 +24,24 @@
 #include <hildon/hildon-program.h>
 #include <gtk/gtkmain.h>
 #endif
+#include "varbuf.h"
 
 void init(char const *name, int nb_args, char *args[]);
 void destroy_cb(GtkWidget *widget, gpointer data);
 void exit_when_closed(GtkWidget *);
+/* Type may be one of :
+ * GTK_MESSAGE_INFO,
+ * GTK_MESSAGE_WARNING,
+ * GTK_MESSAGE_QUESTION,
+ * GTK_MESSAGE_ERROR,
+ * GTK_MESSAGE_OTHER
+ */
 void alert(GtkMessageType type, char const *text);
 bool confirm(char const *);
+void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget);
 void close_cb(GtkToolButton *button, gpointer user_data);	// a simple callback that just deletes the given window
+struct chn_cnx;
+void wait_all_tx(struct chn_cnx *ccnx);
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
 GtkWidget *make_labeled_hbox(char const *label, GtkWidget *other);
 GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...);

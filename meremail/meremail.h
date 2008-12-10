@@ -28,6 +28,7 @@
 
 extern struct chn_cnx ccnx;
 extern struct mdir_user *user;
+extern struct mdir *outbox;
 
 GtkWidget *make_list_window(char const *folder);
 GtkWidget *make_folder_window(char const *parent);

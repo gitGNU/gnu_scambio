@@ -48,3 +48,6 @@ export SC_MEREFS_PATH=$HOME/scambio/shared
 ## The corresponding mdir
 export SC_MEREFS_MDIR=files
 
+## The mdir to which new mail is written
+export SC_OUTBOX=/mailboxes/To_Send
+

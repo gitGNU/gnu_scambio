@@ -288,3 +288,11 @@ int Connect(char const *host, char const *service)
 	freeaddrinfo(info_head);
 	return fd;
 }
+
+char const *Basename(char const *path)
+{
+	for (char const *c = path; *c; c++) {
+		if (*c == '/') path = c+1;
+	}
+	return path;
+}

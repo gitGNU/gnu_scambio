@@ -18,9 +18,13 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <unistd.h>
+#include <gio/gio.h>
 #include "merelib.h"
 #include "meremail.h"
 #include "scambio/channel.h"
+#include "scambio/timetools.h"
+#include "misc.h"
 
 struct compose {
 	GtkWidget *win;
@@ -78,10 +82,89 @@ static void compose_del(struct compose *comp)
 	free(comp);
 }
 
+// Return a header with just the basic fields (no content)
+static struct header *header_new_from_compose(struct compose *comp)
+{
+	struct header *header = header_new();
+	on_error return NULL;
+	do {
+		if_fail (header_add_field(header, SC_TYPE_FIELD, SC_MAIL_TYPE)) break;
+		if_fail (header_add_field(header, SC_START_FIELD, sc_ts2gmfield(time(NULL), true))) break;
+		if_fail (header_add_field(header, SC_DESCR_FIELD,
+			gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)))) break;
+		if_fail (header_add_field(header, SC_TO_FIELD,
+			gtk_entry_get_text(GTK_ENTRY(comp->to_entry)))) break;
+		if_fail (header_add_field(header, SC_FROM_FIELD,
+			gtk_combo_box_get_active_text(GTK_COMBO_BOX(comp->from_combo)))) break;
+		return header;
+	} while (0);
+	header_del(header);
+	return NULL;
+}
+
+static void send_file(char const *fname, char const *name, char const *type, struct header *header)
+{
+	debug("fname='%s', name='%s', type='%s'", fname, name, type);
+	char resource[PATH_MAX];
+	if_fail (chn_send_file_request(&ccnx, fname, resource)) return;
+	size_t len = strlen(resource);
+	if (name) len += snprintf(resource+len, sizeof(resource)-len, "; name=\"%s\"", name);
+	if (type) len += snprintf(resource+len, sizeof(resource)-len, "; type=\"%s\"", type);
+	header_add_field(header, SC_RESOURCE_FIELD, resource);
+}
+
+static void add_files_and_send(struct compose *comp, struct header *header)
+{
+	char editor_fname[] = "/tmp/XXXXXX";
+	size_t text_len = 0;
+	do {	// Make a temp file from the editor text
+		int fd = mkstemp(editor_fname);
+		if (fd < 0) with_error(errno, "mkstemp(%s)", editor_fname) break;
+		debug("outputing editor buffer into '%s'", editor_fname);
+		struct varbuf vb;
+		varbuf_ctor_from_gtk_text_view(&vb, comp->editor);
+		unless_error {
+			text_len = vb.used;
+			varbuf_write(&vb, fd);
+			varbuf_dtor(&vb);
+		}
+		(void)close(fd);
+	} while (0);
+	on_error {
+		header_del(header);
+		return;
+	}
+	bool have_content = false;
+	// Send this file and add the resource name to the header
+	if (text_len > 1) {	// 1 byte is not an edit ! (2 may be 'ok' ?)
+		send_file(editor_fname, "msg", "text/plain; charset=utf-8", header);
+		have_content = true;
+	} else debug("Skip text for being too small");
+	// And all attached files
+	unless_error for (unsigned p = 0; p < comp->nb_files && !is_error(); p++) {
+		gboolean certain;
+		char *content_type = g_content_type_guess(comp->filenames[p], NULL, 0, &certain);
+		debug("guessed content-type : %s", content_type);
+		send_file(comp->filenames[p], Basename(comp->filenames[p]), content_type, header);
+		have_content = true;
+	}
+	(void)unlink(editor_fname);
+	debug("Now sending patch");
+	unless_error {
+		if (have_content) mdir_patch_request(outbox, MDIR_ADD, header);
+		else error_push(0, "Be creative, write something !");
+	}
+}
+
 static void compose_send(struct compose *comp)
 {
-	(void)comp;
-	error_push(0, "Not implemented yet");
+	// Prepare a new header from common fields
+	struct header *header = header_new_from_compose(comp);
+	on_error return;
+	add_files_and_send(comp, header);
+	header_del(header);
+	// Now wait until the upload is complete
+	wait_all_tx(&ccnx);
 }
 
 /*

@@ -48,6 +48,7 @@ off_t filesize(int fd);
 
 char *Strdup(char const *orig);
 void FreeIfSet(char **ptr);
+char const *Basename(char const *path);
 
 int Connect(char const *host, char const *service);
 

@@ -19,9 +19,11 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <string.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
+#include "scambio/channel.h"
 #include "merelib.h"
 
 /*
@@ -207,5 +209,41 @@ GtkWidget *make_expander(char const *title, GtkWidget *wdg)
 	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
 	gtk_expander_set_expanded(GTK_EXPANDER(frame), FALSE);
 	return frame;
+}
+
+void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget)
+{
+	if_fail (varbuf_ctor(vb, 1024, true)) return;
+	GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
+	GtkTextIter begin, end;
+	gtk_text_buffer_get_start_iter(buffer, &begin);
+	gtk_text_buffer_get_end_iter(buffer, &end);
+	gchar *text = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+	varbuf_append(vb, strlen(text), text);
+	g_free(text);
+}
+
+/* GTK apps cannot mix seamlessly with libpth : they both poll a different set of fd.
+ * So at some points in the GTK apps we just wait for other threads to complete, so
+ * than we have only one pth thread while the GTK is running.
+ */
+void wait_all_tx(struct chn_cnx *ccnx)
+{
+	debug("waiting...");
+	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_modal(GTK_WINDOW(win), TRUE);
+	gtk_window_set_title(GTK_WINDOW(win), "Waiting...");
+	GtkWidget *bar = gtk_progress_bar_new();
+	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(bar), "Transfering files");
+	gtk_container_add(GTK_CONTAINER(win), bar);
+	gtk_widget_show_all(win);
+
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 };
+	while (! chn_cnx_all_tx_done(ccnx)) {
+		pth_nanosleep(&ts, NULL);
+		gtk_progress_bar_pulse(GTK_PROGRESS_BAR(bar));
+		gtk_main_iteration_do(FALSE);
+	}
+	gtk_widget_destroy(win);
 }
 

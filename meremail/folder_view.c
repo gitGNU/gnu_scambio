@@ -40,6 +40,7 @@ static struct mdir *root_mdir;
 static void quit_cb(GtkToolButton *button, gpointer user_data)
 {
 	debug("quit");
+	// TODO: wait for all cnx transfert !!
 	destroy_cb(GTK_WIDGET(button), user_data);
 }
 
@@ -179,15 +180,12 @@ GtkWidget *make_folder_window(char const *parent)
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 	gtk_container_add(GTK_CONTAINER(vbox), folder_tree);
 	
-	GtkWidget *toolbar = make_toolbar(4,
+	GtkWidget *toolbar = make_toolbar(5,
 		GTK_STOCK_OK,      enter_cb,   GTK_TREE_VIEW(folder_tree),
 		GTK_STOCK_ADD,     new_cb,     NULL,
 		GTK_STOCK_DELETE,  NULL,       NULL,
-		GTK_STOCK_REFRESH, refresh_cb, NULL);
-
-	GtkToolItem *button_quit = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_quit, -1);
-	g_signal_connect(G_OBJECT(button_quit), "clicked", G_CALLBACK(quit_cb), NULL);
+		GTK_STOCK_REFRESH, refresh_cb, NULL,
+		GTK_STOCK_QUIT,    quit_cb,    NULL);
 
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);

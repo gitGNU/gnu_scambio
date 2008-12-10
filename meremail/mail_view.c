@@ -28,13 +28,6 @@
  * Make a Window to display a mail
  */
 
-static void wait_complete(void)
-{
-	debug("waiting...");
-	struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000 };
-	while (! chn_cnx_all_tx_done(&ccnx)) pth_nanosleep(&ts, NULL);
-}
-
 static GtkWidget *make_view_widget(char const *type, char const *resource)
 {
 	debug("type='%s', resource='%s'", type, resource);
@@ -50,7 +43,7 @@ static GtkWidget *make_view_widget(char const *type, char const *resource)
 		error_clear();	// replace by an error text
 		goto q;
 	}
-	wait_complete();
+	wait_all_tx(&ccnx);
 	// For text files, display in a text widget (after utf8 conversion)
 	// For html, use GtkHtml,
 	// For image, display as an image
@@ -83,7 +76,7 @@ static GtkWidget *make_view_widget(char const *type, char const *resource)
 	}
 	if (! widget) {
 		widget = gtk_label_new(NULL);
-		char *str = g_markup_printf_escaped("<b>Cannot display this part</b> which have type <i>%s</i>", type);
+		char *str = g_markup_printf_escaped("<b>Cannot display this part</b> which have type '<i>%s</i>'", type);
 		gtk_label_set_markup(GTK_LABEL(widget), str);
 		g_free(str);
 	}
