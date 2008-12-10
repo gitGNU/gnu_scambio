@@ -107,6 +107,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		char *descr = get_serial_text(e->descr_buffer);
 		on_error break;
 		if (descr) header_add_field(h, SC_DESCR_FIELD, descr);
+		g_free(descr);
 		debug("sending patch");
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);
 	} while (0);
