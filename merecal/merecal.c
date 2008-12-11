@@ -65,6 +65,11 @@ static void cal_date_ctor_from_str(struct cal_date *cd, char const *str)
 	cal_date_ctor(cd, year, month, day, hour, min);
 }
 
+void cal_date_ctor_from_tm(struct cal_date *cd, struct tm const *tm)
+{
+	cal_date_ctor(cd, tm->tm_year+1900, tm->tm_mon, tm->tm_mday, tm->tm_hour, tm->tm_min);
+}
+
 void cal_date_to_str(struct cal_date *cd, char *str, size_t size)
 {
 	assert(cal_date_is_set(cd));

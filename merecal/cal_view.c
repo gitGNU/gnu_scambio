@@ -79,10 +79,22 @@ static void display_event(struct cal_event *ce)
 	debug("adding event '%s' : '%s'", hour, ce->description);
 	GtkTreeIter iter;
 	gtk_list_store_insert_with_values(event_store, &iter, G_MAXINT,
-			FIELD_HOUR, hour,
-			FIELD_TEXT, ce->description,
-			FIELD_EVENT, ce,
-			-1);
+		FIELD_HOUR, hour,
+		FIELD_TEXT, ce->description,
+		FIELD_EVENT, ce,
+		-1);
+}
+
+static void display_now(struct cal_date *cd)
+{
+	(void)cd;
+	debug("adding mark for current time");
+	GtkTreeIter iter;
+	gtk_list_store_insert_with_values(event_store, &iter, G_MAXINT,
+		FIELD_HOUR, "-- now --",
+		FIELD_TEXT, "",
+		FIELD_EVENT, NULL,
+		-1);
 }
 
 // month or day changed, so we must refresh the event list for that day
@@ -90,15 +102,26 @@ static void reset_day(void)
 {
 	// Clear the list store
 	gtk_list_store_clear(GTK_LIST_STORE(event_store));
+	// Get current date and time
+	struct cal_date now;
+	time_t now_ts = time(NULL);
+	cal_date_ctor_from_tm(&now, localtime(&now_ts));
 	// Add new ones
 	guint year, month, day;
 	gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
-	debug("new day : %u %u %u", year, month+1, day);
+	bool today = year == now.year && month == now.month && day == now.day;
+	debug("new day : %u %u %u %s", year, month+1, day, today ? "(today)":"");
 	struct day2event *d2e;
 	assert(day > 0 && day-1 < sizeof_array(day2events));
+	struct cal_date *prev = NULL;
 	TAILQ_FOREACH(d2e, day2events+day-1, entry) {
+		if (today && (!prev || cal_date_compare(&now, prev) > 0) && cal_date_compare(&now, &d2e->event->start) <= 0) {
+			today = false;	// shortcut for next test
+			display_now(&now);
+		}
 		display_event(d2e->event);
 	}
+	if (today) display_now(&now);
 }
 
 static void select_event(struct cal_event *ce, void *data)
@@ -183,6 +206,10 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 		gtk_tree_model_get_value(GTK_TREE_MODEL(event_store), &iter, FIELD_EVENT, &gevent);
 		struct cal_event *ce = g_value_get_pointer(&gevent);
 		g_value_unset(&gevent);
+		if (! ce) {
+			alert(GTK_MESSAGE_ERROR, "Cannot edit this");	// user try to edit current time mark
+			return;
+		}
 		replaced = ce->version;
 		if (replaced < 0) {
 			alert(GTK_MESSAGE_ERROR, "Cannot edit a transient event");
@@ -214,6 +241,10 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 	gtk_tree_model_get_value(GTK_TREE_MODEL(event_store), &iter, FIELD_EVENT, &gevent);
 	struct cal_event *ce = g_value_get_pointer(&gevent);
 	g_value_unset(&gevent);
+	if (! ce) {
+		alert(GTK_MESSAGE_ERROR, "Current time mark is not deletable (good try)");
+		return;
+	}
 	if (ce->version < 0) {
 		alert(GTK_MESSAGE_ERROR, "Cannot delete a transient event");
 		return;
