@@ -169,16 +169,13 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	g_signal_connect(G_OBJECT(button_ok), "clicked", G_CALLBACK(send_cb), editor);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
-	gtk_container_add(GTK_CONTAINER(vbox), table);
-	gtk_container_add(GTK_CONTAINER(vbox), descr_text);
+	gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), descr_text, TRUE, TRUE, 0);
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(editor->window), GTK_TOOLBAR(toolbar));
 #	else
-	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 #	endif
-	gtk_box_set_child_packing(GTK_BOX(vbox), table, FALSE, TRUE, 1, GTK_PACK_START);
-	gtk_box_set_child_packing(GTK_BOX(vbox), descr_text, TRUE, TRUE, 1, GTK_PACK_START);
 
 	gtk_container_add(GTK_CONTAINER(editor->window), vbox);
 	return editor->window;

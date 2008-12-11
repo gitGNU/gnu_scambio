@@ -151,10 +151,8 @@ GtkWidget *make_labeled_hbox(char const *label_text, GtkWidget *other)
 {
 	GtkWidget *label = gtk_label_new(label_text);
 	GtkWidget *hbox = gtk_hbox_new(FALSE, 3);
-	gtk_container_add(GTK_CONTAINER(hbox), label);
-	gtk_container_add(GTK_CONTAINER(hbox), other);
-	gtk_box_set_child_packing(GTK_BOX(hbox), label, FALSE, FALSE, 1, GTK_PACK_START);
-	gtk_box_set_child_packing(GTK_BOX(hbox), other, TRUE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 0);
+	gtk_box_pack_end(GTK_BOX(hbox), other, TRUE, TRUE, 0);
 	return hbox;
 }
 

@@ -295,15 +295,13 @@ GtkWidget *make_cal_window(void)
 		GTK_STOCK_QUIT,    quit_cb,    window);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
-	gtk_container_add(GTK_CONTAINER(vbox), event_list);
+	gtk_box_pack_start(GTK_BOX(vbox), event_list, FALSE, FALSE, 0);
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
 #	else
-	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 #	endif
-	gtk_container_add(GTK_CONTAINER(vbox), calendar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), calendar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), calendar, FALSE, FALSE, 0);
 
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 

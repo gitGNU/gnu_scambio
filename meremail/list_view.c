@@ -119,7 +119,7 @@ GtkWidget *make_list_window(char const *folder)
 	
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
-	gtk_container_add(GTK_CONTAINER(vbox), make_scrollable(msg_list));
+	gtk_box_pack_start(GTK_BOX(vbox), make_scrollable(msg_list), TRUE, TRUE, 0);
 	
 	GtkWidget *toolbar = make_toolbar(5,
 		GTK_STOCK_OK,      view_cb,  GTK_TREE_VIEW(msg_list),	// View
@@ -131,8 +131,7 @@ GtkWidget *make_list_window(char const *folder)
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
 #	else
-	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 #	endif
 	return window;
 }

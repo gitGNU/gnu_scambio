@@ -178,7 +178,7 @@ GtkWidget *make_folder_window(char const *parent)
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
-	gtk_container_add(GTK_CONTAINER(vbox), make_scrollable(folder_tree));
+	gtk_box_pack_start(GTK_BOX(vbox), make_scrollable(folder_tree), TRUE, TRUE, 0);
 	
 	GtkWidget *toolbar = make_toolbar(5,
 		GTK_STOCK_OK,      enter_cb,   GTK_TREE_VIEW(folder_tree),
@@ -187,8 +187,7 @@ GtkWidget *make_folder_window(char const *parent)
 		GTK_STOCK_REFRESH, refresh_cb, NULL,
 		GTK_STOCK_QUIT,    quit_cb,    NULL);
 
-	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 
 	return window;
 }

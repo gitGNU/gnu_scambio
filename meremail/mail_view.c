@@ -114,8 +114,7 @@ GtkWidget *make_mail_window(struct msg *msg)
 	gtk_label_set_line_wrap(GTK_LABEL(title), TRUE);
 	gtk_label_set_line_wrap_mode(GTK_LABEL(title), PANGO_WRAP_WORD_CHAR);
 	g_free(title_str);
-	gtk_container_add(GTK_CONTAINER(vbox), title);
-	gtk_box_set_child_packing(GTK_BOX(vbox), title, FALSE, FALSE, 1, GTK_PACK_START);
+	gtk_box_pack_start(GTK_BOX(vbox), title, FALSE, FALSE, 0);
 
 	GtkWidget *notebook = gtk_notebook_new();
 	gtk_notebook_set_scrollable(GTK_NOTEBOOK(notebook), TRUE);
@@ -140,15 +139,13 @@ GtkWidget *make_mail_window(struct msg *msg)
 		}
 		GtkWidget *widget = make_view_widget(type, resource);
 		if (is_header) {
-			gtk_container_add(GTK_CONTAINER(vbox), make_expander("Headers", widget));
-			gtk_box_set_child_packing(GTK_BOX(vbox), widget, FALSE, TRUE, 1, GTK_PACK_START);
+			gtk_box_pack_start(GTK_BOX(vbox), make_expander("Headers", widget), FALSE, FALSE, 0);
 		} else {
 			if (title[0] == '\0') snprintf(title, sizeof(title), "Untitled");
 			(void)gtk_notebook_append_page(GTK_NOTEBOOK(notebook), widget, gtk_label_new(title));
 		}
 	}
-	gtk_container_add(GTK_CONTAINER(vbox), notebook);
-	gtk_box_set_child_packing(GTK_BOX(vbox), notebook, TRUE, TRUE, 1, GTK_PACK_START);
+	gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
 	free(resources);
 
@@ -160,8 +157,7 @@ GtkWidget *make_mail_window(struct msg *msg)
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(win), toolbar);
 #	else
-	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 #	endif
 
 q1:

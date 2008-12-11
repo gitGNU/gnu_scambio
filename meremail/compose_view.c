@@ -246,15 +246,13 @@ GtkWidget *make_compose_window(char const *from, char const *to, char const *sub
 		"From :", comp->from_combo,
 	  	"To :", comp->to_entry,
 	  	"Subject :", comp->subject_entry, NULL);
-	gtk_container_add(GTK_CONTAINER(vbox), formH);
-	gtk_box_set_child_packing(GTK_BOX(vbox), formH, FALSE, FALSE, 1, GTK_PACK_START);
-	gtk_container_add(GTK_CONTAINER(vbox), comp->editor);
+	gtk_box_pack_start(GTK_BOX(vbox), formH, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), comp->editor, TRUE, TRUE, 0);
 	// Then some buttons :
 	// - add file (later an editable list of joined files)
 	GtkWidget *add_button = gtk_button_new_with_label("Attach file");
 	g_signal_connect(G_OBJECT(add_button), "clicked", G_CALLBACK(add_file), comp);
-	gtk_container_add(GTK_CONTAINER(vbox), add_button);
-	gtk_box_set_child_packing(GTK_BOX(vbox), add_button, FALSE, FALSE, 1, GTK_PACK_START);
+	gtk_box_pack_start(GTK_BOX(vbox), add_button, FALSE, FALSE, 0);
 	// - cancel, send
 	GtkWidget *toolbar = make_toolbar(2,
 		GTK_STOCK_JUMP_TO, send_cb, comp,
@@ -263,8 +261,7 @@ GtkWidget *make_compose_window(char const *from, char const *to, char const *sub
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(comp->win), toolbar);
 #	else
-	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
-	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 #	endif
 
 	return comp->win;
