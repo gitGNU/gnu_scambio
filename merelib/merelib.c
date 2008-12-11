@@ -242,7 +242,7 @@ void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent)
 	gtk_widget_show_all(win);
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 };
-	while (1 || ! chn_cnx_all_tx_done(ccnx)) {
+	while (! chn_cnx_all_tx_done(ccnx)) {
 		pth_nanosleep(&ts, NULL);
 		gtk_progress_bar_pulse(GTK_PROGRESS_BAR(bar));
 		gtk_main_iteration_do(FALSE);
