@@ -1,4 +1,4 @@
-icondir=$(datadir)/icons/hicolor/scalable/
+icondir=$(datadir)/@GTK_ICONDIR@
 
 icon_DATA=merecal.png
 

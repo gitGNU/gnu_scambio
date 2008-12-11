@@ -67,7 +67,7 @@ static void deinit_osso(void)
 
 void init(char const *name, int nb_args, char *args[])
 {
-	app_name = name;	// FIXME: merecal.log is not sexy as an app name
+	app_name = name;
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
@@ -76,7 +76,6 @@ void init(char const *name, int nb_args, char *args[])
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 #	ifdef WITH_MAEMO
-//	if (! gnome_vfs_init()) with_error(0, "gnome_vfs_init") return;
 	gtk_init(&nb_args, &args);
 	g_set_application_name(app_name);
 	hildon_program = HILDON_PROGRAM(hildon_program_get_instance());
@@ -86,6 +85,9 @@ void init(char const *name, int nb_args, char *args[])
 #	else
 	gtk_init(&nb_args, &args);
 #	endif
+	char icon_fname[PATH_MAX];
+	snprintf(icon_fname, sizeof(icon_fname), TOSTR(ICONDIR) "/%s.png", app_name);
+	gtk_window_set_default_icon_from_file(icon_fname, NULL);
 }
 
 /*
@@ -140,7 +142,6 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 	gtk_window_set_title(GTK_WINDOW(win), app_name);
 #	endif
 	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
-	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
 	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), NULL);
 	return GTK_WIDGET(win);
 }

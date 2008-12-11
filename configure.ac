@@ -45,6 +45,8 @@ AS_IF(
 			AC_SUBST(GTK_SUBDIRS, [])
 		])
 
+AC_SUBST(GTK_ICONDIR, "icons/hicolor/scalable")
+
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h miscmac.h])

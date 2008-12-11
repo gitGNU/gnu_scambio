@@ -368,7 +368,7 @@ void refresh(void)
 
 int main(int nb_args, char *args[])
 {
-	if_fail(init("merecal.log", nb_args, args)) return EXIT_FAILURE;
+	if_fail(init("merecal", nb_args, args)) return EXIT_FAILURE;
 	char const *folders[] = { "/calendars/rixed", "/calendars/project-X" };
 	for (unsigned f=0; f<sizeof_array(folders); f++) {
 		(void)cal_folder_new(folders[f]);
