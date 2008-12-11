@@ -253,12 +253,16 @@ static int send_forward(int fd, struct forward *fwd)
 	int status;
 	if_fail (status = smtp_cmd(fd, "MAIL FROM:<", fwd->from, ">", NULL)) return 0;
 	if (status != 250) return status;
-	if_fail (status = smtp_cmd(fd, "RCPT TO:<", fwd->to, ">", NULL)) return 0;
-	if (status < 250 || status > 252) return status;
+	for (unsigned d = 0; d < fwd->nb_dests; d++) {
+		if_fail (status = smtp_cmd(fd, "RCPT TO:<", fwd->dests[d], ">", NULL)) return 0;
+		if (status < 250 || status > 252) return status;
+	}
 	if_fail (status = smtp_cmd(fd, "DATA", NULL)) return 0;
 	if (status != 354) return status;
 	if_fail (send_smtp_strs(fd, "From: ", fwd->from, NULL)) return 0;
-	if_fail (send_smtp_strs(fd, "To: ", fwd->to, NULL)) return 0;
+	for (unsigned d = 0; d < fwd->nb_dests; d++) {
+		if_fail (send_smtp_strs(fd, d == 0 ? "To: ":" ", fwd->dests[d], d < fwd->nb_dests-1 ? ",":NULL, NULL)) return 0;
+	}
 	if_fail (send_smtp_strs(fd, "Subject: ", fwd->subject, NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Message-Id: <", mdir_version2str(fwd->version), "@", my_hostname, ">", NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Mime-Version: 1.0", NULL)) return 0;
@@ -400,28 +404,21 @@ static void part_del(struct part *part, struct forward *fwd)
 	free(part);
 }
 
-static void forward_ctor(struct forward *fwd, mdir_version version, char const *from, char const *to, char const *subject)
+static void forward_ctor(struct forward *fwd, mdir_version version, char const *from, char const *subject , unsigned nb_dests, char const **dests)
 {
-	debug("fwd@%p, '%s'=>'%s'", fwd, from, to);
+	debug("fwd@%p, from='%s', subject='%s'", fwd, from, subject);
 	if_fail (fwd->from = Strdup(from)) return;
-	if_fail (fwd->to = Strdup(to)) return;
 	if_fail (fwd->subject = Strdup(subject)) return;
+	fwd->nb_dests = nb_dests;
+	if_fail (fwd->dests = Malloc(sizeof(*fwd->dests)*nb_dests)) return;
+	for (unsigned d = 0; d < nb_dests; d++) {
+		if_fail (fwd->dests[d] = Strdup(dests[d])) return;
+	}
 	TAILQ_INIT(&fwd->parts);
 	fwd->nb_parts = 0;
 	fwd->list = NULL;
 	fwd->status = 0;
 	fwd->version = version;
-}
-
-struct forward *forward_new(mdir_version version, char const *from, char const *to, char const *subject)
-{
-	struct forward *fwd = malloc(sizeof(*fwd));
-	if (! fwd) with_error(ENOMEM, "malloc fwd") return NULL;
-	if_fail (forward_ctor(fwd, version, from, to, subject)) {
-		free(fwd);
-		fwd = NULL;
-	}
-	return fwd;
 }
 
 static void forward_dtor(struct forward *fwd)
@@ -434,13 +431,30 @@ static void forward_dtor(struct forward *fwd)
 	}
 	list_unlock();
 	FreeIfSet(&fwd->from);
-	FreeIfSet(&fwd->to);
 	FreeIfSet(&fwd->subject);
+	if (fwd->dests) {
+		for (unsigned d = 0; d < fwd->nb_dests; d++) {
+			FreeIfSet(&fwd->dests[d]);
+		}
+		free(fwd->dests);
+	}
 	struct part *part;
 	while (NULL != (part = TAILQ_FIRST(&fwd->parts))) {
 		part_del(part, fwd);
 	}
 	assert(fwd->nb_parts == 0);
+}
+
+struct forward *forward_new(mdir_version version, char const *from, char const *subject, unsigned nb_dests, char const **dests)
+{
+	struct forward *fwd = Calloc(sizeof(*fwd));
+	on_error return NULL;
+	if_fail (forward_ctor(fwd, version, from, subject, nb_dests, dests)) {
+		forward_dtor(fwd);
+		free(fwd);
+		fwd = NULL;
+	}
+	return fwd;
 }
 
 void forward_del(struct forward *fwd)

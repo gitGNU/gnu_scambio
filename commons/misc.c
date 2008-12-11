@@ -296,3 +296,16 @@ char const *Basename(char const *path)
 	}
 	return path;
 }
+
+void *Malloc(size_t size)
+{
+	void *ret = malloc(size);
+	if (! ret) error_push(ENOMEM, "Malloc %zu bytes", size);
+	return ret;
+}
+void *Calloc(size_t size)
+{
+	void *ret = calloc(1, size);
+	if (! ret) error_push(ENOMEM, "Calloc %zu bytes", size);
+	return ret;
+}

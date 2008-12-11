@@ -51,5 +51,7 @@ void FreeIfSet(char **ptr);
 char const *Basename(char const *path);
 
 int Connect(char const *host, char const *service);
+void *Malloc(size_t size);
+void *Calloc(size_t size);
 
 #endif

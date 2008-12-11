@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <gio/gio.h>
 #include "merelib.h"
 #include "meremail.h"
@@ -82,6 +83,25 @@ static void compose_del(struct compose *comp)
 	free(comp);
 }
 
+static void add_dests(struct header *header, char const *dests)
+{
+	char const *c = dests;
+	do {
+		if (*c == ',' || *c == '\0') {
+			int len = c - dests;
+			char to[len + 1];
+			memcpy(to, dests, len);
+			to[len] = '\0';
+			while (isblank(to[len-1])) to[--len] = '\0';
+			if (len > 0) if_fail (header_add_field(header, SC_TO_FIELD, to)) return;
+			if (*c == '\0') break;
+			while (*c == ',' || isblank(*c)) c++;
+			dests = c;
+		}
+		c++;
+	} while (1);
+}
+
 // Return a header with just the basic fields (no content)
 static struct header *header_new_from_compose(struct compose *comp)
 {
@@ -92,8 +112,7 @@ static struct header *header_new_from_compose(struct compose *comp)
 		if_fail (header_add_field(header, SC_START_FIELD, sc_ts2gmfield(time(NULL), true))) break;
 		if_fail (header_add_field(header, SC_DESCR_FIELD,
 			gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)))) break;
-		if_fail (header_add_field(header, SC_TO_FIELD,
-			gtk_entry_get_text(GTK_ENTRY(comp->to_entry)))) break;
+		if_fail (add_dests(header, gtk_entry_get_text(GTK_ENTRY(comp->to_entry)))) break;
 		if_fail (header_add_field(header, SC_FROM_FIELD,
 			gtk_combo_box_get_active_text(GTK_COMBO_BOX(comp->from_combo)))) break;
 		return header;

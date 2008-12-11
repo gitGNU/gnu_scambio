@@ -53,20 +53,28 @@ static void send_patch(struct mdir *mdir, struct header *header, enum mdir_actio
 	if (version < 0) return;	// we do not want to try to send anything if it's not synched
 	if (action != MDIR_ADD) return;	// there is little we can do about it
 	if (! header_has_type(header, SC_MAIL_TYPE)) return;
-	char const *from, *to, *subject;
+	char const *from, **dests, *subject;
+	unsigned nb_dests;
 	struct forward *fwd;
 	if_fail (from = header_search(header, SC_FROM_FIELD)) return;
-	if_fail (to = header_search(header, SC_TO_FIELD)) return;
 	if_fail (subject = header_search(header, SC_DESCR_FIELD)) return;
-	debug("Send new email from '%s' to '%s'", from, to);
-	if_fail (fwd = forward_new(version, from, to, subject)) return;
-	if_fail (add_parts(fwd, header)) {
-		error_save();
-		forward_del(fwd);
-		error_restore();
-		return;
-	}
-	forward_submit(fwd);
+	if_fail (dests = header_search_all(header, SC_TO_FIELD, &nb_dests)) return;
+	do {
+		if (nb_dests == 0) {
+			debug("No dests, skipping");
+			break;
+		}
+		debug("Send new email from '%s', subject '%s'", from, subject);
+		if_fail (fwd = forward_new(version, from, subject, nb_dests, dests)) break;
+		if_fail (add_parts(fwd, header)) {
+			error_save();
+			forward_del(fwd);
+			error_restore();
+			break;
+		}
+		forward_submit(fwd);
+	} while (0);
+	free(dests);
 }
 
 static void *crawler_thread(void *data)
@@ -87,7 +95,7 @@ static void *crawler_thread(void *data)
 
 static void move_fwd(struct forward *fwd)
 {
-	debug("version=%"PRIversion", to='%s', descr='%s'", fwd->version, fwd->to, fwd->subject);
+	debug("version=%"PRIversion", from='%s', descr='%s'", fwd->version, fwd->from, fwd->subject);
 	// Retrieve the patch (should we keep it in forward with ref counter ?)
 	struct header *header = mdir_read(to_send, fwd->version, NULL);
 	on_error return;

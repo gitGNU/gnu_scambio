@@ -42,7 +42,9 @@ struct part {
 };
 struct forward {
 	// Description of the email
-	char *from, *to, *subject;	// strduped
+	char *from, *subject;	// strduped
+	unsigned nb_dests;
+	char **dests;
 	TAILQ_HEAD(parts, part) parts;
 	// SMTP status
 	struct forwards *list;	// the list we are on, or NULL if we are still constructed
@@ -53,7 +55,7 @@ struct forward {
 	time_t submited;
 };
 
-struct forward *forward_new(mdir_version version, char const *from, char const *to, char const *subject);
+struct forward *forward_new(mdir_version version, char const *from, char const *subject, unsigned nb_dests, char const **dests);
 void forward_part_new(struct forward *fwd, char const *resource);
 void forward_submit(struct forward *fwd);
 struct forward *forward_oldest_completed(void);
