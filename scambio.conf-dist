@@ -17,7 +17,7 @@ export SC_LOG_DIR=$HOME/scambio/log
 
 ## MDSYNC server location
 #export MDIRD_HOST=localhost
-#export MDIRD_PORT=21435
+#export MDIRD_PORT=21654
 
 ## FILE server location
 #export SC_FILED_HOST=localhost
@@ -47,4 +47,7 @@ export SC_FILES_DIR=$HOME/scambio/cache
 export SC_MEREFS_PATH=$HOME/scambio/shared
 ## The corresponding mdir
 export SC_MEREFS_MDIR=files
+
+## The mdir to which new mail is written
+export SC_OUTBOX=/mailboxes/To_Send
 

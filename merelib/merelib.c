@@ -18,9 +18,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <assert.h>
+#include <string.h>
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
+#include "scambio/channel.h"
 #include "merelib.h"
 
 /*
@@ -45,9 +48,9 @@ static void init_conf(void)
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 }
 
-static void init_log(char const *filename)
+static void init_log(char const *appname)
 {
-	if_fail(log_begin(conf_get_str("SC_LOG_DIR"), filename)) return;
+	if_fail(log_begin(conf_get_str("SC_LOG_DIR"), appname)) return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
 	log_level = conf_get_int("SC_LOG_LEVEL");
@@ -61,9 +64,9 @@ static void deinit_osso(void)
 }
 #endif
 
-void init(char const *app_name_, int nb_args, char *args[])
+void init(char const *name, int nb_args, char *args[])
 {
-	app_name = app_name_;
+	app_name = name;
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
@@ -74,18 +77,20 @@ void init(char const *app_name_, int nb_args, char *args[])
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 #	ifdef WITH_MAEMO
-//	if (! gnome_vfs_init()) with_error(0, "gnome_vfs_init") return;
 	gtk_init(&nb_args, &args);
 	g_set_application_name(app_name);
 	hildon_program = HILDON_PROGRAM(hildon_program_get_instance());
 	char servname[PATH_MAX];
-	snprintf(servname, sizeof(servname), "org.maemo.%s", app_name);
+	snprintf(servname, sizeof(servname), "org.happyleptic.%s", app_name);
 	osso_ctx = osso_initialize(servname, PACKAGE_VERSION, TRUE, NULL);
 	if (! osso_ctx) with_error(0, "osso_initialize") return;
 	if (0 != atexit(deinit_osso)) with_error(0, "atexit") return;
 #	else
 	gtk_init(&nb_args, &args);
 #	endif
+	char icon_fname[PATH_MAX];
+	snprintf(icon_fname, sizeof(icon_fname), TOSTR(ICONDIR) "/%s.png", app_name);
+	gtk_window_set_default_icon_from_file(icon_fname, NULL);
 }
 
 /*
@@ -122,6 +127,14 @@ bool confirm(char const *text)
 	return ret;
 }
 
+void close_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	debug("close");
+	GtkWidget *window = (GtkWidget *)user_data;
+	gtk_widget_destroy(window);
+}
+
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 {
 #	ifdef WITH_MAEMO
@@ -132,7 +145,6 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 	gtk_window_set_title(GTK_WINDOW(win), app_name);
 #	endif
 	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
-	//gtk_window_set_default_icon_from_file(PIXMAPS_DIRS "/truc.png", NULL);
 	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), NULL);
 	return GTK_WIDGET(win);
 }
@@ -179,3 +191,63 @@ GtkWidget *make_toolbar(unsigned nb_buttons, ...)
 	va_end(ap);
 	return toolbar;
 }
+
+GtkWidget *make_scrollable(GtkWidget *wdg)
+{
+	GtkWidget *scrolwin = gtk_scrolled_window_new(NULL, NULL);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolwin), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolwin), wdg);
+	return scrolwin;
+}
+
+GtkWidget *make_frame(char const *title, GtkWidget *wdg)
+{
+	GtkWidget *frame = gtk_frame_new(title);
+	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
+	return frame;
+}
+
+GtkWidget *make_expander(char const *title, GtkWidget *wdg)
+{
+	GtkWidget *frame = gtk_expander_new(title);
+	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
+	gtk_expander_set_expanded(GTK_EXPANDER(frame), FALSE);
+	return frame;
+}
+
+void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget)
+{
+	if_fail (varbuf_ctor(vb, 1024, true)) return;
+	GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget));
+	GtkTextIter begin, end;
+	gtk_text_buffer_get_start_iter(buffer, &begin);
+	gtk_text_buffer_get_end_iter(buffer, &end);
+	gchar *text = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+	varbuf_append(vb, strlen(text), text);
+	g_free(text);
+}
+
+/* GTK apps cannot mix seamlessly with libpth : they both poll a different set of fd.
+ * So at some points in the GTK apps we just wait for other threads to complete, so
+ * than we have only one pth thread while the GTK is running.
+ */
+void wait_all_tx(struct chn_cnx *ccnx)
+{
+	debug("waiting...");
+	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_modal(GTK_WINDOW(win), TRUE);
+	gtk_window_set_title(GTK_WINDOW(win), "Waiting...");
+	GtkWidget *bar = gtk_progress_bar_new();
+	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(bar), "Transfering files");
+	gtk_container_add(GTK_CONTAINER(win), bar);
+	gtk_widget_show_all(win);
+
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 };
+	while (! chn_cnx_all_tx_done(ccnx)) {
+		pth_nanosleep(&ts, NULL);
+		gtk_progress_bar_pulse(GTK_PROGRESS_BAR(bar));
+		gtk_main_iteration_do(FALSE);
+	}
+	gtk_widget_destroy(win);
+}
+

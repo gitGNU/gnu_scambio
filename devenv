@@ -15,6 +15,7 @@ function auth_user {
 	cat > $dir/$name <<EOF
 key: 1234567890DEADBEAF
 method: 3des
+smtp-from: rixed@dangi.happyleptic.org
 
 EOF
 }
@@ -30,17 +31,17 @@ function send_content {
 1 auth Alice
 2 put /
 sc-type: dir
-sc-name: smtpd
-
-3 put /smtpd
-sc-type: dir
 sc-name: mailboxes
 
-4 put /smtpd
+3 put /mailboxes
 sc-type: dir
-sc-name: To Send
+sc-name: Incoming
 
-5 put /smtpd
+4 put /mailboxes
+sc-type: dir
+sc-name: To_Send
+
+5 put /mailboxes
 sc-type: dir
 sc-name: Sent
 
@@ -48,9 +49,9 @@ sc-name: Sent
 sc-type: dir
 sc-name: calendars
 
-7 put smtpd/mailboxes
+7 put mailboxes/Incoming
 sc-type: dir
-sc-name: rixed@happyleptic.org
+sc-name: rixed@dangi.happyleptic.org
 
 8 put calendars
 sc-type: dir

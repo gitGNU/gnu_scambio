@@ -161,7 +161,7 @@ void header_del(struct header *h)
 
 char const **header_search_all(struct header const *h, char const *name, unsigned *nb)
 {
-	debug("looking for all%s in header @%p", name, h);
+	debug("looking for all %s in header @%p", name, h);
 	*nb = 0;
 	struct varbuf vb;
 	if_fail (varbuf_ctor(&vb, 10*sizeof(char *), true)) return NULL;
@@ -279,7 +279,6 @@ void header_dump(struct header const *h, struct varbuf *vb)
 	for (unsigned f=0; f<h->nb_fields; f++) {
 		field_dump(h->fields+f, vb);
 	}
-	varbuf_stringify(vb);	// so that empty headers leads to empty lines
 }
 
 void header_debug(struct header *h)
@@ -288,6 +287,7 @@ void header_debug(struct header *h)
 	varbuf_ctor(&vb, 1000, true);
 	on_error return;
 	header_dump(h, &vb);
+	varbuf_stringify(&vb);
 	if (! is_error()) debug("header : %s", vb.buf);
 	varbuf_dtor(&vb);
 }
@@ -347,11 +347,26 @@ size_t header_find_parameter(char const *name, char const *field_value, char con
 void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value)
 {
 	char const *str;
+	assert(max_len > 0);
+	value[0] = '\0';
 	int str_len = header_find_parameter(name, field_value, &str);
 	on_error return;
 	if (str_len >= (int)max_len) with_error(EMSGSIZE, "parameter length is %d while buf size is %zu", str_len, max_len) return;
 	memcpy(value, str, str_len);
 	value[str_len] = '\0';
+}
+
+size_t header_stripped_value(char const *field_value, size_t max_len, char *value)
+{
+	char const *v = field_value;
+	size_t len = 0;
+	while (*v != '\0' && len < max_len-1) {
+		if (*v == ';') break;
+		value[len++] = *v++;
+	}
+	while (len > 0 && isspace(value[len-1])) len--;
+	value[len] = '\0';
+	return len;
 }
 
 void header_digest(struct header *header, size_t size, char *buffer)

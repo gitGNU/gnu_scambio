@@ -168,7 +168,7 @@ static struct mdir *lookup_abs(char const *path)
 	debug("lookup absolute path '%s'", path);
 	char slink[PATH_MAX];
 	ssize_t len = readlink(path, slink, sizeof(slink));
-	if (len == -1) with_error(errno, "readlink %s", path) return NULL;
+	if (len == -1) with_error(errno, "readlink(%s)", path) return NULL;
 	if (len == 0 || len >= (int)sizeof(slink) || len <= (int)mdir_root_len+1) with_error(0, "bad symlink for %s", path) return NULL;
 	slink[len] = '\0';
 	return mdir_lookup_by_id(slink+mdir_root_len+1, false);	// symlinks points to "mdir_root/id"
@@ -263,7 +263,7 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
 	return header;
 }
 
-static struct header *get_header(struct mdir *mdir, mdir_version version, enum mdir_action *action)
+struct header *mdir_read(struct mdir *mdir, mdir_version version, enum mdir_action *action)
 {
 	struct jnl *jnl;
 	struct header *header;
@@ -307,7 +307,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		char prev_link[PATH_MAX];
 		ssize_t len = readlink(path, prev_link, sizeof(prev_link));
 		if (len == -1) {
-			if (errno != ENOENT) with_error(errno, "Cannot readlink %s", path) return;
+			if (errno != ENOENT) with_error(errno, "readlink(%s)", path) return;
 			// does not exist : then create a new one
 			child = mdir_lookup_by_id(dirid, true);
 		} else {	// the symlink exist
@@ -387,6 +387,34 @@ static void insert_blank_patches(struct mdir *mdir, unsigned nb)
 	}
 }
 
+static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
+{
+	mdir_version to_del = header_target(header);
+	on_error return;
+	struct jnl *old_jnl = find_jnl(mdir, to_del);
+	on_error return;
+	if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) return;
+	enum mdir_action action;
+	struct header *target = jnl_read(old_jnl, to_del - old_jnl->version, &action);
+	on_error return;
+	if (! target) return;	// we remove something that was already removed
+	do {
+		if (action != MDIR_ADD) with_error(0, "Bad patch type for deletion") break;
+		if (header_is_directory(target)) {
+			if_fail (mdir_unlink(mdir, target)) break;
+		}
+		if_fail (jnl_mark_del(old_jnl, to_del)) break;
+	} while (0);
+	header_del(target);
+}
+
+static void mdir_prepare_add(struct mdir *mdir, struct header *header)
+{
+	if (header_is_directory(header)) {
+		mdir_link(mdir, header, false);
+	}
+}
+
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
 {
 	debug("patch mdir %s (with %u dels)", mdir_id(mdir), nb_deleted);
@@ -398,22 +426,11 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		if (nb_deleted) if_fail (insert_blank_patches(mdir, nb_deleted)) break;
 		// If it's a removal, check the header and the deleted version
 		if (action == MDIR_REM) {
-			mdir_version to_del = header_target(header);
-			on_error break;
-			struct jnl *old_jnl = find_jnl(mdir, to_del);
-			on_error break;
-			if (! old_jnl) with_error(0, "Version %"PRIversion" does not exist", to_del) break;
-			if_fail (jnl_mark_del(old_jnl, to_del)) break;
+			mdir_prepare_rem(mdir, header);
+		} else {
+			mdir_prepare_add(mdir, header);
 		}
-		// if its for a subfolder, performs the (un)linking
-		if (header_is_directory(header)) {
-			if (action == MDIR_ADD) {
-				mdir_link(mdir, header, false);
-			} else {
-				mdir_unlink(mdir, header);
-			}
-			on_error break;
-		}
+		on_error break;
 		// Either use the last journal, or create a new one
 		struct jnl *jnl = last_jnl(mdir);
 		on_error break;
@@ -611,7 +628,7 @@ struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h)
 	struct header *header;
 	enum mdir_action action;
 	if_fail (version = get_target(h)) return NULL;
-	if_fail (header = get_header(mdir, version, &action)) return NULL;
+	if_fail (header = mdir_read(mdir, version, &action)) return NULL;
 	if (action != MDIR_ADD) with_error(0, "Target header was not an addition !") return NULL;
 	return header;
 }
@@ -676,13 +693,3 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
-// FIXME: this count also removed patches, but forgetabout transient patches.
-unsigned mdir_size(struct mdir *mdir)
-{
-	unsigned size = 0;
-	struct jnl *jnl;
-	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
-		size += jnl->nb_patches;
-	}
-	return size;
-}

@@ -112,8 +112,7 @@ static bool is_seq(char const *str)
 static void parse_line(struct mdir_syntax *syntax, struct mdir_cmd *cmd, struct varbuf *vb, int fd)
 {
 	varbuf_clean(vb);
-	varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL);
-	on_error return;
+	if_fail (varbuf_read_line(vb, fd, MAX_CMD_LINE, NULL)) return;
 	union mdir_cmd_arg tokens[1 + CMD_MAX_ARGS];	// will point into the varbuf
 	int nb_tokens = tokenize(vb, tokens);
 	on_error return;

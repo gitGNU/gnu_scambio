@@ -1,0 +1,25 @@
+## Values shown are default values.
+## To change, it's recommanded to copy the line first, then uncomment
+## and change the value (so that you keep the default value for reference).
+
+##
+## Log file
+##
+## Under this dir the logfile will be mdird.log
+#export SC_LOG_DIR=/var/log/scambio
+## Log level goes from 0 (nothing but important errors) to 5 (debug)
+#export SC_LOG_LEVEL=3
+
+## SC_FILED server location
+#export SC_FILED_HOST=localhost
+#export SC_FILED_PORT=21436
+#export SC_USERNAME=Alice
+#export SC_FILES_DIR=/var/lib/scambio/files
+
+## System user/group to setuid to
+#export SC_RUNASUSER=
+#export SC_RUNASGROUP=
+
+## Where the users definition files are stored
+#export MDIR_USERS_DIR=/var/lib/scambio/users
+

@@ -49,7 +49,7 @@ int log_begin(char const *dirname, char const *filename)
 {
 	if (!dirname || !filename) return 0;
 	if_fail (Mkdir(dirname)) return 0;
-	snprintf(file_path, sizeof(file_path), "%s/%s", dirname, filename);
+	snprintf(file_path, sizeof(file_path), "%s/%s.log", dirname, filename);
 	return open_log();
 }
 

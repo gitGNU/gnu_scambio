@@ -40,7 +40,7 @@ static void editor_del(struct editor *e)
 	free(e);
 }
 
-static void close_cb(GtkToolButton *button, gpointer user_data)
+static void my_close_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	debug("close");
@@ -107,6 +107,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		char *descr = get_serial_text(e->descr_buffer);
 		on_error break;
 		if (descr) header_add_field(h, SC_DESCR_FIELD, descr);
+		g_free(descr);
 		debug("sending patch");
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);
 	} while (0);
@@ -162,7 +163,7 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
 	GtkToolItem *button_cancel = gtk_tool_button_new_from_stock(GTK_STOCK_CANCEL);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_cancel, -1);
-	g_signal_connect(G_OBJECT(button_cancel), "clicked", G_CALLBACK(close_cb), editor);
+	g_signal_connect(G_OBJECT(button_cancel), "clicked", G_CALLBACK(my_close_cb), editor);
 	GtkToolItem *button_ok = gtk_tool_button_new_from_stock(GTK_STOCK_APPLY);
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_ok, -1);
 	g_signal_connect(G_OBJECT(button_ok), "clicked", G_CALLBACK(send_cb), editor);

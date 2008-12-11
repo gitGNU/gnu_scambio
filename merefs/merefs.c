@@ -55,7 +55,7 @@ static void init_conf(void)
 
 static void init_log(void)
 {
-	if_fail(log_begin(conf_get_str("SC_LOG_DIR"), "merefs.log")) return;
+	if_fail(log_begin(conf_get_str("SC_LOG_DIR"), "merefs")) return;
 	debug("init log");
 	if (0 != atexit(log_end)) with_error(0, "atexit") return;
 	log_level = conf_get_int("SC_LOG_LEVEL");

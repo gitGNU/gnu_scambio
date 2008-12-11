@@ -63,7 +63,7 @@ struct msg_tree {
 	union {
 		struct {
 			struct varbuf data;
-			char name[PATH_MAX];
+			char params[128];	// wild guess
 		} file;
 		SLIST_HEAD(subtrees, msg_tree) parts;
 	} content;

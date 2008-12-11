@@ -24,19 +24,19 @@ AC_ARG_WITH([desktop],
 	[
 		AS_IF(
 			[test "x$with_desktop" = xmaemo],
-				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 hildon-1 >= 0.18 libosso >= 1.3, [DO_GTKAPPS="maemo"], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
+				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 gio-2.0 libgtkhtml-3.14 hildon-1 >= 0.18 libosso >= 1.3, [DO_GTKAPPS="maemo"], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
 			[test "x$with_desktop" = xgtk],
-				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2, [DO_GTKAPPS="gtk"], [AC_MSG_ERROR("cannot found GTK libs")])])])
+				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 gio-2.0 libgtkhtml-3.14, [DO_GTKAPPS="gtk"], [AC_MSG_ERROR("cannot found GTK libs")])])])
 
 AS_IF(
 	[test "x$DO_GTKAPPS" = xgtk],
 		[
-			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")
+			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal icons")
 			AC_SUBST(MAEMO_CPPFLAGS, "")
 		],
 	[test "x$DO_GTKAPPS" = xmaemo],
 		[
-			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal")
+			AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal icons")
 			AC_SUBST(MAEMO_CPPFLAGS, "-DWITH_MAEMO")
 		],
 	[test "x$DO_GTKAPPS" = xno],
@@ -44,6 +44,8 @@ AS_IF(
 			AC_MSG_WARN([will skip GTK applications])
 			AC_SUBST(GTK_SUBDIRS, [])
 		])
+
+AC_SUBST(GTK_ICONDIR, "icons/hicolor/scalable")
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -65,13 +67,17 @@ AC_CONFIG_FILES([
 	mdsyncd/Makefile
 	mdsyncc/Makefile
 	filed/Makefile
+	filec/Makefile
 	smtpd/Makefile
+	sendmail/Makefile
 	merefs/Makefile
 	merelib/Makefile
 	meremail/Makefile
+	meremail/meremail.desktop
+	meremail/org.happyleptic.meremail.service
 	merecal/Makefile
 	merecal/merecal.desktop
-	merecal/org.maemo.merecal.service
+	merecal/org.happyleptic.merecal.service
 	merenotifier/Makefile
 	tools/Makefile
 	icons/Makefile

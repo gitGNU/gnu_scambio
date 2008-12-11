@@ -23,13 +23,13 @@
 ## Port sc_smtpd listens at
 #export SC_SMTPD_PORT=25
 
-## SMTP server all outgoing messages are forwarded
-#export SC_SMTP_HOST smtp.free.fr
-#export SC_SMTP_PORT 25
+## Relay SMTP messages to
+#export SC_SMTP_RELAY_HOST=localhost
+#export SC_SMTP_RELAY_PORT=25
 
 ## System user/group to setuid to
-#export SC_RUNASUSER=scambio
-#export SC_RUNASGROUP=scambio
+#export SC_RUNASUSER=
+#export SC_RUNASGROUP=
 
 ## Where the meta-data are stored
 #export MDIR_ROOT_DIR=/var/lib/scambio/mdir

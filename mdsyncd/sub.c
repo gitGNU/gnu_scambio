@@ -34,6 +34,7 @@ static void *subscription_thread(void *sub);
 
 static void subscription_ctor(struct subscription *sub, struct cnx_env *env, char const *dirId, mdir_version version)
 {
+	debug("subscription@%p, dirId=%s, version=%"PRIversion, sub, dirId, version);
 	sub->version = version;
 	sub->env = env;
 	struct mdir *mdir = mdir_lookup_by_id(dirId, false);
@@ -60,6 +61,7 @@ struct subscription *subscription_new(struct cnx_env *env, char const *dirId, md
 
 static void subscription_dtor(struct subscription *sub)
 {
+	debug("subscription@%p", sub);
 	LIST_REMOVE(sub, mdird_entry);
 	LIST_REMOVE(sub, env_entry);
 	(void)pth_cancel(sub->thread_id);	// better set the cancellation type to PTH_CANCEL_ASYNCHRONOUS
@@ -134,10 +136,10 @@ static void wait_notif(struct subscription *sub)
 static void *subscription_thread(void *sub_)
 {
 	struct subscription *sub = sub_;
-	debug("new thread for subscription @%p", sub);
+	debug("new thread for subscription@%p", sub);
 	while (1) {
 		if (client_needs_patch(sub)) {
-			debug("Sending a patch");
+			debug("Sending a patch for subscription@%p", sub);
 			pth_mutex_acquire(&sub->env->wfd, FALSE, NULL);
 			send_next_patch(sub);
 			pth_mutex_release(&sub->env->wfd);
@@ -145,7 +147,7 @@ static void *subscription_thread(void *sub_)
 		}
 		wait_notif(sub);
 	}
-	debug("terminate thread for subscription @%p", sub);
+	debug("terminate thread for subscription@%p", sub);
 	subscription_del(sub);
 	return NULL;
 }

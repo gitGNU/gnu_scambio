@@ -1,4 +1,4 @@
 [D-BUS Service]
-Name=org.maemo.merecal
+Name=org.happyleptic.merecal
 Exec=@prefix@/bin/merecal
 

@@ -4,5 +4,5 @@ Version=1.0
 Type=Application
 Name=MereCal
 Exec=@prefix@/bin/merecal
-X-Osso-Service=org.maemo.merecal
+X-Osso-Service=org.happyleptic.merecal
 Icon=merecal

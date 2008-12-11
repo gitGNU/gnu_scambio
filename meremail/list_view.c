@@ -25,7 +25,8 @@
 enum {
 	MSG_STORE_FROM,
 	MSG_STORE_SUBJECT,
-	MSG_STORE_VERSION,
+	MSG_STORE_DATE,
+	MSG_STORE_MSGPTR,
 	NB_MSG_STORES
 };
 
@@ -33,54 +34,80 @@ enum {
  * Callbacks
  */
 
-static void close_cb(GtkToolButton *button, gpointer user_data)
+static void view_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
-	debug("close");
-	GtkWidget *window = (GtkWidget *)user_data;
-	gtk_widget_destroy(window);
+	// Retrieve selected row
+	GtkTreeView *list = (GtkTreeView *)user_data;
+	GtkTreeModel *model = gtk_tree_view_get_model(list);
+	if (! model) {
+		error("Tree without a model?");
+		return;
+	}
+	GtkTreeSelection *selection = gtk_tree_view_get_selection(list);
+	GtkTreeIter iter;
+	if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
+		alert(GTK_MESSAGE_ERROR, "Select a message to display");
+		return;
+	}
+	GValue gevent;
+	memset(&gevent, 0, sizeof(gevent));
+	gtk_tree_model_get_value(model, &iter, MSG_STORE_MSGPTR, &gevent);
+	struct msg *msg = g_value_get_pointer(&gevent);
+	g_value_unset(&gevent);
+	debug("Viewing message %"PRIversion, msg->version);
+	GtkWidget *new_win = make_mail_window(msg);
+	on_error {
+		alert(GTK_MESSAGE_ERROR, error_str());
+		error_clear();
+	} else {
+		gtk_widget_show_all(new_win);
+	}
 }
 
 /*
  * Build the view
  */
 
-static void add_patch_to_store(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
+static void fill_store_from_maildir(GtkListStore *store, struct maildir *maildir)
 {
-	if (action != MDIR_ADD) return;
-	char const *from = header_search(header, SC_FROM_FIELD);
-	char const *subject = header_search(header, SC_DESCR_FIELD);
-	if (! from || ! subject) return;	// not an email
-	
-	(void)mdir;
-	GtkListStore *msg_store = (GtkListStore *)data;
+	struct msg *msg;
 	GtkTreeIter iter;
-	gtk_list_store_insert_with_values(msg_store, &iter, G_MAXINT,
-		MSG_STORE_FROM, from,
-		MSG_STORE_SUBJECT, subject,
-		MSG_STORE_VERSION, version,
-		-1);
+	LIST_FOREACH (msg, &maildir->msgs, entry) {
+		gtk_list_store_insert_with_values(store, &iter, G_MAXINT,
+			MSG_STORE_FROM, msg->from,
+			MSG_STORE_SUBJECT, msg->descr,
+			MSG_STORE_DATE, ts2staticstr(msg->date),
+			MSG_STORE_MSGPTR, msg,
+			-1);
+	}
 }
 
 GtkWidget *make_list_window(char const *folder)
 {
 	struct mdir *mdir = mdir_lookup(folder);
 	on_error return NULL;
+	struct maildir *maildir = mdir2maildir(mdir);
+	maildir_refresh(maildir);	// just in case the mdir was just created (mdir lib may randomly destruct mdir)
 
 	GtkWidget *window = make_window(NULL);
 
 	// The list of messages
-	GtkListStore *msg_store = gtk_list_store_new(NB_MSG_STORES, G_TYPE_STRING, G_TYPE_STRING, MDIR_VERSION_G_TYPE);
+	GtkListStore *msg_store = gtk_list_store_new(NB_MSG_STORES, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	// Fill this store
-	mdir_patch_reset(mdir);
-	mdir_patch_list(mdir, false, add_patch_to_store, msg_store);
+	fill_store_from_maildir(msg_store, maildir);
 	
 	GtkWidget *msg_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(msg_store));
 	g_object_unref(G_OBJECT(msg_store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(msg_list), FALSE);
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 
-	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes("From", renderer,
+	GtkTreeViewColumn *column;
+	column = gtk_tree_view_column_new_with_attributes("Date", renderer,
+		"text", MSG_STORE_DATE,
+		NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(msg_list), column);
+	column = gtk_tree_view_column_new_with_attributes("From", renderer,
 		"text", MSG_STORE_FROM,
 		NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(msg_list), column);
@@ -92,22 +119,21 @@ GtkWidget *make_list_window(char const *folder)
 	
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
-	gtk_container_add(GTK_CONTAINER(vbox), msg_list);
+	gtk_container_add(GTK_CONTAINER(vbox), make_scrollable(msg_list));
 	
 	GtkWidget *toolbar = make_toolbar(5,
-		GTK_STOCK_DIRECTORY, NULL, NULL,
-		GTK_STOCK_EDIT,      NULL, NULL,
-		GTK_STOCK_JUMP_TO,   NULL, NULL,
-		GTK_STOCK_DELETE,    NULL, NULL,
-		GTK_STOCK_FIND,      NULL, NULL);
+		GTK_STOCK_OK,      view_cb,  GTK_TREE_VIEW(msg_list),	// View
+		GTK_STOCK_JUMP_TO, NULL,     NULL,	// Forward
+		GTK_STOCK_DELETE,  NULL,     NULL,	// Delete
+		GTK_STOCK_FIND,    NULL,     NULL,	// Find
+		GTK_STOCK_QUIT,    close_cb, window);
 
-	GtkToolItem *button_close = gtk_tool_button_new_from_stock(GTK_STOCK_QUIT);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_close, -1);
-	g_signal_connect(G_OBJECT(button_close), "clicked", G_CALLBACK(close_cb), window);
-
+#	ifdef WITH_MAEMO
+	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
+#	else
 	gtk_container_add(GTK_CONTAINER(vbox), toolbar);
 	gtk_box_set_child_packing(GTK_BOX(vbox), toolbar, FALSE, TRUE, 1, GTK_PACK_END);
-
+#	endif
 	return window;
 }
 

@@ -79,6 +79,7 @@ static struct mdir_user *user_refresh(struct mdir_user *usr)
 
 struct mdir_user *mdir_user_load(char const *name)
 {
+	debug("name=%s", name);
 	struct mdir_user *usr;
 	LIST_FOREACH(usr, &users, entry) {
 		if (0 == strcmp(name, usr->name)) return user_refresh(usr);
@@ -93,6 +94,11 @@ struct mdir_user *mdir_user_load(char const *name)
 		return NULL;
 	}
 	return usr;
+}
+
+struct header *mdir_user_header(struct mdir_user *user)
+{
+	return user->header;
 }
 
 /*

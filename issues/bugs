@@ -1,0 +1,6 @@
+2008-12-10 mdsyncd not sending a patch
+
+While two mdsyncc had subscribed to a mdir, only one of the two
+received a newly created patch. The other one didn't get it untill
+it was restarted.
+

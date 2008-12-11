@@ -22,8 +22,17 @@
 #include "scambio.h"
 #include "scambio/mdir.h"
 #include "scambio/header.h"
+#include "auth.h"
+#include "scambio/channel.h"
+#include "maildir.h"
+
+extern struct chn_cnx ccnx;
+extern struct mdir_user *user;
+extern struct mdir *outbox;
 
 GtkWidget *make_list_window(char const *folder);
 GtkWidget *make_folder_window(char const *parent);
+GtkWidget *make_mail_window(struct msg *);
+GtkWidget *make_compose_window(char const *from, char const *to, char const *subject);
 
 #endif

@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <netdb.h>
 #include <pth.h>
 #include "scambio.h"
 #include "misc.h"
@@ -111,17 +112,19 @@ void WriteTo(int fd, off_t offset, void const *buf, size_t len)
 void Copy(int dst, int src)
 {
 	debug("Copy from %d to %d", src, dst);
-	char byte;
+#	define BUFFER_SIZE 65536
+	char *buffer = malloc(BUFFER_SIZE);
+	if (! buffer) with_error(ENOMEM, "Cannot alloc buffer for copy") return;
 	do {
-		ssize_t ret = pth_read(src, &byte, 1);
+		ssize_t ret = pth_read(src, buffer, BUFFER_SIZE);
 		if (ret < 0) {
-			if (! retryable(errno)) with_error(errno, "Cannot pth_read") return;
+			if (! retryable(errno)) with_error(errno, "Cannot pth_read") break;
 			continue;
 		}
-		if (ret == 0) return;
-		Write(dst, &byte, 1);
-		on_error return;
+		if (ret == 0) break;
+		if_fail (Write(dst, buffer, ret)) break;
 	} while (1);
+	free(buffer);
 }
 
 static void Mkdir_single(char const *path)
@@ -149,16 +152,17 @@ void Mkdir(char const *path_)
 	Mkdir_single(path);
 }
 
-void Mkdir_for_file(char *path)
+void Mkdir_for_file(char const *path)
 {
-	char *last_sep = NULL;
-	for (char *c = path; *c; c++) {
-		if (*c == '/') last_sep = c;
+	char p[PATH_MAX];
+	int last_sep = -1;
+	for (unsigned c = 0; path[c]; c++) {
+		if (path[c] == '/') last_sep = c;
+		p[c] = path[c];
 	}
-	if (last_sep) {
-		*last_sep = '\0';
-		Mkdir(path);
-		*last_sep = '/';
+	if (last_sep >= 0) {
+		p[last_sep] = '\0';
+		Mkdir(p);
 	}
 }
 
@@ -218,7 +222,90 @@ off_t filesize(int fd)
 	off_t size = lseek(fd, 0, SEEK_END);
 	if ((off_t)-1 == size) error_push(errno, "lseek(end)");
 	if ((off_t)-1 == lseek(fd, 0, SEEK_SET)) error_push(errno, "lseek(start)");
+	debug("filesize of fd %d is %u", fd, (unsigned)size);
 	return size;
 }
 
+char *Strdup(char const *orig)
+{
+	char *ret = strdup(orig);
+	if (! ret) with_error(errno, "strdup") return NULL;
+	return ret;
+}
 
+void FreeIfSet(char **ptr)
+{
+	if (NULL == *ptr) return;
+	free(*ptr);
+	*ptr = NULL;
+}
+
+static char const *gaierr2str(int err)
+{
+	switch (err) {
+		case EAI_SYSTEM:     return strerror(errno);
+		case EAI_ADDRFAMILY: return "No addr in family";
+		case EAI_BADFLAGS:   return "Bad flags";
+		case EAI_FAIL:       return "DNS failed";
+		case EAI_FAMILY:     return "Bad family";
+		case EAI_MEMORY:     return "No mem";
+		case EAI_NODATA:     return "No address";
+		case EAI_NONAME:     return "No such name";
+		case EAI_SERVICE:    return "Not in this socket type";
+		case EAI_SOCKTYPE:   return "Bad socket type";
+	}
+	return "Unknown error";
+}
+
+int Connect(char const *host, char const *service)
+{
+	int fd = -1;
+	// Resolve hostname into sockaddr
+	debug("Connecting to %s:%s", host, service);
+	struct addrinfo *info_head, *ainfo;
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;	// AF_UNSPEC to allow IPv6
+	hints.ai_socktype = SOCK_STREAM;	// TODO: configure this
+	int err;
+	if (0 != (err = getaddrinfo(host, service, &hints, &info_head))) {
+		// TODO: check that freeaddrinfo is not required in this case
+		with_error(0, "Cannot getaddrinfo : %s", gaierr2str(err)) return -1;
+	}
+	err = ENOENT;
+	for (ainfo = info_head; ainfo; ainfo = ainfo->ai_next) {
+		fd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
+		if (fd == -1) continue;
+		if (0 == connect(fd, ainfo->ai_addr, ainfo->ai_addrlen)) {
+			info("Connected to %s:%s", host, service);
+			break;
+		}
+		err = errno;
+		(void)close(fd);
+		fd = -1;
+	}
+	if (! ainfo) error_push(err, "No suitable address found for host %s:%s", host, service);
+	freeaddrinfo(info_head);
+	return fd;
+}
+
+char const *Basename(char const *path)
+{
+	for (char const *c = path; *c; c++) {
+		if (*c == '/') path = c+1;
+	}
+	return path;
+}
+
+void *Malloc(size_t size)
+{
+	void *ret = malloc(size);
+	if (! ret) error_push(ENOMEM, "Malloc %zu bytes", size);
+	return ret;
+}
+void *Calloc(size_t size)
+{
+	void *ret = calloc(1, size);
+	if (! ret) error_push(ENOMEM, "Calloc %zu bytes", size);
+	return ret;
+}
