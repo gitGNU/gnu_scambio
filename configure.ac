@@ -24,9 +24,9 @@ AC_ARG_WITH([desktop],
 	[
 		AS_IF(
 			[test "x$with_desktop" = xmaemo],
-				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 gio-2.0 libgtkhtml-3.14 hildon-1 >= 0.18 libosso >= 1.3, [DO_GTKAPPS="maemo"], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
+				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 libgtkhtml-3.8 hildon-1 >= 0.18 libosso >= 1.3, [DO_GTKAPPS="maemo"], [AC_MSG_ERROR("cannot found MAEMO desktop libs")])],
 			[test "x$with_desktop" = xgtk],
-				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 gio-2.0 libgtkhtml-3.14, [DO_GTKAPPS="gtk"], [AC_MSG_ERROR("cannot found GTK libs")])])])
+				[PKG_CHECK_MODULES(GTKS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 libgtkhtml-3.8, [DO_GTKAPPS="gtk"], [AC_MSG_ERROR("cannot found GTK libs")])])])
 
 AS_IF(
 	[test "x$DO_GTKAPPS" = xgtk],
@@ -45,7 +45,7 @@ AS_IF(
 			AC_SUBST(GTK_SUBDIRS, [])
 		])
 
-AC_SUBST(GTK_ICONDIR, "icons/hicolor/scalable")
+AC_SUBST(GTK_ICONDIR, "icons/hicolor/scalable/apps")
 
 # Checks for header files.
 AC_HEADER_STDC

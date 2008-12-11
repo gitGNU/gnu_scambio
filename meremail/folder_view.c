@@ -178,7 +178,7 @@ GtkWidget *make_folder_window(char const *parent)
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
-	gtk_container_add(GTK_CONTAINER(vbox), folder_tree);
+	gtk_container_add(GTK_CONTAINER(vbox), make_scrollable(folder_tree));
 	
 	GtkWidget *toolbar = make_toolbar(5,
 		GTK_STOCK_OK,      enter_cb,   GTK_TREE_VIEW(folder_tree),

@@ -71,9 +71,7 @@ void init(char const *name, int nb_args, char *args[])
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail(init_conf()) return;
-	char logfname[PATH_MAX];
-	snprintf(logfname, sizeof(logfname), "%s.log", app_name);
-	if_fail(init_log(logfname)) return;
+	if_fail(init_log(name)) return;
 	if_fail(mdir_begin()) return;
 	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
 #	ifdef WITH_MAEMO
@@ -203,14 +201,14 @@ GtkWidget *make_scrollable(GtkWidget *wdg)
 GtkWidget *make_frame(char const *title, GtkWidget *wdg)
 {
 	GtkWidget *frame = gtk_frame_new(title);
-	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
+	gtk_container_add(GTK_CONTAINER(frame), wdg);
 	return frame;
 }
 
 GtkWidget *make_expander(char const *title, GtkWidget *wdg)
 {
 	GtkWidget *frame = gtk_expander_new(title);
-	gtk_container_add(GTK_CONTAINER(frame), make_scrollable(wdg));
+	gtk_container_add(GTK_CONTAINER(frame), wdg);
 	gtk_expander_set_expanded(GTK_EXPANDER(frame), FALSE);
 	return frame;
 }

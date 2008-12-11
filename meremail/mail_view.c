@@ -80,7 +80,7 @@ static GtkWidget *make_view_widget(char const *type, char const *resource)
 		gtk_label_set_markup(GTK_LABEL(widget), str);
 		g_free(str);
 	}
-q:	return widget;
+q:	return make_scrollable(widget);
 }
 
 GtkWidget *make_mail_window(struct msg *msg)

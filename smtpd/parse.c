@@ -24,6 +24,7 @@
 #include "smtpd.h"
 #include "misc.h"
 #include "scambio/header.h"
+#include "mime.h"
 
 #ifndef HAVE_STRNSTR
 static char *strnstr(const char *big_, const char *little, size_t max_len)
@@ -187,111 +188,6 @@ static void decode_in_varbuf(struct varbuf *vb, size_t size, char *msg, struct h
 	varbuf_append(vb, size, msg);
 }
 
-// Given a content-type, returns a suitable file extention.
-// Taken from a perl mail parser from Benjamin Elijah Griffin
-static char const *type2ext(char const *type)
-{
-	static const struct {
-		char const *type, *ext;
-	} type2exts[] = {
-		{ "text/x-vcard", "vcf" },
-		{ "text/plain", "txt" },
-		{ "txt/plain", "txt" },	// typo version
-		{ "text/html", "html" },
-		{ "text/sgml", "sgml" },
-		{ "text/css", "css" },
-		{ "text/xml", "xml" },
-		{ "text/richtext", "rtx" },
-		{ "text/calandar", "ics" },	// outlook specific?
-		{ "text/rtf", "rtf" },	// might not be correct type
-		{ "text/tab-separated-values", "tsv" },
-		{ "text/tab-seperated-values", "tsv" },	// typo version
-		{ "text/", "txt" },
-		{ "audio/x-aiff", "aiff" },
-		{ "audio/x-wav", "wav" },
-		{ "audio/x-pn-realaudio", "rm" },
-		{ "audio/x-realaudio", "ra" },
-		{ "audio/basic", "au" },
-		{ "audio/mpeg", "mp3" },
-		{ "audio/midi", "mid" },
-		{ "audio/", "audio" },
-		{ "application/x-stuffit", "sit" },
-		{ "application/x-compress", "Z" },
-		{ "application/x-gzip", "gz" },
-		{ "application/x-cpio", "cpio" },
-		{ "application/x-gunzip", "gz" },
-		{ "application/x-bzip2", "bz2" },
-		{ "application/x-tar", "tar" },
-		{ "application/x-gtar", "tar" },
-		{ "application/x-shar", "shar" },
-		{ "application/x-tar-gz", "tgz" },
-		{ "application/x-zip-compressed", "zip" },
-		{ "application/x-ar", "a" },
-		{ "application/x-shockwave-flash", "swf" },
-		{ "application/x-dvi", "dvi" },
-		{ "application/x-sh", "sh" },
-		{ "application/x-perl", "pl" },
-		{ "application/x-tcl", "tcl" },
-		{ "application/x-javascript", "js" },
-		{ "application/x-tex", "tex" },
-		{ "application/x-texinfo", "texinfo" },
-		{ "application/x-latex", "latex" },
-		{ "application/x-troff-man", "man" },
-		{ "application/x-troff-ms", "ms" },
-		{ "application/x-troff-me", "me" },
-		{ "application/x-troff", "tr" },
-		{ "application/x-patch", "patch" },
-		{ "application/pgp-signature", "sig" },
-		{ "application/andrew-inset", "ez" },
-		{ "application/postscript", "ps" },
-		{ "application/mac-binhex40", "hqx" },
-		{ "application/mac-compactpro", "cpt" },
-		{ "application/pdf", "pdf" },
-		{ "application/rtf", "rtf" },	// might not be correct type
-		{ "application/smil", "smil" },
-		{ "application/msword", "doc" },
-		{ "application/vnd.msword", "doc" },	// not correct
-		{ "application/vnd.ms-word", "doc" },	// not correct
-		{ "application/msexcel", "xls" },	// not correct
-		{ "application/vnd.msexcel", "xls" },	// not correct
-		{ "application/vnd.ms-excel", "xls" },
-		{ "application/vnd.ms-powerpoint", "ppt" },
-		{ "application/", "data" },
-		{ "video/x-msvideo", "avi" },
-		{ "video/x-shockwave-flash", "swf" },	// correctly application/...
-		{ "video/mpeg", "mpg" },
-		{ "video/quicktime", "mov" },
-		{ "video/", "video" },
-		{ "image/x-xbm", "xpm" },
-		{ "image/x-portable-bitmap", "pbm" },
-		{ "image/x-portable-greymap", "pgm" },
-		{ "image/x-portable-pixmap", "ppm" },
-		{ "image/x-xbitmap", "xbm" },
-		{ "image/x-xpixmap", "xpm" },
-		{ "image/x-xwindowdump", "xwd" },
-		{ "image/x-ico", "ico" },
-		{ "image/x-png", "png" },
-		{ "image/png", "png" },
-		{ "image/tiff", "tiff" },
-		{ "image/bmp", "bmp" },
-		{ "image/gif", "gif" },
-		{ "image/jpeg", "jpg" },
-		{ "image/pjpeg", "jpg" },
-		{ "image/", "image" },
-		{ "model/vrml", "vrml" },
-		{ "message/rfc822", "mail" },
-		{ "message/news", "news" },
-		{ "message/partial", "segment" },
-		{ "message/", "message" },
-	};
-	for (unsigned i = 0; i < sizeof_array(type2exts); i++) {
-		if (0 == strncasecmp(type2exts[i].type, type, strlen(type2exts[i].type))) {
-			return type2exts[i].ext;
-		}
-	}
-	return "";
-}
-
 static size_t append_param(char *params, size_t maxlen, size_t len, char const *pname, char const *pval, size_t plen)
 {
 	if (len >= maxlen) {
@@ -309,7 +205,7 @@ static void build_params(char *params, size_t maxlen, struct header *header)
 	char const *filename = NULL;
 	char const *filetype = NULL;
 	char buf[PATH_MAX];
-	size_t len = 0, plen;
+	size_t len = 0, plen = 0;
 	if (disp) {
 		plen = header_find_parameter("filename", disp, &filename);
 		on_error {
@@ -325,12 +221,13 @@ static void build_params(char *params, size_t maxlen, struct header *header)
 		}
 	}
 	if (! filename && type) {	// build from scratch based on type
-		char const *ext = type2ext(type);
-		snprintf(buf, sizeof(buf), "noname.%s", ext);
+		char const *ext = mime_type2ext(type);
+		plen = snprintf(buf, sizeof(buf), "noname.%s", ext ? ext:"bin");
 		filename = buf;
 	}
 	if (! filename) {
 		filename = "noname";
+		plen = strlen(filename);
 	}
 	len += append_param(params, maxlen, len, "name", filename, plen);
 	if (type) {	// take the whole value including charset etc...

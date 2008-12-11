@@ -20,12 +20,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <gio/gio.h>
 #include "merelib.h"
 #include "meremail.h"
 #include "scambio/channel.h"
 #include "scambio/timetools.h"
 #include "misc.h"
+#include "mime.h"
 
 struct compose {
 	GtkWidget *win;
@@ -161,8 +161,7 @@ static void add_files_and_send(struct compose *comp, struct header *header)
 	} else debug("Skip text for being too small");
 	// And all attached files
 	unless_error for (unsigned p = 0; p < comp->nb_files && !is_error(); p++) {
-		gboolean certain;
-		char *content_type = g_content_type_guess(comp->filenames[p], NULL, 0, &certain);
+		char const *content_type = filename2mime_type(comp->filenames[p]);
 		debug("guessed content-type : %s", content_type);
 		send_file(comp->filenames[p], Basename(comp->filenames[p]), content_type, header);
 		have_content = true;

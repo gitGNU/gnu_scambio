@@ -13,5 +13,6 @@ libcommons_la_SOURCES = \
 	persist.c \
 	digest.c \
 	auth.c \
-	options.c
+	options.c \
+	mime.c
 
