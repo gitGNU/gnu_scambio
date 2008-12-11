@@ -41,7 +41,7 @@ bool confirm(char const *);
 void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget);
 void close_cb(GtkToolButton *button, gpointer user_data);	// a simple callback that just deletes the given window
 struct chn_cnx;
-void wait_all_tx(struct chn_cnx *ccnx);
+void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent);
 GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer));
 GtkWidget *make_labeled_hbox(char const *label, GtkWidget *other);
 GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...);

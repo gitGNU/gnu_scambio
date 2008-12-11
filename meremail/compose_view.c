@@ -182,7 +182,7 @@ static void compose_send(struct compose *comp)
 	add_files_and_send(comp, header);
 	header_del(header);
 	// Now wait until the upload is complete
-	wait_all_tx(&ccnx);
+	wait_all_tx(&ccnx, GTK_WINDOW(comp->win));
 }
 
 /*

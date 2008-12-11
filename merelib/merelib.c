@@ -227,19 +227,22 @@ void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget)
  * So at some points in the GTK apps we just wait for other threads to complete, so
  * than we have only one pth thread while the GTK is running.
  */
-void wait_all_tx(struct chn_cnx *ccnx)
+void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent)
 {
 	debug("waiting...");
 	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_modal(GTK_WINDOW(win), TRUE);
 	gtk_window_set_title(GTK_WINDOW(win), "Waiting...");
+	gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
+	gtk_window_set_transient_for(GTK_WINDOW(win), parent);
+	gtk_window_set_type_hint(GTK_WINDOW(win), GDK_WINDOW_TYPE_HINT_NOTIFICATION);
 	GtkWidget *bar = gtk_progress_bar_new();
 	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(bar), "Transfering files");
 	gtk_container_add(GTK_CONTAINER(win), bar);
 	gtk_widget_show_all(win);
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 };
-	while (! chn_cnx_all_tx_done(ccnx)) {
+	while (1 || ! chn_cnx_all_tx_done(ccnx)) {
 		pth_nanosleep(&ts, NULL);
 		gtk_progress_bar_pulse(GTK_PROGRESS_BAR(bar));
 		gtk_main_iteration_do(FALSE);

@@ -28,7 +28,7 @@
  * Make a Window to display a mail
  */
 
-static GtkWidget *make_view_widget(char const *type, char const *resource)
+static GtkWidget *make_view_widget(char const *type, char const *resource, GtkWindow *win)
 {
 	debug("type='%s', resource='%s'", type, resource);
 	GtkWidget *widget = NULL;
@@ -43,7 +43,7 @@ static GtkWidget *make_view_widget(char const *type, char const *resource)
 		error_clear();	// replace by an error text
 		goto q;
 	}
-	wait_all_tx(&ccnx);
+	wait_all_tx(&ccnx, win);
 	// For text files, display in a text widget (after utf8 conversion)
 	// For html, use GtkHtml,
 	// For image, display as an image
@@ -137,7 +137,7 @@ GtkWidget *make_mail_window(struct msg *msg)
 				type[0] = '\0';
 			} else break;
 		}
-		GtkWidget *widget = make_view_widget(type, resource);
+		GtkWidget *widget = make_view_widget(type, resource, GTK_WINDOW(win));
 		if (is_header) {
 			gtk_box_pack_start(GTK_BOX(vbox), make_expander("Headers", widget), FALSE, FALSE, 0);
 		} else {
