@@ -5,7 +5,7 @@ dbusdir=$(datadir)/dbus-1/services
 desktopdir=$(datadir)/applications/hildon
 
 bin_PROGRAMS = merecal
-dbus_DATA=org.maemo.merecal.service
+dbus_DATA=org.happyleptic.merecal.service
 desktop_DATA=merecal.desktop
 
 merecal_SOURCES = \

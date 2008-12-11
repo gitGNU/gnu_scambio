@@ -73,9 +73,11 @@ AC_CONFIG_FILES([
 	merefs/Makefile
 	merelib/Makefile
 	meremail/Makefile
+	meremail/meremail.desktop
+	meremail/org.happyleptic.meremail.service
 	merecal/Makefile
 	merecal/merecal.desktop
-	merecal/org.maemo.merecal.service
+	merecal/org.happyleptic.merecal.service
 	merenotifier/Makefile
 	tools/Makefile
 	icons/Makefile

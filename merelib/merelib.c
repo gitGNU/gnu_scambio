@@ -32,7 +32,7 @@
 
 #ifdef WITH_MAEMO
 #include <libosso.h>
-#define PACKAGE_DBUS_NAME "org.maemo." PACKAGE_NAME
+#define PACKAGE_DBUS_NAME "org.happyleptic." PACKAGE_NAME
 
 static HildonProgram *hildon_program;
 osso_context_t *osso_ctx;
