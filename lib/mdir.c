@@ -547,7 +547,8 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 	}
 	mdir_version last_version = mdir_last_version(mdir);	// used to remove transient acked patches already on the journals (ie synched down)
 	struct dirent *dirent;
-	while (NULL != (dirent = readdir(dir))) {
+	mdir_version const last_listed_unsync_start = mdir->last_listed_unsync;	// we will only report patches that are new relative to this version (mdir->last_listed_unsync will be updated within the loop)
+	while (NULL != (dirent = readdir(dir))) {	// will return the patches in random order
 		char const *const filename = dirent->d_name;
 		debug("  considering '%s'", filename);
 		// patch files start with the action code '+' or '-'.
@@ -580,8 +581,8 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				error_clear();
 				continue;
 			}
-			if (version <= mdir->last_listed_unsync) continue;
-			mdir->last_listed_unsync = version;
+			if (version <= last_listed_unsync_start) continue;
+			if (version > mdir->last_listed_unsync) mdir->last_listed_unsync = version;
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
