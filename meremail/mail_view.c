@@ -91,7 +91,7 @@ GtkWidget *make_mail_window(struct msg *msg)
 	 * (for the first one, the untouched headers, is not of much use).
 	 */
 	debug("for msg %s", msg->descr);
-	GtkWidget *win = make_window(NULL);
+	GtkWidget *win = make_window(NULL, NULL);
 	enum mdir_action action;
 	struct header *h = mdir_read(&msg->maildir->mdir, msg->version, &action);
 	on_error return NULL;

@@ -133,7 +133,7 @@ void close_cb(GtkToolButton *button, gpointer user_data)
 	gtk_widget_destroy(window);
 }
 
-GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
+GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer), gpointer user_data)
 {
 #	ifdef WITH_MAEMO
 	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
@@ -143,7 +143,7 @@ GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer))
 	gtk_window_set_title(GTK_WINDOW(win), app_name);
 #	endif
 	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
-	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), NULL);
+	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), user_data);
 	return GTK_WIDGET(win);
 }
 

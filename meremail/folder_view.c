@@ -153,7 +153,7 @@ GtkWidget *make_folder_window(char const *parent)
 	root_mdir = mdir_lookup(parent);
 	on_error return NULL;
 
-	GtkWidget *window = make_window(destroy_cb);
+	GtkWidget *window = make_window(destroy_cb, NULL);
 
 	// The list of messages
 	folder_store = gtk_tree_store_new(NB_FOLDER_STORES, G_TYPE_STRING, G_TYPE_UINT);

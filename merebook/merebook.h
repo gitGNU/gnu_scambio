@@ -21,7 +21,10 @@
 #include "scambio.h"
 #include "scambio/header.h"
 #include "scambio/mdir.h"
+#include "scambio/channel.h"
 #include "merelib.h"
+
+extern struct chn_cnx ccnx;
 
 struct contact;
 struct book {

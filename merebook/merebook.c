@@ -162,6 +162,18 @@ void refresh(struct book *book)
  * Main
  */
 
+struct chn_cnx ccnx;
+
+void ccnx_init(void)
+{
+	if_fail (chn_begin(false)) return;
+	atexit(chn_end);
+	conf_set_default_str("SC_FILED_HOST", "localhost");
+	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
+	on_error return;
+	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
+}
+
 int main(int nb_args, char *args[])
 {
 	if_fail (init("merebook", nb_args, args)) return EXIT_FAILURE;
@@ -171,6 +183,8 @@ int main(int nb_args, char *args[])
 	if_fail (auth_begin()) return EXIT_FAILURE;
 	atexit(auth_end);
 	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
+	if_fail (ccnx_init()) return EXIT_FAILURE;
+
 	unsigned nb_books;
 	char const **book_names = header_search_all(mdir_user_header(user), "contact-dir", &nb_books);
 	on_error return EXIT_FAILURE;

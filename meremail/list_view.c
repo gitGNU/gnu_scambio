@@ -90,7 +90,7 @@ GtkWidget *make_list_window(char const *folder)
 	struct maildir *maildir = mdir2maildir(mdir);
 	maildir_refresh(maildir);	// just in case the mdir was just created (mdir lib may randomly destruct mdir)
 
-	GtkWidget *window = make_window(NULL);
+	GtkWidget *window = make_window(NULL, NULL);
 
 	// The list of messages
 	GtkListStore *msg_store = gtk_list_store_new(NB_MSG_STORES, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);

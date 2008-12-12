@@ -36,7 +36,7 @@ struct compose {
 
 static void compose_ctor(struct compose *comp, char const *from, char const *to, char const *subject)
 {
-	comp->win = make_window(NULL);
+	comp->win = make_window(NULL, NULL);
 	// From : combobox with all accepted from addresses (with from param preselected)
 	unsigned nb_froms;
 	char const **froms = header_search_all(mdir_user_header(user), "smtp-from", &nb_froms);

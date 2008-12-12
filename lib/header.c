@@ -144,6 +144,8 @@ static void header_dtor(struct header *h)
 
 extern inline struct header *header_ref(struct header *header);
 extern inline void header_unref(struct header *header);
+extern inline unsigned header_nb_fields(struct header *h);
+extern inline struct head_field const *header_field(struct header *h, unsigned f);
 
 struct header *header_new(void)
 {

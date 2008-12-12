@@ -143,7 +143,7 @@ static GtkWidget *make_contacts_list(void)
 
 GtkWidget *make_book_window(void)
 {
-	GtkWidget *win = make_window(NULL);
+	GtkWidget *win = make_window(destroy_cb, NULL);
 	/* The book window is composed of :
 	 * - a book selector (ALL/book1/book2/etc)
 	 * - a list of all contact in this book list (or global contacts list), sorted

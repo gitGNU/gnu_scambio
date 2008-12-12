@@ -108,12 +108,15 @@ sc-name: work
 sc-type: contact
 sc-name: Moi Meme
 sc-descr: What a sucker!
-email: rixed@free.fr
+email: rixed@free.fr; category=home
+email: rixed@happyleptic.org; category=home
+email: cedric.cellier@evistel.com; category=work
 
 18 put /contacts/rixed
 sc-type: contact
 sc-name: Pascale
-email: pascale@happyleptic.org
+email: pascale@happyleptic.org; category=home
+email: ombreroze@hotmail.com; category=home
 
 18 put /contacts/rixed
 sc-type: contact

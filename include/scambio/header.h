@@ -53,6 +53,16 @@ static inline void header_unref(struct header *header)
 	if (--header->count <= 0) header_del(header);
 }
 
+static inline unsigned header_nb_fields(struct header *h)
+{
+	return h->nb_fields;
+}
+
+static inline struct head_field const *header_field(struct header *h, unsigned f)
+{
+	return h->fields+f;
+}
+
 // Given a field name, return the (first) field value
 // or NULL if undefined.
 char const *header_search(struct header const *h, char const *name);

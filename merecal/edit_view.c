@@ -134,7 +134,7 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	editor->replaced_version = replaced;
 	editor->replaced_folder = default_cf;
 
-	editor->window = make_window(NULL);
+	editor->window = make_window(NULL, NULL);
 
 	// First the combo to choose the folder from
 	editor->folder_combo = gtk_combo_box_new_text();
