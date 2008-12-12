@@ -112,7 +112,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		debug("sending patch");
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);
 	} while (0);
-	header_del(h);
+	header_unref(h);
 	unless_error {
 		// Now that the new msg is in, remove the replaced one
 		if (e->replaced_version != 0) {

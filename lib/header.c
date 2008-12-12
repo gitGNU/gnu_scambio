@@ -126,6 +126,7 @@ static void str_tolower(char *str)
 static void header_ctor(struct header *h)
 {
 	h->nb_fields = 0;
+	h->count = 1;
 }
 
 static void header_dtor(struct header *h)
@@ -140,6 +141,9 @@ static void header_dtor(struct header *h)
 /*
  * Public Functions
  */
+
+extern inline struct header *header_ref(struct header *header);
+extern inline void header_unref(struct header *header);
 
 struct header *header_new(void)
 {
@@ -397,7 +401,7 @@ struct header *header_from_file(char const *filename)
 		}
 		header_read(h, fd);
 		on_error {
-			header_del(h);
+			header_unref(h);
 			h = NULL;
 			break;
 		}

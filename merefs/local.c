@@ -55,7 +55,7 @@ static void upload_file(struct file *file, char const *filename)
 	if_fail (header = header_new()) return;
 	make_file_patch(header, file);
 	unless_error mdir_patch_request(mdir, MDIR_ADD, header);
-	header_del(header);
+	header_unref(header);
 }
 
 static void remove_remote(struct file *file)

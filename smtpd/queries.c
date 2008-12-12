@@ -277,7 +277,7 @@ static void process_mail(struct cnx_env *env)
 			// submit the header
 			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h)) break;
 		} while (0);
-		header_del(h);
+		header_unref(h);
 	} while (0);
 	msg_tree_del(msg_tree);
 }

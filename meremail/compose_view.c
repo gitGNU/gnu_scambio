@@ -117,7 +117,7 @@ static struct header *header_new_from_compose(struct compose *comp)
 			gtk_combo_box_get_active_text(GTK_COMBO_BOX(comp->from_combo)))) break;
 		return header;
 	} while (0);
-	header_del(header);
+	header_unref(header);
 	return NULL;
 }
 
@@ -150,7 +150,7 @@ static void add_files_and_send(struct compose *comp, struct header *header)
 		(void)close(fd);
 	} while (0);
 	on_error {
-		header_del(header);
+		header_unref(header);
 		return;
 	}
 	bool have_content = false;
@@ -180,7 +180,7 @@ static void compose_send(struct compose *comp)
 	struct header *header = header_new_from_compose(comp);
 	on_error return;
 	add_files_and_send(comp, header);
-	header_del(header);
+	header_unref(header);
 	// Now wait until the upload is complete
 	wait_all_tx(&ccnx, GTK_WINDOW(comp->win));
 }

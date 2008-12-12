@@ -29,6 +29,7 @@
  */
 struct header {
 	unsigned nb_fields;
+	int count;
 	// Variable size
 	struct head_field {
 		char *name, *value;	// strdupped strings
@@ -40,6 +41,17 @@ struct header {
 struct header *header_new(void);
 
 void header_del(struct header *h);
+
+static inline struct header *header_ref(struct header *header)
+{
+	header->count++;
+	return header;
+}
+
+static inline void header_unref(struct header *header)
+{
+	if (--header->count <= 0) header_del(header);
+}
 
 // Given a field name, return the (first) field value
 // or NULL if undefined.

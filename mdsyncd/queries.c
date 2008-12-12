@@ -129,7 +129,7 @@ static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *use
 		version = add_header(dir, h, action);
 		on_error status = 502;
 	}
-	header_del(h);
+	header_unref(h);
 	answer(env, cmd, status, status == 200 ? mdir_version2str(version) : (is_error() ? error_str():"Error"));
 	error_clear();
 }

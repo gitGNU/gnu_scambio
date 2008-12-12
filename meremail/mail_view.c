@@ -161,6 +161,6 @@ GtkWidget *make_mail_window(struct msg *msg)
 #	endif
 
 q1:
-	header_del(h);
+	header_unref(h);
 	return win;
 }

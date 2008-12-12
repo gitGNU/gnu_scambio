@@ -46,7 +46,7 @@ int main(void)
 			display_refresh();
 		} while (0);
 		error_save();
-		header_del(header);
+		header_unref(header);
 		error_restore();
 	}
 	

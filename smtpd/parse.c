@@ -274,7 +274,7 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 static void msg_tree_dtor(struct msg_tree *node)
 {
 	if (node->header) {
-		header_del(node->header);
+		header_unref(node->header);
 		node->header = NULL;
 	}
 	switch (node->type) {

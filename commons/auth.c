@@ -51,7 +51,7 @@ static void user_dtor(struct mdir_user *usr)
 {
 	LIST_REMOVE(usr, entry);
 	free(usr->name);
-	header_del(usr->header);
+	header_unref(usr->header);
 }
 
 static struct mdir_user *user_new(char const *name, struct header *header)
@@ -90,7 +90,7 @@ struct mdir_user *mdir_user_load(char const *name)
 	on_error return NULL;
 	usr = user_new(name, header);
 	on_error {
-		header_del(header);
+		header_unref(header);
 		return NULL;
 	}
 	return usr;

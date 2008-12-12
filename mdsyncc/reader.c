@@ -161,7 +161,7 @@ static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version ol
 	on_error return;
 	header_read(patch->header, cnx.fd);
 	on_error {
-		header_del(patch->header);
+		header_unref(patch->header);
 		return;
 	}
 	struct c2l_map *c2l = c2l_search(&mdirc->c2l_maps, new_version);
@@ -186,7 +186,7 @@ static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version ol
 static void patch_dtor(struct patch *patch)
 {
 	LIST_REMOVE(patch, entry);
-	header_del(patch->header);
+	header_unref(patch->header);
 }
 
 static void patch_del(struct patch *patch)

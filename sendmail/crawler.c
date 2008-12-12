@@ -108,7 +108,7 @@ static void move_fwd(struct forward *fwd)
 	snprintf(status, sizeof(status), "%d", fwd->status);
 	header_add_field(header, SC_STATUS_FIELD, status);
 	mdir_patch_request(sent, MDIR_ADD, header);
-	header_del(header);
+	header_unref(header);
 }
 
 static void *acker_thread(void *data)

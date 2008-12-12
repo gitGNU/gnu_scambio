@@ -405,7 +405,7 @@ static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
 		}
 		if_fail (jnl_mark_del(old_jnl, to_del)) break;
 	} while (0);
-	header_del(target);
+	header_unref(target);
 }
 
 static void mdir_prepare_add(struct mdir *mdir, struct header *header)
@@ -476,19 +476,12 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 	on_error return;
 	header_add_field(h, SC_TARGET_FIELD, mdir_version2str(to_del));
 	unless_error mdir_patch_request(mdir, MDIR_REM, h);
-	header_del(h);
+	header_unref(h);
 }
 
 /*
  * List
  */
-
-static mdir_version get_target(struct header *h)
-{
-	char const *target_str = header_search(h, SC_TARGET_FIELD);
-	if (! target_str) with_error(0, "Removal patch with no target ?") return 0;
-	return mdir_str2version(target_str);
-}
 
 void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version, void *), void *data)
 {
@@ -519,7 +512,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 					}
 				}
 				if (action == MDIR_REM) {	// don't report removals of patches we did not report
-					mdir_version target = get_target(h);
+					mdir_version target = header_target(h);
 					on_error {
 						error_clear();
 						skip = true;
@@ -530,7 +523,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				if (! skip) {
 					cb(mdir, h, action, jnl->version + index, data);
 				}
-				header_del(h);
+				header_unref(h);
 				on_error return;
 				mdir->last_listed_sync = jnl->version + index;
 			}
@@ -587,7 +580,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 		struct header *h = header_from_file(temp);
 		on_error break;
 		cb(mdir, h, action, acked ? version:-version, data);
-		header_del(h);
+		header_unref(h);
 		on_error break;
 	}
 	if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
@@ -628,7 +621,7 @@ struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h)
 	mdir_version version;
 	struct header *header;
 	enum mdir_action action;
-	if_fail (version = get_target(h)) return NULL;
+	if_fail (version = header_target(h)) return NULL;
 	if_fail (header = mdir_read(mdir, version, &action)) return NULL;
 	if (action != MDIR_ADD) with_error(0, "Target header was not an addition !") return NULL;
 	return header;
