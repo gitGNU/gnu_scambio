@@ -31,6 +31,7 @@
 enum {
 	FIELD_HOUR,
 	FIELD_TEXT,
+	FIELD_FOLDER,
 	FIELD_EVENT,
 	NB_STORE_FIELDS
 };
@@ -81,6 +82,7 @@ static void display_event(struct cal_event *ce)
 	gtk_list_store_insert_with_values(event_store, &iter, G_MAXINT,
 		FIELD_HOUR, hour,
 		FIELD_TEXT, ce->description,
+		FIELD_FOLDER, ce->folder->name,
 		FIELD_EVENT, ce,
 		-1);
 }
@@ -93,6 +95,7 @@ static void display_now(struct cal_date *cd)
 	gtk_list_store_insert_with_values(event_store, &iter, G_MAXINT,
 		FIELD_HOUR, "-- now --",
 		FIELD_TEXT, "",
+		FIELD_FOLDER, "",
 		FIELD_EVENT, NULL,
 		-1);
 }
@@ -292,7 +295,7 @@ GtkWidget *make_cal_window(void)
 
 	GtkWidget *window = make_window(NULL);
 	
-	event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
+	event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	GtkWidget *event_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(event_store));
 	g_object_unref(G_OBJECT(event_store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(event_list), FALSE);
@@ -304,6 +307,10 @@ GtkWidget *make_cal_window(void)
 	renderer = gtk_cell_renderer_text_new();
 	column = gtk_tree_view_column_new_with_attributes("Description", renderer,
 		"text", FIELD_TEXT, NULL);
+	gtk_tree_view_column_set_expand(column, TRUE);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(event_list), column);
+	column = gtk_tree_view_column_new_with_attributes("Folder", renderer,
+		"text", FIELD_FOLDER, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(event_list), column);
 	
 	calendar = gtk_calendar_new();
