@@ -237,6 +237,9 @@ void add_file(GtkToolButton *button, gpointer user_data)
 GtkWidget *make_compose_window(char const *from, char const *to, char const *subject)
 {
 	debug("from=%s, to=%s, subject=%s", from, to, subject);
+	if (! outbox) {
+		with_error(0, "Cannot compose message when no outbox is configured") return NULL;
+	}
 	struct compose *comp = compose_new(from, to, subject);
 	on_error return NULL;
 

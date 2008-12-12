@@ -26,6 +26,7 @@
 #include "scambio/header.h"
 #include "scambio/timetools.h"
 #include "merecal.h"
+#include "auth.h"
 
 /*
  * Dates
@@ -373,17 +374,28 @@ void refresh(void)
 
 int main(int nb_args, char *args[])
 {
-	if_fail(init("merecal", nb_args, args)) return EXIT_FAILURE;
-	char const *folders[] = { "/calendars/rixed", "/calendars/project-X" };
-	for (unsigned f=0; f<sizeof_array(folders); f++) {
-		(void)cal_folder_new(folders[f]);
+	static struct mdir_user *user;
+	if_fail (init("merecal", nb_args, args)) return EXIT_FAILURE;
+
+	conf_set_default_str("SC_USERNAME", "Alice");
+	if_fail (auth_begin()) return EXIT_FAILURE;
+	atexit(auth_end);
+	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
+	unsigned nb_folders;
+	char const **folders = header_search_all(mdir_user_header(user), "cal-dir", &nb_folders);
+	on_error return EXIT_FAILURE;
+
+	while (nb_folders --) {
+		(void)cal_folder_new(folders[nb_folders]);
 		on_error return EXIT_FAILURE;
 	}
+	free(folders);
 	refresh();
 	GtkWidget *cal_window = make_cal_window();
 	if (! cal_window) return EXIT_FAILURE;
 	exit_when_closed(cal_window);
 	gtk_widget_show_all(cal_window);
 	gtk_main();
+
 	return EXIT_SUCCESS;
 }

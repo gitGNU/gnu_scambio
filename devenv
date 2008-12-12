@@ -16,6 +16,11 @@ function auth_user {
 key: 1234567890DEADBEAF
 method: 3des
 smtp-from: rixed@dangi.happyleptic.org
+smtp-from: rixed@free.fr
+smtp-inbox: /mailboxes/Incoming/rixed@dangi.happyleptic.org
+smtp-outbox: /mailboxes/To_Send
+cal-dir: /calendars/rixed
+cal-dir: /calendars/project-X
 
 EOF
 }
