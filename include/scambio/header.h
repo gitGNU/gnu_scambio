@@ -120,5 +120,6 @@ mdir_version header_target(struct header *h);
 #define SC_IM_TYPE        "im"
 #define SC_DIR_TYPE       "dir"
 #define SC_FILE_TYPE      "file"
+#define SC_CONTACT_TYPE   "contact"
 
 #endif

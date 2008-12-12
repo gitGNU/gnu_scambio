@@ -36,10 +36,10 @@ else
 		PKG_CHECK_MODULES(GTKHTML, libgtkgtkhtml-3.8, [GTKHTMLVER=380], [AC_MSG_ERROR("cannot find GTKHTML lib")])
 	])
 	if test "x$DO_GTKAPPS" = xgtk ; then
-		AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal icons")
+		AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal merebook icons")
 		AC_SUBST(MAEMO_CPPFLAGS, "")
 	else # maemo then
-		AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal icons")
+		AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal merebook icons")
 		AC_SUBST(MAEMO_CPPFLAGS, "-DWITH_MAEMO")
 	fi
 fi
@@ -77,6 +77,9 @@ AC_CONFIG_FILES([
 	merecal/Makefile
 	merecal/merecal.desktop
 	merecal/org.happyleptic.merecal.service
+	merebook/Makefile
+	merebook/merebook.desktop
+	merebook/org.happyleptic.merebook.service
 	merenotifier/Makefile
 	tools/Makefile
 	icons/Makefile

@@ -21,6 +21,8 @@ smtp-inbox: /mailboxes/Incoming/rixed@dangi.happyleptic.org
 smtp-outbox: /mailboxes/To_Send
 cal-dir: /calendars/rixed
 cal-dir: /calendars/project-X
+contact-dir: /contacts/rixed
+contact-dir: /contacts/work
 
 EOF
 }
@@ -93,6 +95,34 @@ sc-name: files
 14 put /
 sc-type: dir
 sc-name: contacts
+
+15 put contacts
+sc-type: dir
+sc-name: rixed
+
+16 put contacts
+sc-type: dir
+sc-name: work
+
+17 put /contacts/rixed
+sc-type: contact
+sc-name: Moi Meme
+sc-descr: What a sucker!
+email: rixed@free.fr
+
+18 put /contacts/rixed
+sc-type: contact
+sc-name: Pascale
+email: pascale@happyleptic.org
+
+18 put /contacts/rixed
+sc-type: contact
+sc-name: Gabriel
+
+19 put /contacts/work
+sc-type: contact
+sc-name: Bossa
+sc-descr: Been there done that
 
 999 quit
 EOF
