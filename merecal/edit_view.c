@@ -27,7 +27,8 @@
 struct editor {
 	GtkWidget *window, *folder_combo, *start_entry, *stop_entry;
 	GtkTextBuffer *descr_buffer;
-	mdir_version replaced;
+	mdir_version replaced_version;
+	struct cal_folder *replaced_folder;
 };
 
 /*
@@ -114,8 +115,9 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	header_del(h);
 	unless_error {
 		// Now that the new msg is in, remove the replaced one
-		if (e->replaced != 0) {
-			mdir_del_request(cf->mdir, e->replaced);
+		if (e->replaced_version != 0) {
+			assert(e->replaced_folder);
+			mdir_del_request(e->replaced_folder->mdir, e->replaced_version);
 		}
 		editor_del(e);
 	}
@@ -129,7 +131,8 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 {
 	struct editor *editor = malloc(sizeof(*editor));
 	if (! editor) with_error(ENOMEM, "malloc editor") return NULL;
-	editor->replaced = replaced;
+	editor->replaced_version = replaced;
+	editor->replaced_folder = default_cf;
 
 	editor->window = make_window(NULL);
 

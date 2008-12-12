@@ -185,7 +185,7 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 	struct cal_date start, stop;
 	char *descr;
 	struct cal_folder *cf;
-	mdir_version replaced;
+	mdir_version replaced = 0;
 	if (new) {
 		guint year, month, day;
 		gtk_calendar_get_date(GTK_CALENDAR(calendar), &year, &month, &day);
@@ -193,7 +193,6 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 		cal_date_ctor(&stop,  0, month, day, 99, 99);
 		descr = "";
 		cf = LIST_FIRST(&cal_folders);
-		replaced = 0;
 	} else {	// Retrieve selected event
 		GtkTreeSelection *selection = gtk_tree_view_get_selection(list);
 		GtkTreeIter iter;
@@ -210,11 +209,11 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 			alert(GTK_MESSAGE_ERROR, "Cannot edit this");	// user try to edit current time mark
 			return;
 		}
-		replaced = ce->version;
-		if (replaced < 0) {
+		if (ce->version < 0) {
 			alert(GTK_MESSAGE_ERROR, "Cannot edit a transient event");
 			return;
 		}
+		replaced = ce->version;
 		start = ce->start;
 		stop = ce->stop;
 		descr = ce->description;
