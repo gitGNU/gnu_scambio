@@ -100,7 +100,7 @@ GtkWidget *make_mail_window(struct msg *msg)
 	char const **resources = header_search_all(h, SC_RESOURCE_FIELD, &nb_resources);
 	on_error goto q1;
 
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(win), vbox);
 
 	// The header

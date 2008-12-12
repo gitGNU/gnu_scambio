@@ -243,7 +243,7 @@ GtkWidget *make_compose_window(char const *from, char const *to, char const *sub
 	struct compose *comp = compose_new(from, to, subject);
 	on_error return NULL;
 
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(comp->win), vbox);
 	GtkWidget *formH = make_labeled_hboxes(3,
 		"From :", comp->from_combo,

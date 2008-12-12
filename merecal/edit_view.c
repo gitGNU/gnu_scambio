@@ -171,7 +171,7 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_ok, -1);
 	g_signal_connect(G_OBJECT(button_ok), "clicked", G_CALLBACK(send_cb), editor);
 
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), descr_text, TRUE, TRUE, 0);
 #	ifdef WITH_MAEMO

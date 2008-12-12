@@ -176,7 +176,7 @@ GtkWidget *make_folder_window(char const *parent)
 		NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(folder_tree), column);
 
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 	gtk_box_pack_start(GTK_BOX(vbox), make_scrollable(folder_tree), TRUE, TRUE, 0);
 	

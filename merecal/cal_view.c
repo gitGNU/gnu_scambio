@@ -104,7 +104,7 @@ static void display_now(struct cal_date *cd)
 static void reset_day(void)
 {
 	// Clear the list store
-	gtk_list_store_clear(GTK_LIST_STORE(event_store));
+	gtk_list_store_clear(event_store);
 	// Get current date and time
 	struct cal_date now;
 	time_t now_ts = time(NULL);
@@ -331,8 +331,8 @@ GtkWidget *make_cal_window(void)
 		GTK_STOCK_DELETE,  del_cb,     GTK_TREE_VIEW(event_list),
 		GTK_STOCK_QUIT,    quit_cb,    window);
 
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 1);
-	gtk_box_pack_start(GTK_BOX(vbox), event_list, FALSE, FALSE, 0);
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), event_list, TRUE, TRUE, 0);
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
 #	else

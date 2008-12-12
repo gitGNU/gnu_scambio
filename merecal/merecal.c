@@ -374,9 +374,9 @@ void refresh(void)
 
 int main(int nb_args, char *args[])
 {
-	static struct mdir_user *user;
 	if_fail (init("merecal", nb_args, args)) return EXIT_FAILURE;
 
+	static struct mdir_user *user;
 	conf_set_default_str("SC_USERNAME", "Alice");
 	if_fail (auth_begin()) return EXIT_FAILURE;
 	atexit(auth_end);
@@ -386,8 +386,7 @@ int main(int nb_args, char *args[])
 	on_error return EXIT_FAILURE;
 
 	while (nb_folders --) {
-		(void)cal_folder_new(folders[nb_folders]);
-		on_error return EXIT_FAILURE;
+		if_fail ((void)cal_folder_new(folders[nb_folders])) return EXIT_FAILURE;
 	}
 	free(folders);
 	refresh();
