@@ -72,7 +72,7 @@ static void category_add_value(struct category *cat, char const *field, char con
 	}
 	struct cat_value *cat_value = cat->values + cat->nb_values;
 	cat_value->field = field;
-#	define MAX_VALUE_LEN 10000
+#	define MAX_VALUE_LEN 10000	// FIXME (stripped value into a varbuf ?)
 	if_fail (varbuf_ctor(&cat_value->value, MAX_VALUE_LEN, true)) return;
 	if_fail (varbuf_put(&cat_value->value, MAX_VALUE_LEN)) return;
 	size_t value_len;
@@ -121,15 +121,16 @@ static void category_del(struct category *cat)
 
 static GtkWidget *category_widget(struct category *cat)
 {
-	GtkWidget *catbox = gtk_hbox_new(FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(catbox), gtk_label_new(cat->name), FALSE, FALSE, 0);
 	GtkWidget *table = gtk_table_new(2, cat->nb_values, FALSE);
 	for (unsigned v = 0; v < cat->nb_values; v++) {
-		gtk_table_attach(GTK_TABLE(table), gtk_label_new(cat->values[v].field), 0, 1, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 1, 1);
+		GtkWidget *field_label = gtk_label_new(NULL);
+		char *markup = g_markup_printf_escaped("<i>%s</i> : ", cat->values[v].field);
+		gtk_label_set_markup(GTK_LABEL(field_label), markup);
+		g_free(markup);
+		gtk_table_attach(GTK_TABLE(table), field_label, 0, 1, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 1, 1);
 		gtk_table_attach(GTK_TABLE(table), gtk_label_new(cat->values[v].value.buf), 1, 2, v, v+1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 1, 1);
 	}
-	gtk_box_pack_start(GTK_BOX(catbox), table, TRUE, TRUE, 0);
-	return catbox;
+	return make_frame(cat->name, table);
 }
 
 /*
@@ -144,6 +145,7 @@ struct contact_view {
 
 static void contact_view_dtor(struct contact_view *ctv)
 {
+	debug("ctv@%p", ctv);
 	struct category *cat;
 	while (NULL != (cat = LIST_FIRST(&ctv->categories))) {
 		category_del(cat);
@@ -157,19 +159,27 @@ static void contact_view_del(struct contact_view *ctv)
 	free(ctv);
 }
 
-void del_me(GtkWidget *widget, gpointer data)
+static void del_me(GtkWidget *widget, gpointer data)
 {
 	(void)widget;
 	struct contact_view *ctv = (struct contact_view *)data;
 	contact_view_del(ctv);
 }
 
+static void edit_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	(void)data;
+}
+
 static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 {
+	debug("ctv@%p", ctv);
 	LIST_INIT(&ctv->categories);
 	ctv->ct = ct;
 	ctv->window = make_window(del_me, ctv);
 	GtkWidget *page = gtk_vbox_new(FALSE, 0);
+	
 	// Header with photo and name
 	char fname[PATH_MAX];
 	char const *picture_field = header_search(ct->header, "sc-picture");
@@ -182,11 +192,17 @@ static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 	GtkWidget *photo = picture_field ?
 		gtk_image_new_from_file(fname) :
 		gtk_image_new_from_stock(GTK_STOCK_ORIENTATION_PORTRAIT, GTK_ICON_SIZE_DIALOG);
-	GtkWidget *name_label = gtk_label_new(ct->name);
+
+	GtkWidget *name_label = gtk_label_new(NULL);
+	char *mark_name = g_markup_printf_escaped("<span size=\"x-large\"><b>%s</b></span>", ct->name);
+	gtk_label_set_markup(GTK_LABEL(name_label), mark_name);
+	g_free(mark_name);
+	
 	GtkWidget *head_hbox = gtk_hbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(head_hbox), photo, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(head_hbox), name_label, TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(page), head_hbox, FALSE, FALSE, 0);
+	
 	// Category boxes
 	unsigned nb_fields = header_nb_fields(ct->header);
 	for (unsigned f = 0; f < nb_fields; f++) {
@@ -203,6 +219,11 @@ static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 		gtk_box_pack_start(GTK_BOX(page), category_widget(cat), FALSE, FALSE, 0);
 	}
 	// Then a toolbar
+	GtkWidget *toolbar = make_toolbar(2,
+		GTK_STOCK_EDIT, edit_cb, ctv,
+		GTK_STOCK_QUIT, close_cb, ctv->window);
+	gtk_box_pack_end(GTK_BOX(page), toolbar, FALSE, FALSE, 0);
+		
 	gtk_container_add(GTK_CONTAINER(ctv->window), page);
 }
 
