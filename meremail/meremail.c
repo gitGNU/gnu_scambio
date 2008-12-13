@@ -55,7 +55,7 @@ int main(int nb_args, char *args[])
 	char const *outbox_name = header_search(mdir_user_header(user), "smtp-outbox");
 	on_error return EXIT_FAILURE;
 	if (outbox_name) {
-		if_fail (outbox = mdir_lookup(conf_get_str("SC_OUTBOX"))) return EXIT_FAILURE;
+		if_fail (outbox = mdir_lookup(outbox_name)) return EXIT_FAILURE;
 	} else {
 		warning("No outbox defined : Cannot send");
 	}
