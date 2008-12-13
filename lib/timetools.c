@@ -116,3 +116,14 @@ time_t sc_gmfield2ts(char const *str, bool *hour_set)
 	return ts;
 }
 
+static bool is_leap_year(unsigned y)
+{
+	return (y%4 == 0) && (y%100 != 0 || y%400 == 0);
+}
+
+int month_days(unsigned year, unsigned month)	// month is from 0 to 11
+{
+	static unsigned const days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	return days[month] + (month == 1 && is_leap_year(year));
+}
+

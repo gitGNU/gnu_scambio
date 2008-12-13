@@ -89,20 +89,20 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	on_error return;
 	do {
 		char date_str[] = "XXXX XX XX XX XX XX";
-		struct cal_date date;
+		struct cal_date from_date, to_date;
 		if_fail (header_add_field(h, SC_TYPE_FIELD, SC_CAL_TYPE)) break;
 		// From
-		if_fail (cal_date_ctor_from_input(&date, gtk_entry_get_text(GTK_ENTRY(e->start_entry)))) break;
-		if (! cal_date_is_set(&date)) {
+		if_fail (cal_date_ctor_from_input(&from_date, gtk_entry_get_text(GTK_ENTRY(e->start_entry)), NULL)) break;
+		if (! cal_date_is_set(&from_date)) {
 			alert(GTK_MESSAGE_ERROR, "You must enter a 'From' date");
 			break;
 		}
-		if_fail (cal_date_to_str(&date, date_str, sizeof(date_str))) break;
+		if_fail (cal_date_to_str(&from_date, date_str, sizeof(date_str))) break;
 		if_fail (header_add_field(h, SC_START_FIELD, date_str)) break;
 		// To
-		if_fail (cal_date_ctor_from_input(&date, gtk_entry_get_text(GTK_ENTRY(e->stop_entry)))) break;
-		if (cal_date_is_set(&date)) {
-			if_fail (cal_date_to_str(&date, date_str, sizeof(date_str))) break;
+		if_fail (cal_date_ctor_from_input(&to_date, gtk_entry_get_text(GTK_ENTRY(e->stop_entry)), &from_date)) break;
+		if (cal_date_is_set(&to_date)) {
+			if_fail (cal_date_to_str(&to_date, date_str, sizeof(date_str))) break;
 			if_fail (header_add_field(h, SC_STOP_FIELD, date_str)) break;
 		}
 		char *descr = get_serial_text(e->descr_buffer);
@@ -113,14 +113,17 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);
 	} while (0);
 	header_unref(h);
-	unless_error {
-		// Now that the new msg is in, remove the replaced one
-		if (e->replaced_version != 0) {
-			assert(e->replaced_folder);
-			mdir_del_request(e->replaced_folder->mdir, e->replaced_version);
-		}
-		editor_del(e);
+	on_error {
+		alert(GTK_MESSAGE_ERROR, error_str());
+		error_clear();
+		return;
 	}
+	// Now that the new msg is in, remove the replaced one
+	if (e->replaced_version != 0) {
+		assert(e->replaced_folder);
+		mdir_del_request(e->replaced_folder->mdir, e->replaced_version);
+	}
+	editor_del(e);
 }
 
 /*
@@ -162,14 +165,9 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	editor->descr_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(descr_text));
 	gtk_text_buffer_set_text(editor->descr_buffer, descr, -1);
 	
-	GtkWidget *toolbar = gtk_toolbar_new();
-	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
-	GtkToolItem *button_cancel = gtk_tool_button_new_from_stock(GTK_STOCK_CANCEL);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_cancel, -1);
-	g_signal_connect(G_OBJECT(button_cancel), "clicked", G_CALLBACK(my_close_cb), editor);
-	GtkToolItem *button_ok = gtk_tool_button_new_from_stock(GTK_STOCK_APPLY);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button_ok, -1);
-	g_signal_connect(G_OBJECT(button_ok), "clicked", G_CALLBACK(send_cb), editor);
+	GtkWidget *toolbar = make_toolbar(2,
+		GTK_STOCK_APPLY,  send_cb,     editor,
+		GTK_STOCK_CANCEL, my_close_cb, editor);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 0);

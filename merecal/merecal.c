@@ -43,6 +43,30 @@ void cal_date_ctor(struct cal_date *cd, guint y, guint M, guint d, guint h, guin
 	cd->day = d;
 	cd->hour = h;
 	cd->min = m;
+	debug("year = %u, month = %u, day = %u, hour = %u, min = %u", y, M, d, h, m);
+	if (cal_date_has_time(cd)) {
+		cd->hour += cd->min / 60;
+		cd->min %= 60;
+		debug("after min bounding : hour = %u, min = %u", cd->hour, cd->min);
+		cd->day += cd->hour / 24;
+		cd->hour %= 24;
+		debug("after hour bounding : day = %u, hour = %u", cd->day, cd->hour);
+	}
+	if (cal_date_is_set(cd)) {
+		cd->year += cd->month / 12;
+		cd->month %= 12;
+		debug("after month bounding : year = %u, month = %u", cd->year, cd->month);
+		do {
+			unsigned const max_days = month_days(cd->year, cd->month);
+			if (cd->day <= max_days) break;
+			cd->day -= max_days;
+			if (++ cd->month >= 12) {
+				cd->month -= 12;
+				cd->year ++;
+			}
+		} while (1);
+		debug("after day bounding : year = %u, month = %u, day = %u", cd->year, cd->month, cd->day);
+	}
 	if (! cal_date_is_set(cd)) {
 		cd->str[0] = '\0';
 	} else {
@@ -89,49 +113,87 @@ void cal_date_to_str(struct cal_date *cd, char *str, size_t size)
 	if (len >= (int)size) error_push(0, "Buffer too small");
 }
 
-
-static bool is_leap_year(unsigned y)
-{
-	return (y%4 == 0) && (y%100 != 0 || y%400 == 0);
-}
-
-int month_days(unsigned year, unsigned month)	// month is from 0 to 11
-{
-	static unsigned const days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-	return days[month] + (month == 1 && is_leap_year(year));
-}
-
 static bool issep(int c)
 {
 	return isblank(c) || c == '-' || c == '/' || c == ':' || c == 'h';
 }
 
-void cal_date_ctor_from_input(struct cal_date *cd, char const *i)
+static long parse_duration(char const *str)
+{
+	char const *end;
+	long d = 0;
+	while (*str) {
+		long d_ = strtol(str, (char **)&end, 10);
+		while (isblank(*end)) end++;
+		if (*end == '\0') {
+			d += d_;	// assume minutes when no units are given
+			break;
+		}
+		if (*end == 'm') {
+			end++;
+			if (end[0] == 'i' && end[1] == 'n') {
+				end += 2;
+				if (*end == 's') end++;
+			}
+			d += d_;
+		} else if (*end == 'h') {
+			end++;
+			if (end[0] == 'o' && end[1] == 'u' && end[2] == 'r') {
+				end += 3;
+				if (*end == 's') end++;
+			}
+			d += d_*60;
+		} else if (*end == 'd') {
+			end++;
+			if (end[0] == 'a' && end[1] == 'y') {
+				end += 2;
+				if (*end == 's') end++;
+			}
+			d += d_*(60*24);
+		} else with_error(0, "Cannot parse '%s' as duration", str) return 0;
+		while (isblank(*end)) end++;
+		str = end;
+	}
+	return d;
+}
+
+void cal_date_ctor_from_input(struct cal_date *cd, char const *i, struct cal_date *ref)
 {
 	long year = 0, month = 0, day = 0, hour = 99, min = 0;
 	// Try to reckognize a date and a time from user inputs
 	while (isblank(*i)) i++;
 	if (*i != '\0') {
 		char const *j;
-		year = strtol(i, (char **)&j, 10);
-		if (*j == '\0') with_error(0, "Invalid date : lacks a month") return;
-		while (issep(*j)) j++;
-		month = strtol(j, (char **)&i, 10);
-		if (*i == '\0') with_error(0, "Invalid date : lacks a day") return;
-		if (month < 1 || month > 12) with_error(0, "Invalid month (%ld)", month) return;
-		month --;
-		while (issep(*i)) i++;
-		day = strtol(i, (char **)&j, 10);
-		if (day < 1 || day > 31) with_error(0, "Invalid day (%ld)", day) return;
-		if (day > month_days(year, month)) with_error(0, "No such day (%ld) in this month (%ld)", day, month) return;
-		while (isblank(*j)) j++;
-		if (*j != '\0') {
-			hour = strtol(j, (char **)&i, 10);
-			if (hour < 0 || hour > 23) with_error(0, "Invalid hour (%ld)", hour) return;
+		if (*i == '+' && ref) {	// duration
+			long duration = parse_duration(i+1);	// in minutes
+			on_error return;
+			assert(cal_date_is_set(cd));
+			min   = (cal_date_has_time(ref) ? ref->min : 0) + duration;
+			hour  = cal_date_has_time(ref) ? ref->hour : 0;
+			day   = ref->day;
+			month = ref->month;
+			year  = ref->year;
+		} else {	// normal date
+			year = strtol(i, (char **)&j, 10);
+			if (*j == '\0') with_error(0, "Invalid date : lacks a month") return;
+			while (issep(*j)) j++;
+			month = strtol(j, (char **)&i, 10);
+			if (*i == '\0') with_error(0, "Invalid date : lacks a day") return;
+			if (month < 1 || month > 12) with_error(0, "Invalid month (%ld)", month) return;
+			month --;
 			while (issep(*i)) i++;
-			if (*i != '\0') {
-				min = strtol(i, (char **)&j, 10);
-				if (min < 0 || min > 59) with_error(0, "Invalid minutes (%ld)", min) return;
+			day = strtol(i, (char **)&j, 10);
+			if (day < 1 || day > 31) with_error(0, "Invalid day (%ld)", day) return;
+			if (day > month_days(year, month)) with_error(0, "No such day (%ld) in this month (%ld)", day, month) return;
+			while (isblank(*j)) j++;
+			if (*j != '\0') {
+				hour = strtol(j, (char **)&i, 10);
+				if (hour < 0 || hour > 23) with_error(0, "Invalid hour (%ld)", hour) return;
+				while (issep(*i)) i++;
+				if (*i != '\0') {
+					min = strtol(i, (char **)&j, 10);
+					if (min < 0 || min > 59) with_error(0, "Invalid minutes (%ld)", min) return;
+				}
 			}
 		}
 	}

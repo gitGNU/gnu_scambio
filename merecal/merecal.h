@@ -41,7 +41,7 @@ static inline bool cal_date_is_set(struct cal_date const *cd) { return cd->year 
 static inline bool cal_date_has_time(struct cal_date const *cd) { return cal_date_is_set(cd) && cd->hour <= 23; }
 static inline void cal_date_dtor(struct cal_date *cd) { (void)cd; }
 void cal_date_ctor(struct cal_date *, guint y, guint M, guint d, guint h, guint m);
-void cal_date_ctor_from_input(struct cal_date *, char const *input);
+void cal_date_ctor_from_input(struct cal_date *, char const *input, struct cal_date *);
 void cal_date_ctor_from_tm(struct cal_date *cd, struct tm const *tm);
 int cal_date_compare(struct cal_date const *a, struct cal_date const *b);
 void cal_date_to_str(struct cal_date *, char *, size_t);
