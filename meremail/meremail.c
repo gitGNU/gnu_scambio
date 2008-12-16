@@ -52,10 +52,10 @@ int main(int nb_args, char *args[])
 	if_fail (auth_begin()) return EXIT_FAILURE;
 	atexit(auth_end);
 	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
-	char const *outbox_name = header_search(mdir_user_header(user), "smtp-outbox");
+	struct header_field *outbox_name = header_find(mdir_user_header(user), "smtp-outbox", NULL);
 	on_error return EXIT_FAILURE;
 	if (outbox_name) {
-		if_fail (outbox = mdir_lookup(outbox_name)) return EXIT_FAILURE;
+		if_fail (outbox = mdir_lookup(outbox_name->value)) return EXIT_FAILURE;
 	} else {
 		warning("No outbox defined : Cannot send");
 	}

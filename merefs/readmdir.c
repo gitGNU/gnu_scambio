@@ -25,9 +25,11 @@
 
 static void extract_file_info(struct header *h, char const **name, char const **digest, char const **resource)
 {
-	if_fail (*name     = header_search(h, SC_NAME_FIELD)) return;
-	if_fail (*digest   = header_search(h, SC_DIGEST_FIELD)) return;
-	if_fail (*resource = header_search(h, SC_RESOURCE_FIELD)) return;
+	*name = *digest = *resource = NULL;
+	struct header_field *hf;
+	if (NULL != (hf = header_find(h, SC_NAME_FIELD, NULL))) *name = hf->value;
+	if (NULL != (hf = header_find(h, SC_DIGEST_FIELD, NULL))) *digest = hf->value;
+	if (NULL != (hf = header_find(h, SC_RESOURCE_FIELD, NULL))) *resource = hf->value;
 	if (! *name || ! *digest || ! *resource) {
 		warning("File header have name '%s', digest '%s' and resource '%s'", *name, *digest, *resource);
 		return;

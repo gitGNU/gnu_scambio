@@ -20,7 +20,6 @@
 #include <string.h>
 #include <pth.h>
 #include "scambio.h"
-#include "scambio/mdir.h"
 #include "scambio/header.h"
 #include "scambio.h"
 #include "merebook.h"
@@ -37,9 +36,9 @@ struct contacts contacts = LIST_HEAD_INITIALIZER(&contacts);
 static void contact_ctor(struct contact *ct, struct book *book, struct header *header, mdir_version version)
 {
 	debug("contact@%p, book %s, version %"PRIversion, ct, book->name, version);
-	char const *name = header_search(header, SC_NAME_FIELD);
-	if (!name || is_error()) return;
-	ct->name = name;
+	struct header_field *name = header_find(header, SC_NAME_FIELD, NULL);
+	if (! name) return;
+	ct->name = name->value;
 	ct->header = header_ref(header);
 	ct->book = book;
 	ct->version = version;
@@ -97,6 +96,7 @@ static void book_ctor(struct book *book, char const *path)
 	if (len >= (int)sizeof(book->path)) with_error(0, "Path too long : %s", path) return;
 	book->name = book->path + len;
 	while (book->name > book->path && *(book->name-1) != '/') book->name--;
+	if_fail (book->mdir = mdir_lookup(book->path)) return;
 	LIST_INSERT_HEAD(&books, book, entry);
 	LIST_INIT(&book->contacts);
 }
@@ -153,9 +153,7 @@ static void list_contact_cb(struct mdir *mdir, struct header *header, enum mdir_
 void refresh(struct book *book)
 {
 	debug("refreshing book %s", book->name);
-	struct mdir *mdir = mdir_lookup(book->path);
-	on_error return;
-	mdir_patch_list(mdir, false, list_contact_cb, book);
+	mdir_patch_list(book->mdir, false, list_contact_cb, book);
 }
 
 /*
@@ -185,17 +183,13 @@ int main(int nb_args, char *args[])
 	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
 	if_fail (ccnx_init()) return EXIT_FAILURE;
 
-	unsigned nb_books;
-	char const **book_names = header_search_all(mdir_user_header(user), "contact-dir", &nb_books);
-	on_error return EXIT_FAILURE;
-
-	while (nb_books --) {
+	struct header_field *book_name = NULL;
+	while (NULL != (book_name = header_find(mdir_user_header(user), "contact-dir", book_name))) {
 		struct book *book;
 		// TODO: these failure are interreting for the user : display an error message !
-		if_fail (book = book_new(book_names[nb_books])) return EXIT_FAILURE;
+		if_fail (book = book_new(book_name->value)) return EXIT_FAILURE;
 		if_fail (refresh(book)) return EXIT_FAILURE;
 	}
-	free(book_names);
 	GtkWidget *book_window = make_book_window();
 	if (! book_window) return EXIT_FAILURE;
 	exit_when_closed(book_window);

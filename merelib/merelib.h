@@ -37,6 +37,7 @@ void exit_when_closed(GtkWidget *);
  * GTK_MESSAGE_OTHER
  */
 void alert(GtkMessageType type, char const *text);
+void alert_error(void);
 bool confirm(char const *);
 void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget);
 void close_cb(GtkToolButton *button, gpointer user_data);	// a simple callback that just deletes the given window
@@ -49,5 +50,6 @@ GtkWidget *make_toolbar(unsigned nb_buttons, ...);
 GtkWidget *make_scrollable(GtkWidget *wdg);
 GtkWidget *make_frame(char const *title, GtkWidget *wdg);
 GtkWidget *make_expander(char const *title, GtkWidget *wdg);
+void empty_container(GtkWidget *container);
 
 #endif

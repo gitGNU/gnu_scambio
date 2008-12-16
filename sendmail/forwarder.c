@@ -251,19 +251,22 @@ static void send_part(int fd, struct part *part)
 static int send_forward(int fd, struct forward *fwd)
 {
 	int status;
-	if_fail (status = smtp_cmd(fd, "MAIL FROM:<", fwd->from, ">", NULL)) return 0;
+	if_fail (status = smtp_cmd(fd, "MAIL FROM:<", header_find(fwd->header, SC_FROM_FIELD, NULL), ">", NULL)) return 0;
 	if (status != 250) return status;
-	for (unsigned d = 0; d < fwd->nb_dests; d++) {
-		if_fail (status = smtp_cmd(fd, "RCPT TO:<", fwd->dests[d], ">", NULL)) return 0;
+	struct header_field *hf = NULL;
+	while (NULL != (hf = header_find(fwd->header, SC_TO_FIELD, hf))) {
+		if_fail (status = smtp_cmd(fd, "RCPT TO:<", hf->value, ">", NULL)) return 0;
 		if (status < 250 || status > 252) return status;
 	}
 	if_fail (status = smtp_cmd(fd, "DATA", NULL)) return 0;
 	if (status != 354) return status;
-	if_fail (send_smtp_strs(fd, "From: ", fwd->from, NULL)) return 0;
-	for (unsigned d = 0; d < fwd->nb_dests; d++) {
-		if_fail (send_smtp_strs(fd, d == 0 ? "To: ":" ", fwd->dests[d], d < fwd->nb_dests-1 ? ",":NULL, NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "From: ", header_find(fwd->header, SC_FROM_FIELD, NULL), NULL)) return 0;
+	bool first = true;
+	while (NULL != (hf = header_find(fwd->header, SC_TO_FIELD, hf))) {
+		if_fail (send_smtp_strs(fd, first ? "To: ":", ", hf->value, NULL)) return 0;
+		first = false;
 	}
-	if_fail (send_smtp_strs(fd, "Subject: ", fwd->subject, NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "Subject: ", header_find(fwd->header, SC_DESCR_FIELD, NULL), NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Message-Id: <", mdir_version2str(fwd->version), "@", my_hostname, ">", NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Mime-Version: 1.0", NULL)) return 0;
 	char const *boundary = "Do-Noy-Cross-Criminal-Scene";
@@ -363,19 +366,20 @@ void forwarder_end(void)
 static void part_ctor(struct part *part, struct forward *fwd, char const *resource)
 {
 	// First get the resource values
-	char resource_stripped[PATH_MAX];
-	if_fail (header_stripped_value(resource, sizeof(resource_stripped), resource_stripped)) return;
-	if_fail (header_copy_parameter("name", resource, sizeof(part->name), part->name)) {
-		if (error_code() == ENOENT) {
-			error_clear();
-		} else return;
+	char *resource_stripped = parameter_suppress(resource);
+	on_error return;
+	part->name = part->type = NULL;
+	do {
+		if_fail (part->name = parameter_extract(resource, "name")) break;
+		if_fail (part->type = parameter_extract(resource, "type")) break;
+		if_fail (part->tx = chn_get_file(&ccnx, part->filename, resource_stripped)) break;
+	} while (0);
+	free(resource_stripped);
+	on_error {
+		FreeIfSet(&part->name);
+		FreeIfSet(&part->type);
+		return;
 	}
-	if_fail (header_copy_parameter("type", resource, sizeof(part->type), part->type)) {
-		if (error_code() == ENOENT) {
-			error_clear();
-		} else return;
-	}
-	if_fail (part->tx = chn_get_file(&ccnx, part->filename, resource_stripped)) return;
 	// we do not wait here for the transfert to complete, but will skip the delivery while the transfert is ongoing
 	TAILQ_INSERT_TAIL(&fwd->parts, part, entry);
 	fwd->nb_parts++;
@@ -383,8 +387,8 @@ static void part_ctor(struct part *part, struct forward *fwd, char const *resour
 
 static struct part *part_new(struct forward *fwd, char const *resource)
 {
-	struct part *part = malloc(sizeof(*part));
-	if (! part) with_error(ENOMEM, "malloc part") return NULL;
+	struct part *part = Malloc(sizeof(*part));
+	on_error return NULL;
 	if_fail (part_ctor(part, fwd, resource)) {
 		(void)free(part);
 		part = NULL;
@@ -404,21 +408,19 @@ static void part_del(struct part *part, struct forward *fwd)
 	free(part);
 }
 
-static void forward_ctor(struct forward *fwd, mdir_version version, char const *from, char const *subject , unsigned nb_dests, char const **dests)
+static void forward_ctor(struct forward *fwd, mdir_version version, struct header *header)
 {
-	debug("fwd@%p, from='%s', subject='%s'", fwd, from, subject);
-	if_fail (fwd->from = Strdup(from)) return;
-	if_fail (fwd->subject = Strdup(subject)) return;
-	fwd->nb_dests = nb_dests;
-	if_fail (fwd->dests = Malloc(sizeof(*fwd->dests)*nb_dests)) return;
-	for (unsigned d = 0; d < nb_dests; d++) {
-		if_fail (fwd->dests[d] = Strdup(dests[d])) return;
-	}
+	debug("fwd@%p", fwd);
+	fwd->header = header_ref(header);
 	TAILQ_INIT(&fwd->parts);
 	fwd->nb_parts = 0;
 	fwd->list = NULL;
 	fwd->status = 0;
 	fwd->version = version;
+	struct header_field *hf = NULL;
+	while (NULL != header_find(header, SC_RESOURCE_FIELD, hf)) {
+		if_fail (part_new(fwd, hf->value)) break;
+	}
 }
 
 static void forward_dtor(struct forward *fwd)
@@ -430,14 +432,8 @@ static void forward_dtor(struct forward *fwd)
 		fwd->list = NULL;
 	}
 	list_unlock();
-	FreeIfSet(&fwd->from);
-	FreeIfSet(&fwd->subject);
-	if (fwd->dests) {
-		for (unsigned d = 0; d < fwd->nb_dests; d++) {
-			FreeIfSet(&fwd->dests[d]);
-		}
-		free(fwd->dests);
-	}
+	header_unref(fwd->header);
+	fwd->header = NULL;
 	struct part *part;
 	while (NULL != (part = TAILQ_FIRST(&fwd->parts))) {
 		part_del(part, fwd);
@@ -445,11 +441,11 @@ static void forward_dtor(struct forward *fwd)
 	assert(fwd->nb_parts == 0);
 }
 
-struct forward *forward_new(mdir_version version, char const *from, char const *subject, unsigned nb_dests, char const **dests)
+struct forward *forward_new(mdir_version version, struct header *header)
 {
 	struct forward *fwd = Calloc(sizeof(*fwd));
 	on_error return NULL;
-	if_fail (forward_ctor(fwd, version, from, subject, nb_dests, dests)) {
+	if_fail (forward_ctor(fwd, version, header)) {
 		forward_dtor(fwd);
 		free(fwd);
 		fwd = NULL;
@@ -464,11 +460,6 @@ void forward_del(struct forward *fwd)
 }
 
 // Adding content & submition
-
-void forward_part_new(struct forward *fwd, char const *resource)
-{
-	(void)part_new(fwd, resource);
-}
 
 void forward_submit(struct forward *fwd)
 {

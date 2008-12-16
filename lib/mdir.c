@@ -290,17 +290,15 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 	assert(h);
 	// check that the given header does _not_ already have a dirId,
 	// and add fields name and type if necessary
-	char const *name = header_search(h, SC_NAME_FIELD);
-	if (! name) {
-		name = "Unnamed";
-		header_add_field(h, SC_NAME_FIELD, name);
-		on_error return;
+	struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
+	if (! name_field) {
+		if_fail (name_field = header_field_new(h, SC_NAME_FIELD, "Unnamed")) return;
 	}
 	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
+	snprintf(path, sizeof(path), "%s/%s", parent->path, name_field->value);
 	struct mdir *child;
-	char const *dirid = header_search(h, SC_DIRID_FIELD);
-	if (dirid) {
+	struct header_field *dirid_field = header_find(h, SC_DIRID_FIELD, NULL);
+	if (dirid_field) {
 		assert(! transient);
 		// A symlink to a transient dirId may already exist. If so, rename it.
 		// Otherwise, create a new one.
@@ -309,7 +307,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		if (len == -1) {
 			if (errno != ENOENT) with_error(errno, "readlink(%s)", path) return;
 			// does not exist : then create a new one
-			child = mdir_lookup_by_id(dirid, true);
+			child = mdir_lookup_by_id(dirid_field->value, true);
 		} else {	// the symlink exist
 			assert(len < (int)sizeof(prev_link) && len > 0);	// PATH_MAX is supposed to be able to store a path + the nul byte
 			prev_link[len] = '\0';
@@ -317,13 +315,13 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 			char *prev_dirid = prev_link + len;
 			while (prev_dirid > prev_link && *(prev_dirid-1) != '/') prev_dirid--;
 			debug("found a previous link to '%s'", prev_dirid);
-			if (*prev_dirid != '_') with_error(0, "Previous link for new dirId %s points toward non transient dirId %s", dirid, prev_dirid) return;
+			if (*prev_dirid != '_') with_error(0, "Previous link for new dirId %s points toward non transient dirId %s", dirid_field->value, prev_dirid) return;
 			// rename dirId and rebuild symlink
 			char new_path[PATH_MAX];
 			snprintf(new_path, sizeof(new_path), "%s/%s", mdir_root, prev_dirid);
 			if (0 != rename(prev_link, new_path)) with_error(errno, "Cannot rename transient dirId %s to %s", prev_link, new_path) return;
 			if (0 != unlink(path)) with_error(errno, "Cannot remove previous symlink %s", path) return;
-			child = mdir_lookup_by_id(dirid, false);	// must exists by now
+			child = mdir_lookup_by_id(dirid_field->value, false);	// must exists by now
 			on_error return;
 			// new symlink is created below
 		}
@@ -333,8 +331,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		child = mdir_create(transient);
 		on_error return;
 		if (! transient) {
-			header_add_field(h, SC_DIRID_FIELD, mdir_id(child));
-			on_error return;
+			if_fail ((void)header_field_new(h, SC_DIRID_FIELD, mdir_id(child))) return;
 		}
 	}
 	debug("symlinking %s to %s", path, child->path);
@@ -345,10 +342,10 @@ static void mdir_unlink(struct mdir *parent, struct header *h)
 {
 	debug("remove a link from mdir %s", mdir_id(parent));
 	assert(h);
-	char const *name = header_search(h, SC_NAME_FIELD);
-	if (! name) with_error(0, "folder name ommited") return;
+	struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
+	if (! name_field) with_error(0, "folder name ommited") return;
 	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/%s", parent->path, name);
+	snprintf(path, sizeof(path), "%s/%s", parent->path, name_field->value);
 	if (0 != unlink(path)) error_push(errno, "unlink %s", path);
 }
 
@@ -443,8 +440,10 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *h)
 {
 	bool is_dir = header_is_directory(h);
-	char const *dirId = is_dir ? header_search(h, SC_DIRID_FIELD):NULL;
-	if (dirId && dirId[0] == '_') with_error(0, "Cannot refer to a temporary dirId") return;
+	struct header_field *dirId_field = is_dir ? header_find(h, SC_DIRID_FIELD, NULL) : NULL;
+	if (dirId_field && dirId_field->value[0] == '_') {
+		with_error(0, "Cannot refer to a temporary dirId") return;
+	}
 	char temp[PATH_MAX];
 	int len = snprintf(temp, sizeof(temp), "%s/.tmp/", mdir->path);
 	Mkdir(temp);
@@ -471,10 +470,10 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 
 void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 {
-	assert(to_del != 0);
+	assert(to_del > 0);
 	struct header *h = header_new();
 	on_error return;
-	header_add_field(h, SC_TARGET_FIELD, mdir_version2str(to_del));
+	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(to_del));
 	unless_error mdir_patch_request(mdir, MDIR_REM, h);
 	header_unref(h);
 }
@@ -502,9 +501,9 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				on_error return;
 				if (! h) continue;
 				bool skip = false;
-				char const *localid = header_search(h, SC_LOCALID_FIELD);
-				if (localid) {	// then the local file does not exist anymore, but we may already have reported it when it was present
-					mdir_version local = mdir_str2version(localid);
+				struct header_field *localid_field = header_find(h, SC_LOCALID_FIELD, NULL);
+				if (localid_field) {	// then the local file does not exist anymore, but we may already have reported it when it was present
+					mdir_version local = mdir_str2version(localid_field->value);
 					on_error {
 						error_clear();
 					} else {

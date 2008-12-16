@@ -36,15 +36,13 @@ TAILQ_HEAD(forwards, forward);
 struct part {
 	TAILQ_ENTRY(part) entry;
 	char filename[PATH_MAX];	// on cache
-	char name[128];	// suggested name
-	char type[128];	// content type
+	char *name;	// suggested name
+	char *type;	// content type
 	struct chn_tx *tx;
 };
 struct forward {
 	// Description of the email
-	char *from, *subject;	// strduped
-	unsigned nb_dests;
-	char **dests;
+	struct header *header;
 	TAILQ_HEAD(parts, part) parts;
 	// SMTP status
 	struct forwards *list;	// the list we are on, or NULL if we are still constructed
@@ -55,8 +53,7 @@ struct forward {
 	time_t submited;
 };
 
-struct forward *forward_new(mdir_version version, char const *from, char const *subject, unsigned nb_dests, char const **dests);
-void forward_part_new(struct forward *fwd, char const *resource);
+struct forward *forward_new(mdir_version version, struct header *header);
 void forward_submit(struct forward *fwd);
 struct forward *forward_oldest_completed(void);
 void forward_del(struct forward *fwd);

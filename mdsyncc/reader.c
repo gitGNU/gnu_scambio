@@ -167,7 +167,7 @@ static void patch_ctor(struct patch *patch, struct mdirc *mdirc, mdir_version ol
 	struct c2l_map *c2l = c2l_search(&mdirc->c2l_maps, new_version);
 	if (c2l) {
 		debug("version %"PRIversion" found to match local version %"PRIversion, new_version, c2l->local);
-		header_add_field(patch->header, SC_LOCALID_FIELD, mdir_version2str(c2l->local));
+		(void)header_field_new(patch->header, SC_LOCALID_FIELD, mdir_version2str(c2l->local));
 		c2l_del(c2l);
 	}
 	// Insert this patch into this mdir

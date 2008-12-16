@@ -229,7 +229,7 @@ off_t filesize(int fd)
 char *Strdup(char const *orig)
 {
 	char *ret = strdup(orig);
-	if (! ret) with_error(errno, "strdup") return NULL;
+	if (! ret) fatal("strdup");
 	return ret;
 }
 
@@ -300,12 +300,12 @@ char const *Basename(char const *path)
 void *Malloc(size_t size)
 {
 	void *ret = malloc(size);
-	if (! ret) error_push(ENOMEM, "Malloc %zu bytes", size);
+	if (! ret) fatal("Malloc %zu bytes", size);
 	return ret;
 }
 void *Calloc(size_t size)
 {
 	void *ret = calloc(1, size);
-	if (! ret) error_push(ENOMEM, "Calloc %zu bytes", size);
+	if (! ret) fatal("Calloc %zu bytes", size);
 	return ret;
 }

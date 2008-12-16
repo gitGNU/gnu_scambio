@@ -30,10 +30,10 @@
 
 static void make_file_patch(struct header *header, struct file *file)
 {
-	if_fail (header_add_field(header, SC_TYPE_FIELD, SC_FILE_TYPE)) return;
-	if_fail (header_add_field(header, SC_NAME_FIELD, file->name)) return;
-	if_fail (header_add_field(header, SC_DIGEST_FIELD, file->digest)) return;
-	if_fail (header_add_field(header, SC_RESOURCE_FIELD, file->resource)) return;
+	if_fail ((void)header_field_new(header, SC_TYPE_FIELD, SC_FILE_TYPE)) return;
+	if_fail ((void)header_field_new(header, SC_NAME_FIELD, file->name)) return;
+	if_fail ((void)header_field_new(header, SC_DIGEST_FIELD, file->digest)) return;
+	if_fail ((void)header_field_new(header, SC_RESOURCE_FIELD, file->resource)) return;
 }
 
 static void wait_complete(void)

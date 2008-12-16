@@ -35,17 +35,6 @@ static pth_t crawler_id, acker_id;
  * Reads all patches in to_send and build forward from them.
  */
 
-static void add_parts(struct forward *fwd, struct header *header)
-{
-	unsigned nb_resources;
-	char const **resources = header_search_all(header, SC_RESOURCE_FIELD, &nb_resources);
-	on_error return;
-	for (unsigned r=0; r<nb_resources; r++) {
-		if_fail (forward_part_new(fwd, resources[r])) break;
-	}
-	free(resources);
-}
-
 static void send_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
 {
 	(void)data;
@@ -53,28 +42,20 @@ static void send_patch(struct mdir *mdir, struct header *header, enum mdir_actio
 	if (version < 0) return;	// we do not want to try to send anything if it's not synched
 	if (action != MDIR_ADD) return;	// there is little we can do about it
 	if (! header_has_type(header, SC_MAIL_TYPE)) return;
-	char const *from, **dests, *subject;
-	unsigned nb_dests;
-	struct forward *fwd;
-	if_fail (from = header_search(header, SC_FROM_FIELD)) return;
-	if_fail (subject = header_search(header, SC_DESCR_FIELD)) return;
-	if_fail (dests = header_search_all(header, SC_TO_FIELD, &nb_dests)) return;
-	do {
-		if (nb_dests == 0) {
-			debug("No dests, skipping");
-			break;
-		}
-		debug("Send new email from '%s', subject '%s'", from, subject);
-		if_fail (fwd = forward_new(version, from, subject, nb_dests, dests)) break;
-		if_fail (add_parts(fwd, header)) {
-			error_save();
-			forward_del(fwd);
-			error_restore();
-			break;
-		}
-		forward_submit(fwd);
-	} while (0);
-	free(dests);
+	if (! header_find(header, SC_FROM_FIELD, NULL)) {
+		debug("No From, skip");
+		return;
+	}
+	if (! header_find(header, SC_DESCR_FIELD, NULL)) {
+		debug("No subject, skip");
+		return;
+	}
+	if (! header_find(header, SC_TO_FIELD, NULL)) {
+		debug("No dests, skip");
+		return;
+	}
+	struct forward *fwd = forward_new(version, header);
+	unless_error forward_submit(fwd);
 }
 
 static void *crawler_thread(void *data)
@@ -95,7 +76,7 @@ static void *crawler_thread(void *data)
 
 static void move_fwd(struct forward *fwd)
 {
-	debug("version=%"PRIversion", from='%s', descr='%s'", fwd->version, fwd->from, fwd->subject);
+	debug("version=%"PRIversion, fwd->version);
 	// Retrieve the patch (should we keep it in forward with ref counter ?)
 	struct header *header = mdir_read(to_send, fwd->version, NULL);
 	on_error return;
@@ -103,10 +84,10 @@ static void move_fwd(struct forward *fwd)
 	// We then delete this message so that it will never sent again
 	if_fail (mdir_del_request(to_send, fwd->version)) return;
 	// And copy it (modified) to the sent mdir
-	header_add_field(header, SC_SENT_DATE, sc_ts2gmfield(time(NULL), true));
+	(void)header_field_new(header, SC_SENT_DATE, sc_ts2gmfield(time(NULL), true));
 	char status[8];
 	snprintf(status, sizeof(status), "%d", fwd->status);
-	header_add_field(header, SC_STATUS_FIELD, status);
+	(void)header_field_new(header, SC_STATUS_FIELD, status);
 	mdir_patch_request(sent, MDIR_ADD, header);
 	header_unref(header);
 }

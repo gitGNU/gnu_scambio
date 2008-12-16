@@ -117,6 +117,12 @@ void alert(GtkMessageType type, char const *text)
 	gtk_widget_show_all(dialog);
 }
 
+void alert_error(void)
+{
+	alert(GTK_MESSAGE_ERROR, error_str());
+	error_clear();
+}
+
 bool confirm(char const *text)
 {
 	GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_QUESTION, GTK_BUTTONS_OK_CANCEL, text);
@@ -248,5 +254,15 @@ void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent)
 		gtk_main_iteration_do(FALSE);
 	}
 	gtk_widget_destroy(win);
+}
+
+static void remove_child(GtkWidget *child, gpointer data)
+{
+	GtkContainer *container = (GtkContainer *)data;
+	gtk_container_remove(container, child);
+}
+void empty_container(GtkWidget *container)
+{
+	gtk_container_foreach(GTK_CONTAINER(container), remove_child, GTK_CONTAINER(container));
 }
 

@@ -55,17 +55,17 @@ struct notif *notif_new(enum sc_notif_type type, char const *descr)
 
 static void append_field(struct varbuf *vb, struct header *header, char const *pref, char const *field)
 {
-	char const *value;
-	if_fail (value = header_search(header, field)) return;
+	struct header_field *value;
+	value = header_find(header, field, NULL);
 	if (! value) return;
-	varbuf_append_strs(vb, pref ? pref:value, pref ? value:NULL, NULL);
+	varbuf_append_strs(vb, pref ? pref:value->value, pref ? value->value:NULL, NULL);
 }
 
 static struct notif *notif_new_from_mail(struct header *header)
 {
 	struct varbuf vb;
 	// Is it a new mail ?
-	if (NULL != header_search(header, SC_SENT_DATE)) return NULL;
+	if (NULL != header_find(header, SC_SENT_DATE, NULL)) return NULL;
 	if_fail (varbuf_ctor(&vb, 1024, true)) return NULL;
 	struct notif *notif = NULL;
 	do {
@@ -115,12 +115,11 @@ static struct notif *notif_new_from_file(struct header *header)
 
 struct notif *notif_new_from_header(struct header *header)
 {
-	char const *type_str;
-	if_fail (type_str = header_search(header, SC_TYPE_FIELD)) return NULL;
+	struct header_field *type_str = header_find(header, SC_TYPE_FIELD, NULL);
 	if (! type_str) return NULL;
-	if (0 == strcmp(type_str, SC_MAIL_TYPE)) return notif_new_from_mail(header);
-	if (0 == strcmp(type_str, SC_CAL_TYPE))  return notif_new_from_cal(header);
-	if (0 == strcmp(type_str, SC_FILE_TYPE)) return notif_new_from_file(header);
+	if (0 == strcmp(type_str->value, SC_MAIL_TYPE)) return notif_new_from_mail(header);
+	if (0 == strcmp(type_str->value, SC_CAL_TYPE))  return notif_new_from_cal(header);
+	if (0 == strcmp(type_str->value, SC_FILE_TYPE)) return notif_new_from_file(header);
 	return NULL;
 }
 

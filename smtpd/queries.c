@@ -220,7 +220,7 @@ static void store_file(struct varbuf *vb, char const *params, struct header *glo
 	} else {
 		varbuf_append_strs(&res_vb, ref, NULL);
 	}
-	header_add_field(global_header, SC_RESOURCE_FIELD, res_vb.buf);
+	(void)header_field_new(global_header, SC_RESOURCE_FIELD, res_vb.buf);
 	varbuf_dtor(&res_vb);
 }
 
@@ -261,19 +261,20 @@ static void process_mail(struct cnx_env *env)
 		struct header *h = header_new();
 		on_error break;
 		do {
-			if_fail (header_add_field(h, SC_TYPE_FIELD, SC_MAIL_TYPE)) break;
-			if_fail (header_add_field(h, SC_FROM_FIELD, env->reverse_path)) break;
+			if_fail ((void)header_field_new(h, SC_TYPE_FIELD, SC_MAIL_TYPE)) break;
+			if_fail ((void)header_field_new(h, SC_FROM_FIELD, env->reverse_path)) break;
 			// Store the upper header in the filed
 			if_fail (store_header(msg_tree->header, h)) break;
 			// Store each file in the filed
 			if_fail (store_file_rec(msg_tree, h)) break;
 			// Attach some more meta informations
-			char const *subject = header_search(msg_tree->header, "subject");
-			if (subject) header_add_field(h, SC_DESCR_FIELD, subject);
-			char const *message_id = header_search(msg_tree->header, "message-id");
-			if (message_id) header_add_field(h, SC_EXTID_FIELD, message_id);
+			struct header_field *subject = header_find(msg_tree->header, "subject", NULL);
+			if (subject) (void)header_field_new(h, SC_DESCR_FIELD, subject->value);
+			struct header_field *message_id = header_find(msg_tree->header, "message-id", NULL);
+			if (message_id) (void)header_field_new(h, SC_EXTID_FIELD, message_id->value);
+			on_error break;
 			time_t now = time(NULL);
-			header_add_field(h, SC_START_FIELD, sc_tm2gmfield(localtime(&now), true));
+			(void)header_field_new(h, SC_START_FIELD, sc_tm2gmfield(localtime(&now), true));
 			// submit the header
 			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h)) break;
 		} while (0);

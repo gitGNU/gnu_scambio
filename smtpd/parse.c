@@ -166,7 +166,7 @@ static void decode_base64(struct varbuf *vb, size_t size, char *msg)
 
 static void decode_in_varbuf(struct varbuf *vb, size_t size, char *msg, struct header *header)
 {
-	char const *encoding = header_search(header, "content-transfer-encoding");
+	struct header_field *encoding = header_find(header, "content-transfer-encoding", NULL);
 	on_error return;
 	if (encoding) {
 		static const struct {
@@ -177,8 +177,8 @@ static void decode_in_varbuf(struct varbuf *vb, size_t size, char *msg, struct h
 			{ "base64", decode_base64 },
 		};
 		for (unsigned e=0; e<sizeof_array(possible_encodings); e++) {
-			if (0 != strcasecmp(encoding, possible_encodings[e].name)) continue;
-			debug("decoding %s, size = %zu", encoding, size);
+			if (0 != strcasecmp(encoding->value, possible_encodings[e].name)) continue;
+			debug("decoding %s, size = %zu", encoding->value, size);
 			possible_encodings[e].decode(vb, size, msg);
 			debug("output size : %zu", vb->used);
 			return;
@@ -200,28 +200,28 @@ static size_t append_param(char *params, size_t maxlen, size_t len, char const *
 
 static void build_params(char *params, size_t maxlen, struct header *header)
 {
-	char const *type = header_search(header, "content-type");
-	char const *disp = header_search(header, "content-disposition");
+	struct header_field *type = header_find(header, "content-type", NULL);
+	struct header_field *disp = header_find(header, "content-disposition", NULL);
 	char const *filename = NULL;
 	char const *filetype = NULL;
 	char buf[PATH_MAX];
 	size_t len = 0, plen = 0;
 	if (disp) {
-		plen = header_find_parameter("filename", disp, &filename);
+		plen = parameter_find(disp->value, "filename", &filename);
 		on_error {
 			filename = NULL;
 			error_clear();	// lets try something else
 		}
 	}
 	if (! filename && type) {
-		plen = header_find_parameter("name", type, &filename);
+		plen = parameter_find(type->value, "name", &filename);
 		on_error {
 			filename = NULL;
 			error_clear();
 		}
 	}
 	if (! filename && type) {	// build from scratch based on type
-		char const *ext = mime_type2ext(type);
+		char const *ext = mime_type2ext(type->value);
 		plen = snprintf(buf, sizeof(buf), "noname.%s", ext ? ext:"bin");
 		filename = buf;
 	}
@@ -232,10 +232,10 @@ static void build_params(char *params, size_t maxlen, struct header *header)
 	len += append_param(params, maxlen, len, "name", filename, plen);
 	if (type) {	// take the whole value including charset etc...
 		// TODO: be more selective
-		filetype = type;
+		filetype = type->value;
 	}
 	if (filetype) {
-		len += append_param(params, maxlen, len, "type", type, strlen(type));
+		len += append_param(params, maxlen, len, "type", type->value, strlen(type->value));
 	}
 }
 
@@ -248,13 +248,17 @@ static void parse_mail_node(struct msg_tree *node, char *msg, size_t size)
 	assert(header_size <= size);
 	// Find out weither the body is total with a decoding method, or
 	// is another message up to a given boundary.
-	char const *content_type = header_search(node->header, "content-type");
-	if (content_type && 0 == strncasecmp(content_type, "multipart/", 10)) {
+	struct header_field *content_type = header_find(node->header, "content-type", NULL);
+	if (content_type && 0 == strncasecmp(content_type->value, "multipart/", 10)) {
 		debug("message is multipart");
 #		define PREFIX "\n--"
 #		define PREFIX_LENGTH 3
 		char boundary[PREFIX_LENGTH+MAX_BOUNDARY_LENGTH] = PREFIX;
-		if_succeed (header_copy_parameter("boundary", content_type, sizeof(boundary)-PREFIX_LENGTH, boundary+PREFIX_LENGTH)) {
+		char *b = parameter_extract(content_type->value, "boundary");
+		on_error return;
+		if (b) {
+			snprintf(boundary+PREFIX_LENGTH, sizeof(boundary)-PREFIX_LENGTH, "%s", b);
+			free(b);
 			parse_multipart(node, msg, size, boundary);
 			return;
 		} else {

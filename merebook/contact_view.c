@@ -28,79 +28,79 @@
 #include "merelib.h"
 #include "varbuf.h"
 #include "misc.h"
-#include "merelib.h"
+
+/*
+ * Data Definitions
+ */
+
+struct contact_view {
+	LIST_HEAD(categories, category) categories;
+	struct contact *ct;
+	GtkWidget *window;
+};
+static void contact_view_reload(struct contact_view *ctv);
+
+struct category {
+	LIST_ENTRY(category) entry;
+	char *name;
+	struct contact_view *ctv;	// backlink
+	unsigned nb_values;
+	struct cat_value {
+		char *value;	// allocated, stripped version of hf->value
+		struct header_field *hf;	// in the original contact header
+		struct category *cat;	// backlink for ease of use from callbacks
+	} values[32];
+};
 
 /*
  * Categories
  */
 
-struct category {
-	LIST_ENTRY(category) entry;
-	char *name;
-	unsigned nb_values;
-	struct cat_value {
-		char const *field;
-		struct varbuf value;
-	} values[32];
-};
-
-LIST_HEAD(categories, category);
-
-static void category_ctor(struct category *cat, struct categories *cats, char const *name)
+// Throw no error.
+static void category_ctor(struct category *cat, struct contact_view *ctv, char const *name)
 {
 	cat->nb_values = 0;
-	if_fail (cat->name = Strdup(name)) return;
-	LIST_INSERT_HEAD(cats, cat, entry);
+	cat->name = Strdup(name);
+	cat->ctv = ctv;
+	LIST_INSERT_HEAD(&ctv->categories, cat, entry);
 }
 
-static struct category *category_new(struct categories *cats, char const *name)
+// Throw no error.
+static struct category *category_new(struct contact_view *ctv, char const *name)
 {
 	struct category *cat = Malloc(sizeof(*cat));
-	on_error return NULL;
-	if_fail (category_ctor(cat, cats, name)) {
-		free(cat);
-		cat = NULL;
-	}
+	category_ctor(cat, ctv, name);
 	return cat;
 }
 
-static void category_add_value(struct category *cat, char const *field, char const *value)
+static void category_add_value(struct category *cat, struct header_field *hf)
 {
 	if (cat->nb_values >= sizeof_array(cat->values)) {
-		warning("Too many values for category %s, skipping value '%s'", cat->name, value);
+		warning("Too many values for category %s", cat->name);
 		return;
 	}
 	struct cat_value *cat_value = cat->values + cat->nb_values;
-	cat_value->field = field;
-#	define MAX_VALUE_LEN 10000	// FIXME (stripped value into a varbuf ?)
-	if_fail (varbuf_ctor(&cat_value->value, MAX_VALUE_LEN, true)) return;
-	if_fail (varbuf_put(&cat_value->value, MAX_VALUE_LEN)) return;
-	size_t value_len;
-	if_fail (value_len = header_stripped_value(value, MAX_VALUE_LEN, cat_value->value.buf)) return;
-	if_fail (varbuf_append(&cat_value->value, value_len, value)) {
-		varbuf_dtor(&cat_value->value);
-		return;
-	}
-	varbuf_stringify(&cat_value->value);
-	cat->nb_values++;
+	cat_value->hf = hf;
+	cat_value->cat = cat;
+	cat->values[cat->nb_values++].value = parameter_suppress(hf->value);
 }
 
-static struct category *category_lookup(struct categories *cats, char const *name)
+static struct category *category_lookup(struct contact_view *ctv, char const *name)
 {
 	struct category *cat;
-	LIST_FOREACH(cat, cats, entry) {
-		if (0 == strcmp(name, cat->name)) return cat;
+	LIST_FOREACH(cat, &ctv->categories, entry) {
+		if (0 == strcasecmp(name, cat->name)) return cat;
 	}
 	return NULL;
 }
 
-static void add_categorized_value(struct categories *cats, char const *cat_name, char const *field, char const *value)
+static void add_categorized_value(struct contact_view *ctv, char const *cat_name, struct header_field *hf)
 {
-	struct category *cat = category_lookup(cats, cat_name);
+	struct category *cat = category_lookup(ctv, cat_name);
 	if (! cat) {
-		if_fail (cat = category_new(cats, cat_name)) return;
+		if_fail (cat = category_new(ctv, cat_name)) return;
 	}
-	category_add_value(cat, field, value);
+	category_add_value(cat, hf);
 }
 
 static void category_dtor(struct category *cat)
@@ -108,7 +108,7 @@ static void category_dtor(struct category *cat)
 	free(cat->name);
 	cat->name = NULL;
 	while (cat->nb_values--) {
-		varbuf_dtor(&cat->values[cat->nb_values].value);
+		FreeIfSet(&cat->values[cat->nb_values].value);
 	}
 	LIST_REMOVE(cat, entry);
 }
@@ -119,38 +119,119 @@ static void category_del(struct category *cat)
 	free(cat);
 }
 
+// gives the field value to edit (and replace), or NULL for a new entry
+static void edit_or_add(struct contact_view *ctv, struct cat_value *cat_value)
+{
+	if (ctv->ct->version < 0) {
+		alert(GTK_MESSAGE_ERROR, "Cannot edit a transient contact");
+		return;
+	}
+	struct field_dialog *fd = field_dialog_new(GTK_WINDOW(ctv->window),
+		cat_value ? cat_value->cat->name : "",
+		cat_value ? cat_value->hf->name : "",
+		cat_value ? cat_value->value : "");
+	on_error goto err;
+	// Run the dialog untill the user either cancels or saves
+	if (gtk_dialog_run(GTK_DIALOG(fd->dialog)) == GTK_RESPONSE_ACCEPT) {
+		// Edit the header within the contact struct
+		// (do not request a patch untill the user saves this page)
+		struct varbuf new_value;
+		if_fail (varbuf_ctor(&new_value, 1024, true)) goto err;
+		varbuf_append_strs(&new_value,
+			gtk_entry_get_text(GTK_ENTRY(fd->value_entry)),
+			"; category=\"", gtk_combo_box_get_active_text(GTK_COMBO_BOX(fd->cat_combo)), "\"",
+			NULL);
+		char const *field_name = gtk_combo_box_get_active_text(GTK_COMBO_BOX(fd->field_combo));
+		if (cat_value) {	// this is a replacement
+			header_field_set(cat_value->hf, field_name, new_value.buf);
+		} else {	// a new field
+			(void)header_field_new(ctv->ct->header, field_name, new_value.buf);
+		}
+		varbuf_dtor(&new_value);
+		on_error goto err;
+		// Rebuild our view in order to show the change
+		contact_view_reload(ctv);
+	}
+	field_dialog_del(fd);
+	return;
+err:
+	alert_error();
+}
+
+static void edit_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct cat_value *cat_value = (struct cat_value *)data;
+	struct contact_view *const ctv = cat_value->cat->ctv;
+	edit_or_add(ctv, cat_value);
+}
+
+static void add_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct contact_view *const ctv = (struct contact_view *)data;
+	edit_or_add(ctv, NULL);
+}
+
+static void del_field_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct cat_value *cat_value = (struct cat_value *)data;
+	struct contact_view *const ctv = cat_value->cat->ctv;
+	if (ctv->ct->version < 0) {
+		alert(GTK_MESSAGE_ERROR, "Cannot edit a transient contact");
+		return;
+	}
+	if (confirm("Delete this value ?")) {
+		header_field_del(cat_value->hf);
+		contact_view_reload(ctv);
+	}
+}
+
 static GtkWidget *category_widget(struct category *cat)
 {
-	GtkWidget *table = gtk_table_new(2, cat->nb_values, FALSE);
+	GtkWidget *table = gtk_table_new(4, cat->nb_values, FALSE);
 	for (unsigned v = 0; v < cat->nb_values; v++) {
 		GtkWidget *field_label = gtk_label_new(NULL);
-		char *markup = g_markup_printf_escaped("<i>%s</i> : ", cat->values[v].field);
+		char *markup = g_markup_printf_escaped("<i>%s</i> : ", cat->values[v].hf->name);
 		gtk_label_set_markup(GTK_LABEL(field_label), markup);
 		g_free(markup);
-		gtk_table_attach(GTK_TABLE(table), field_label, 0, 1, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 1, 1);
-		gtk_table_attach(GTK_TABLE(table), gtk_label_new(cat->values[v].value.buf), 1, 2, v, v+1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 1, 1);
+		gtk_table_attach(GTK_TABLE(table), field_label, 0, 1, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 0, 0);
+		gtk_table_attach(GTK_TABLE(table), gtk_label_new(cat->values[v].value), 1, 2, v, v+1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 0, 0);
+		GtkWidget *edit_button = gtk_button_new_from_stock(GTK_STOCK_EDIT);
+		g_signal_connect(edit_button, "clicked", G_CALLBACK(edit_cb), cat->values+v);
+		gtk_table_attach(GTK_TABLE(table), edit_button, 2, 3, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 0, 0);
+		GtkWidget *del_button = gtk_button_new_from_stock(GTK_STOCK_DELETE);
+		g_signal_connect(del_button, "clicked", G_CALLBACK(del_field_cb), cat->values+v);
+		gtk_table_attach(GTK_TABLE(table), del_button, 3, 4, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 0, 0);
 	}
 	return make_frame(cat->name, table);
 }
 
 /*
- * View context
+ * Contact View
  */
 
-struct contact_view {
-	struct categories categories;
-	struct contact *ct;
-	GtkWidget *window;
-};
-
-static void contact_view_dtor(struct contact_view *ctv)
+static void contact_view_empty(struct contact_view *ctv)
 {
 	debug("ctv@%p", ctv);
 	struct category *cat;
 	while (NULL != (cat = LIST_FIRST(&ctv->categories))) {
 		category_del(cat);
 	}
-	gtk_widget_destroy(ctv->window);
+	if (ctv->window) {
+		empty_container(ctv->window);
+	}
+}
+
+static void contact_view_dtor(struct contact_view *ctv)
+{
+	debug("ctv@%p", ctv);
+	contact_view_empty(ctv);
+	if (ctv->window) {	// may not be present
+		gtk_widget_destroy(ctv->window);
+		ctv->window = NULL;
+	}
 }
 
 static void contact_view_del(struct contact_view *ctv)
@@ -159,32 +240,53 @@ static void contact_view_del(struct contact_view *ctv)
 	free(ctv);
 }
 
-static void del_me(GtkWidget *widget, gpointer data)
+static void save_cb(GtkWidget *widget, gpointer data)
 {
 	(void)widget;
-	struct contact_view *ctv = (struct contact_view *)data;
+	struct contact_view *const ctv = (struct contact_view *)data;
+	debug("saving contact '%s'", ctv->ct->name);
+	if_fail (mdir_del_request(ctv->ct->book->mdir, ctv->ct->version)) {
+		alert_error();
+		return;
+	}
+	if_fail (mdir_patch_request(ctv->ct->book->mdir, MDIR_ADD, ctv->ct->header)) alert_error();
+	gtk_widget_destroy(ctv->window);
+	refresh_contact_list();
+}
+
+static void del_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct contact_view *const ctv = (struct contact_view *)data;
+	if (confirm("Delete this contact ?")) {
+		if_fail (mdir_del_request(ctv->ct->book->mdir, ctv->ct->version)) {
+			alert_error();
+			return;
+		}
+		gtk_widget_destroy(ctv->window);
+	}
+}
+
+// The window was destroyed for some reason : release the ref to it
+static void unref_win(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct contact_view *const ctv = (struct contact_view *)data;
+	if (ctv->window) ctv->window = NULL;
+	// If not for a window, what to live for ?
 	contact_view_del(ctv);
 }
 
-static void edit_cb(GtkWidget *widget, gpointer data)
-{
-	(void)widget;
-	(void)data;
-}
-
-static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
+static void contact_view_fill(struct contact_view *ctv)
 {
 	debug("ctv@%p", ctv);
 	LIST_INIT(&ctv->categories);
-	ctv->ct = ct;
-	ctv->window = make_window(del_me, ctv);
-	GtkWidget *page = gtk_vbox_new(FALSE, 0);
 	
 	// Header with photo and name
 	char fname[PATH_MAX];
-	char const *picture_field = header_search(ct->header, "sc-picture");
+	struct header_field *picture_field = header_find(ctv->ct->header, "sc-picture", NULL);
 	if (picture_field) {
-		if_fail ((void)chn_get_file(&ccnx, fname, picture_field)) {
+		if_fail ((void)chn_get_file(&ccnx, fname, picture_field->value)) {
 			picture_field = NULL;
 			error_clear();
 		}
@@ -194,37 +296,52 @@ static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 		gtk_image_new_from_stock(GTK_STOCK_ORIENTATION_PORTRAIT, GTK_ICON_SIZE_DIALOG);
 
 	GtkWidget *name_label = gtk_label_new(NULL);
-	char *mark_name = g_markup_printf_escaped("<span size=\"x-large\"><b>%s</b></span>", ct->name);
+	char *mark_name = g_markup_printf_escaped("<span size=\"x-large\"><b>%s</b></span>", ctv->ct->name);
 	gtk_label_set_markup(GTK_LABEL(name_label), mark_name);
 	g_free(mark_name);
 	
+	GtkWidget *page = gtk_vbox_new(FALSE, 0);
 	GtkWidget *head_hbox = gtk_hbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(head_hbox), photo, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(head_hbox), name_label, TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(page), head_hbox, FALSE, FALSE, 0);
 	
 	// Category boxes
-	unsigned nb_fields = header_nb_fields(ct->header);
-	for (unsigned f = 0; f < nb_fields; f++) {
-		struct head_field const *hf = header_field(ct->header, f);
-		char cat_name[128];
-		if_fail (header_copy_parameter("category", hf->value, sizeof(cat_name), cat_name)) {
-			error_clear();
-			continue;
-		}
-		if_fail (add_categorized_value(&ctv->categories, cat_name, hf->name, hf->value)) return;
+	struct header_field *hf;
+	LIST_FOREACH(hf, &ctv->ct->header->fields, entry) {
+		char *cat_name = parameter_extract(hf->value, "category");
+		if (! cat_name) continue;
+		add_categorized_value(ctv, cat_name, hf);
+		free(cat_name);
+		on_error return;
 	}
 	struct category *cat;
 	LIST_FOREACH(cat, &ctv->categories, entry) {
 		gtk_box_pack_start(GTK_BOX(page), category_widget(cat), FALSE, FALSE, 0);
 	}
 	// Then a toolbar
-	GtkWidget *toolbar = make_toolbar(2,
-		GTK_STOCK_EDIT, edit_cb, ctv,
-		GTK_STOCK_QUIT, close_cb, ctv->window);
+	GtkWidget *toolbar = ctv->ct->version > 0 ?
+		make_toolbar(4,
+			GTK_STOCK_ADD,  add_cb, ctv,
+			GTK_STOCK_SAVE, save_cb, ctv,
+			GTK_STOCK_DELETE, del_cb, ctv,
+			GTK_STOCK_QUIT, close_cb, ctv->window) :
+		make_toolbar(1, GTK_STOCK_QUIT, close_cb, ctv->window);
+#	ifdef WITH_MAEMO
+	hildon_window_add_toolbar(HILDON_WINDOW(ctv->window), toolbar);
+#	else
 	gtk_box_pack_end(GTK_BOX(page), toolbar, FALSE, FALSE, 0);
-		
+#	endif
 	gtk_container_add(GTK_CONTAINER(ctv->window), page);
+	gtk_widget_show_all(ctv->window);
+}
+
+static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
+{
+	debug("ctv@%p", ctv);
+	ctv->ct = ct;
+	ctv->window = make_window(unref_win, ctv);
+	contact_view_fill(ctv);
 }
 
 static struct contact_view *contact_view_new(struct contact *ct)
@@ -236,6 +353,12 @@ static struct contact_view *contact_view_new(struct contact *ct)
 		ctv = NULL;
 	}
 	return ctv;
+}
+
+static void contact_view_reload(struct contact_view *ctv)
+{
+	contact_view_empty(ctv);
+	contact_view_fill(ctv);
 }
 
 /*

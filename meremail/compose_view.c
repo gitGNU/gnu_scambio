@@ -38,18 +38,17 @@ static void compose_ctor(struct compose *comp, char const *from, char const *to,
 {
 	comp->win = make_window(NULL, NULL);
 	// From : combobox with all accepted from addresses (with from param preselected)
-	unsigned nb_froms;
-	char const **froms = header_search_all(mdir_user_header(user), "smtp-from", &nb_froms);
-	on_error return;
-	if (nb_froms == 0) with_error(0, "You must configure a from address") return;
 	comp->from_combo = gtk_combo_box_new_text();
 	int selected = 0;
-	for (unsigned f = 0; f < nb_froms; f++) {
-		if (from && 0 == strcmp(from, froms[f])) selected = f;
-		gtk_combo_box_append_text(GTK_COMBO_BOX(comp->from_combo), froms[f]);
+	struct header_field *hf = NULL;
+	unsigned nb_froms = 0;
+	while (NULL != (hf = header_find(mdir_user_header(user), "smtp-from", hf))) {
+		if (from && 0 == strcmp(from, hf->value)) selected = nb_froms;
+		gtk_combo_box_append_text(GTK_COMBO_BOX(comp->from_combo), hf->value);
+		nb_froms++;
 	}
+	if (nb_froms == 0) with_error(0, "You must configure a from address") return;
 	gtk_combo_box_set_active(GTK_COMBO_BOX(comp->from_combo), selected);
-	free(froms);
 	// To : input text (with latter a button to pick a contact)
 	comp->to_entry = gtk_entry_new();
 	if (to) gtk_entry_set_text(GTK_ENTRY(comp->to_entry), to);
@@ -93,7 +92,7 @@ static void add_dests(struct header *header, char const *dests)
 			memcpy(to, dests, len);
 			to[len] = '\0';
 			while (isblank(to[len-1])) to[--len] = '\0';
-			if (len > 0) if_fail (header_add_field(header, SC_TO_FIELD, to)) return;
+			if (len > 0) (void)header_field_new(header, SC_TO_FIELD, to);
 			if (*c == '\0') break;
 			while (*c == ',' || isblank(*c)) c++;
 			dests = c;
@@ -107,18 +106,12 @@ static struct header *header_new_from_compose(struct compose *comp)
 {
 	struct header *header = header_new();
 	on_error return NULL;
-	do {
-		if_fail (header_add_field(header, SC_TYPE_FIELD, SC_MAIL_TYPE)) break;
-		if_fail (header_add_field(header, SC_START_FIELD, sc_ts2gmfield(time(NULL), true))) break;
-		if_fail (header_add_field(header, SC_DESCR_FIELD,
-			gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)))) break;
-		if_fail (add_dests(header, gtk_entry_get_text(GTK_ENTRY(comp->to_entry)))) break;
-		if_fail (header_add_field(header, SC_FROM_FIELD,
-			gtk_combo_box_get_active_text(GTK_COMBO_BOX(comp->from_combo)))) break;
-		return header;
-	} while (0);
-	header_unref(header);
-	return NULL;
+	(void)header_field_new(header, SC_TYPE_FIELD, SC_MAIL_TYPE);
+	(void)header_field_new(header, SC_START_FIELD, sc_ts2gmfield(time(NULL), true));
+	(void)header_field_new(header, SC_DESCR_FIELD, gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)));
+	add_dests(header, gtk_entry_get_text(GTK_ENTRY(comp->to_entry)));
+	(void)header_field_new(header, SC_FROM_FIELD, gtk_combo_box_get_active_text(GTK_COMBO_BOX(comp->from_combo)));
+	return header;
 }
 
 static void send_file(char const *fname, char const *name, char const *type, struct header *header)
@@ -129,7 +122,7 @@ static void send_file(char const *fname, char const *name, char const *type, str
 	size_t len = strlen(resource);
 	if (name) len += snprintf(resource+len, sizeof(resource)-len, "; name=\"%s\"", name);
 	if (type) len += snprintf(resource+len, sizeof(resource)-len, "; type=\"%s\"", type);
-	header_add_field(header, SC_RESOURCE_FIELD, resource);
+	(void)header_field_new(header, SC_RESOURCE_FIELD, resource);
 }
 
 static void add_files_and_send(struct compose *comp, struct header *header)

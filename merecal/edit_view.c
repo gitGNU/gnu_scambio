@@ -90,7 +90,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	do {
 		char date_str[] = "XXXX XX XX XX XX XX";
 		struct cal_date from_date, to_date;
-		if_fail (header_add_field(h, SC_TYPE_FIELD, SC_CAL_TYPE)) break;
+		(void)header_field_new(h, SC_TYPE_FIELD, SC_CAL_TYPE);
 		// From
 		if_fail (cal_date_ctor_from_input(&from_date, gtk_entry_get_text(GTK_ENTRY(e->start_entry)), NULL)) break;
 		if (! cal_date_is_set(&from_date)) {
@@ -98,16 +98,16 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 			break;
 		}
 		if_fail (cal_date_to_str(&from_date, date_str, sizeof(date_str))) break;
-		if_fail (header_add_field(h, SC_START_FIELD, date_str)) break;
+		(void)header_field_new(h, SC_START_FIELD, date_str);
 		// To
 		if_fail (cal_date_ctor_from_input(&to_date, gtk_entry_get_text(GTK_ENTRY(e->stop_entry)), &from_date)) break;
 		if (cal_date_is_set(&to_date)) {
 			if_fail (cal_date_to_str(&to_date, date_str, sizeof(date_str))) break;
-			if_fail (header_add_field(h, SC_STOP_FIELD, date_str)) break;
+			(void)header_field_new(h, SC_STOP_FIELD, date_str);
 		}
 		char *descr = get_serial_text(e->descr_buffer);
 		on_error break;
-		if (descr) header_add_field(h, SC_DESCR_FIELD, descr);
+		if (descr) (void)header_field_new(h, SC_DESCR_FIELD, descr);
 		g_free(descr);
 		debug("sending patch");
 		mdir_patch_request(cf->mdir, MDIR_ADD, h);

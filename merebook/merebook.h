@@ -31,6 +31,7 @@ struct book {
 	LIST_ENTRY(book) entry;
 	char path[PATH_MAX];
 	char const *name;	// points into path
+	struct mdir *mdir;
 	LIST_HEAD(contacts, contact) contacts;
 };
 extern LIST_HEAD(books, book) books;
@@ -46,7 +47,16 @@ struct contact {
 extern struct contacts contacts;
 
 void refresh(struct book *book);
+void refresh_contact_list(void);	// refresh all the books, and renew the list displayed by the book view
 GtkWidget *make_book_window(void);
 GtkWidget *make_contact_window(struct contact *);
+
+struct field_dialog {
+	GtkWidget *dialog;
+	GtkWidget *cat_combo, *field_combo, *value_entry;
+};
+
+struct field_dialog *field_dialog_new(GtkWindow *parent, char const *cat_name, char const *field_name, char const *value);
+void field_dialog_del(struct field_dialog *fd);
 
 #endif

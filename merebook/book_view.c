@@ -51,12 +51,10 @@ static void view_cb(GtkToolButton *button, gpointer user_data)
 	struct contact *ct = g_value_get_pointer(&gct);
 	g_value_unset(&gct);
 	debug("Viewing contact %s", ct->name);
-	GtkWidget *new_win = make_contact_window(ct);
+	(void)make_contact_window(ct);
 	on_error {
 		alert(GTK_MESSAGE_ERROR, error_str());
 		error_clear();
-	} else {
-		gtk_widget_show_all(new_win);
 	}
 }
 
@@ -98,15 +96,20 @@ static void select_list(GtkComboBox *combo, gpointer user_data)
 	}
 }
 
-static void refresh_cb(GtkToolButton *button, gpointer user_data)
+void refresh_contact_list(void)
 {
-	(void)button;
-	(void)user_data;
 	struct book *book;
 	LIST_FOREACH(book, &books, entry) {
 		refresh(book);
 	}
 	select_list(GTK_COMBO_BOX(book_combo), ct_store);
+}
+
+static void refresh_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	(void)user_data;
+	refresh_contact_list();
 }
 
 /*

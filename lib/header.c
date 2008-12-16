@@ -33,31 +33,206 @@
 #include "varbuf.h"
 
 /*
- * Data Definitions
+ * Header Fields
  */
 
-#define NB_MAX_FIELDS 5000	// FIXME
-
-/*
- * Private Functions
- */
-
-static bool iseol(char c)
+static void str_tolower(char *str)
 {
-	return c == '\n' || c == '\r';
+	while (*str != '\0') {
+		*str = tolower(*str);
+		str++;
+	}
 }
 
-// Read a value until given delimiter, and compact it inplace (remove comments, new lines and useless spaces). Returns the number of parsed chars
+// Throws no error
+static void header_field_ctor(struct header_field *hf, struct header *h, char const *name, char const *value)
+{
+	hf->name = Strdup(name);
+	hf->value = Strdup(value);
+	str_tolower(hf->name);
+	LIST_INSERT_HEAD(&h->fields, hf, entry);
+}
+
+struct header_field *header_field_new(struct header *h, char const *name, char const *value)
+{
+	struct header_field *hf = Malloc(sizeof(*hf));
+	header_field_ctor(hf, h, name, value);
+	return hf;
+}
+
+static void header_field_dtor(struct header_field *hf)
+{
+	FreeIfSet(&hf->name);
+	FreeIfSet(&hf->value);
+	LIST_REMOVE(hf, entry);
+}
+
+void header_field_del(struct header_field *hf)
+{
+	header_field_dtor(hf);
+	free(hf);
+}
+
+void header_field_set(struct header_field *hf, char const *name, char const *value)
+{
+	if (name) {
+		char *new_name = Strdup(name);
+		on_error return;
+		FreeIfSet(&hf->name);
+		hf->name = new_name;
+		str_tolower(hf->name);
+	}
+	if (value) {
+		char *new_value = Strdup(value);
+		on_error return;
+		FreeIfSet(&hf->value);
+		hf->value = new_value;
+	}
+}
+
+/*
+ * Parameters
+ */
+
+char const *find_next_param_delim(char const *str)
+{
+	bool quoted = false;
+	while (*str) {
+		if (*str == '"') {
+			quoted = !quoted;
+		} else if (! quoted && *str == ';') {
+			break;
+		}
+		str++;
+	}
+	return str;
+}
+
+size_t parameter_find(char const *str, char const *param_name, char const **param_value)
+{
+	size_t const len = strlen(param_name);
+	size_t ret = 0;
+	*param_value = NULL;
+	do {
+		// First find next separator
+		str = find_next_param_delim(str);
+		if (! *str) return 0;
+		str++;	// skip delimiter
+		// Then skip the only white space that may lie here
+		while (*str == ' ') str++;	// there should be only one
+		if (0 == strncasecmp(param_name, str, len)) {	// found
+			str += len;
+			while (*str == ' ') str++;
+			if (*str != '=') continue;
+			str++;
+			while (*str == ' ') str++;
+			char delim = ';';
+			if (*str == '"') {
+				str++;
+				delim = '"';
+			}
+			*param_value = str;
+			while (*str != '\0' && *str != delim) {
+				ret++;
+				str++;
+			}
+			return ret;
+		}
+	} while (*str);
+	return 0;
+}
+
+char *parameter_extract(char const *str, char const *param_name)
+{
+	char const *param_value;
+	size_t len = parameter_find(str, param_name, &param_value);
+	if (! param_value) return NULL;
+	char *res = Malloc(len + 1);
+	memcpy(res, param_value, len);
+	res[len] = '\0';
+	return res;
+}
+
+char *parameter_suppress(char const *str)
+{
+	char const *v = find_next_param_delim(str);
+	while (v > str && isspace(*(v-1))) v--;
+	char *res = Malloc(v - str + 1);
+	memcpy(res, str, v - str);
+	res[v - str] = '\0';
+	return res;
+}
+
+/*
+ * Headers
+ */
+
+static void header_ctor(struct header *h)
+{
+	debug("header @%p", h);
+	LIST_INIT(&h->fields);
+	h->count = 1;
+}
+
+struct header *header_new(void)
+{
+	struct header *h = Malloc(sizeof(*h));
+	if (! h) with_error(errno, "Cannot malloc header") return NULL;
+	if_fail (header_ctor(h)) {
+		free(h);
+		h = NULL;
+	}
+	return h;
+}
+
+static void header_dtor(struct header *h)
+{
+	debug("header @%p", h);
+	assert(h->count <= 0);
+	struct header_field *hf;
+	while (NULL != (hf = LIST_FIRST(&h->fields))) {
+		header_field_del(hf);
+	}
+}
+
+void header_del(struct header *h)
+{
+	header_dtor(h);
+	free(h);
+}
+
+extern inline struct header *header_ref(struct header *);
+extern inline void header_unref(struct header *);
+
+struct header_field *header_find(struct header const *h, char const *name, struct header_field *prev)
+{
+	debug("looking for %s in header @%p", name, h);
+	for (
+		struct header_field *hf = prev ? LIST_NEXT(prev, entry) : LIST_FIRST(&h->fields);
+		hf != NULL;
+		hf = LIST_NEXT(hf, entry)
+	) {
+		if (0 == strcasecmp(hf->name, name)) {
+			debug("  found, value = %s", hf->value);
+			return hf;
+		}
+	}
+	return NULL;
+}
+
+/* Reads a string until given delimiter, and compact it inplace
+ * (ie. remove comments, new lines and useless spaces).
+ * Returns the number of parsed chars
+ */
 static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char const *))
 {
 	char const *src = msg;
 	struct varbuf vb;
-	varbuf_ctor(&vb, 1000, true);
-	on_error return 0;
+	if_fail (varbuf_ctor(&vb, 1000, true)) return 0;
 	bool rem_space = true;
 	while (! is_delimiter(src)) {
 		if (*src == '\0') {
-			error_push(EINVAL, "Unterminated string in header : '%s'", msg);
+			error_push(0, "Unterminated string in header : '%s'", msg);
 			break;
 		}
 		if (isspace(*src)) {
@@ -89,6 +264,11 @@ static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char cons
 	return src - msg;
 }
 
+static bool iseol(char c)
+{
+	return c == '\n' || c == '\r';
+}
+
 static bool is_end_of_name(char const *msg)
 {
 	return *msg == ':' || iseol(*msg);
@@ -110,135 +290,42 @@ static ssize_t parse_field(char const *msg, char **name, char **value)
 		free(*name);
 		return 0;
 	}
-	if (parsedV == 0) with_error(EINVAL, "Field '%s' has no value", *name) return 0;
+	if (parsedV == 0) with_error(0, "Field '%s' has no value", *name) return 0;
 	parsedV++;	// skip delimiter
 	return parsedN + parsedV;
 }
 
-static void str_tolower(char *str)
+size_t header_parse(struct header *h, char const *msg_)
 {
-	while (*str != '\0') {
-		*str = tolower(*str);
-		str++;
-	}
+	ssize_t parsed;
+	char const *msg = msg_;
+	while (*msg) {
+		char *field_name, *field_value;
+		if_fail (parsed = parse_field(msg, &field_name, &field_value)) break;
+		if (parsed == 0) break;	// end of message
+		debug("parsed field '%s' to value '%s'", field_name, field_value);
+		(void)header_field_new(h, field_name, field_value);
+		free(field_name);
+		free(field_value);
+		on_error break;
+		msg += parsed;
+	};
+	return msg - msg_;
 }
 
-static void header_ctor(struct header *h)
+static void field_write(struct header_field const *hf, int fd)
 {
-	h->nb_fields = 0;
-	h->count = 1;
-}
-
-static void header_dtor(struct header *h)
-{
-	while (h->nb_fields--) {
-		struct head_field *f = h->fields+h->nb_fields;
-		free(f->name);
-		free(f->value);
-	}
-}
-
-/*
- * Public Functions
- */
-
-extern inline struct header *header_ref(struct header *header);
-extern inline void header_unref(struct header *header);
-extern inline unsigned header_nb_fields(struct header *h);
-extern inline struct head_field const *header_field(struct header *h, unsigned f);
-
-struct header *header_new(void)
-{
-	struct header *h = malloc(sizeof(*h) + NB_MAX_FIELDS*sizeof(h->fields[0]));
-	if (! h) with_error(errno, "Cannot malloc header") return NULL;
-	header_ctor(h);
-	on_error {
-		free(h);
-		return NULL;
-	}
-	return h;
-}
-
-void header_del(struct header *h)
-{
-	header_dtor(h);
-	free(h);
-}
-
-char const **header_search_all(struct header const *h, char const *name, unsigned *nb)
-{
-	debug("looking for all %s in header @%p", name, h);
-	*nb = 0;
-	struct varbuf vb;
-	if_fail (varbuf_ctor(&vb, 10*sizeof(char *), true)) return NULL;
-	for (unsigned f=0; f<h->nb_fields; f++) {
-		if (0 == strcasecmp(h->fields[f].name, name)) {
-			debug("found, value = %s", h->fields[f].value);
-			if_fail (varbuf_append(&vb, sizeof(h->fields[f].value), &h->fields[f].value)) break;
-			(*nb)++;
-		}
-	}
-	on_error {
-		varbuf_dtor(&vb);
-		return NULL;
-	}
-	return varbuf_unbox(&vb);
-}
-
-char const *header_search(struct header const *h, char const *name)
-{
-	debug("looking for %s in header @%p", name, h);
-	for (unsigned f=0; f<h->nb_fields; f++) {
-		if (0 == strcasecmp(h->fields[f].name, name)) {
-			debug("found, value = %s", h->fields[f].value);
-			return h->fields[f].value;
-		}
-	}
-	return NULL;
-}
-
-static void field_write(struct head_field const *f, int fd)
-{
-	Write(fd, f->name, strlen(f->name));
-	Write(fd, ": ", 2);
-	Write(fd, f->value, strlen(f->value));
-	Write(fd, "\n", 1);
-}
-
-static void field_dump(struct head_field const *f, struct varbuf *vb)
-{
-	varbuf_append(vb, strlen(f->name), f->name);
-	varbuf_append(vb, 2, ": ");
-	varbuf_append(vb, strlen(f->value), f->value);
-	varbuf_append(vb, 1, "\n");
+	Write_strs(fd, hf->name, ": ", hf->value, "\n", NULL);
 }
 
 void header_write(struct header const *h, int fd)
 {
-	for (unsigned f=0; f<h->nb_fields; f++) {
-		field_write(h->fields+f, fd);
+	debug("writing to fd %d", fd);
+	struct header_field *hf;
+	LIST_FOREACH(hf, &h->fields, entry) {
+		field_write(hf, fd);
 	}
 	Write(fd, "\n", 1);
-}
-
-size_t header_parse(struct header *h, char const *msg_) {
-	ssize_t parsed;
-	char const *msg = msg_;
-	while (*msg) {
-		if (h->nb_fields >= NB_MAX_FIELDS) {
-			error_push(E2BIG, "Too many fields in this header (max is "TOSTR(NB_MAX_FIELDS)")");
-			return 0;
-		}
-		struct head_field *field = h->fields + h->nb_fields;
-		if_fail (parsed = parse_field(msg, &field->name, &field->value)) return 0;
-		if (parsed == 0) break;	// end of message
-		debug("parsed field '%s' to value '%s'", field->name, field->value);
-		h->nb_fields ++;
-		msg += parsed;
-		// Lowercase stored field names
-		str_tolower(field->name);
-	};
-	return msg - msg_;
 }
 
 void header_read(struct header *h, int fd)
@@ -248,17 +335,11 @@ void header_read(struct header *h, int fd)
 	struct varbuf vb;
 	char *line;
 	bool eoh_reached = false;
-	varbuf_ctor(&vb, 10240, true);
-	on_error return;
+	if_fail (varbuf_ctor(&vb, 10240, true)) return;
 	error_save();
 	while (1) {
-		varbuf_read_line(&vb, fd, MAX_HEADLINE_LENGTH, &line);
-		on_error break;
-		if (++ nb_lines > MAX_HEADER_LINES) {
-			error_push(E2BIG, "Too many lines in header");
-			break;
-		}
-		debug("line is '%s'", line);
+		if_fail (varbuf_read_line(&vb, fd, MAX_HEADLINE_LENGTH, &line)) break;
+		if (++ nb_lines > MAX_HEADER_LINES) with_error(0, "Too many lines in header") break;
 		if (line_match(line, "")) {
 			debug("end of headers");
 			// forget this line
@@ -273,121 +354,18 @@ void header_read(struct header *h, int fd)
 		eoh_reached = true;
 	}
 	error_restore();
-	if (nb_lines == 0) error_push(EINVAL, "No lines in header");
-	if (! eoh_reached) error_push(EINVAL, "End of file before end of header");
+	if (nb_lines == 0) error_push(0, "No lines in header");
+	if (! eoh_reached) error_push(0, "End of file before end of header");
 	if (! is_error()) (void)header_parse(h, vb.buf);
 	varbuf_dtor(&vb);
 }
 
-void header_dump(struct header const *h, struct varbuf *vb)
+void header_to_file(struct header *h, char const *filename)
 {
-	varbuf_clean(vb);
-	for (unsigned f=0; f<h->nb_fields; f++) {
-		field_dump(h->fields+f, vb);
-	}
-}
-
-void header_debug(struct header *h)
-{
-	struct varbuf vb;
-	varbuf_ctor(&vb, 1000, true);
-	on_error return;
-	header_dump(h, &vb);
-	varbuf_stringify(&vb);
-	if (! is_error()) debug("header : %s", vb.buf);
-	varbuf_dtor(&vb);
-}
-
-void header_add_field(struct header *h, char const *name, char const *value)
-{
-	debug("adding '%s: %s' to header @%p", name, value, h);
-	if (h->nb_fields >= NB_MAX_FIELDS) with_error(E2BIG, "Too many fields in header") return;
-	struct head_field *field = h->fields + h->nb_fields;
-	field->name = strdup(name);	// won't be written to from now on
-	if (! field->name) with_error(ENOMEM, "Cannot strdup field name") return;
-	str_tolower(field->name);
-	field->value = strdup(value);
-	if (! field->value) {
-		free(field->name);
-		with_error(ENOMEM, "Cannot strdup field value") return;
-	}
-	h->nb_fields ++;
-}
-
-size_t header_find_parameter(char const *name, char const *field_value, char const **value)
-{
-	char const *v = field_value;
-	size_t len = strlen(name);
-	size_t ret = 0;
-	*value = NULL;
-	do {
-		// First find next separator
-		for ( ; *v != ';'; v++) {
-			if (*v == '\0') with_error(ENOENT, "No parameters in field value") return 0;
-		}
-		v++;
-		// Then skip the only white space that may lie here
-		while (*v == ' ') v++;	// there should be only one
-		if (0 == strncasecmp(name, v, len)) {	// found
-			v += len;
-			while (*v == ' ') v++;
-			if (*v != '=') continue;
-			v++;
-			while (*v == ' ') v++;
-			char delim = ';';
-			if (*v == '"') {
-				v++;
-				delim = '"';
-			}
-			*value = v;
-			while (*v != '\0' && *v != delim) {
-				ret++;
-				v++;
-			}
-			return ret;
-		}
-	} while (*v != '\0');
-	with_error(ENOENT, "No such parameter '%s'", name) return 0;
-}
-
-void header_copy_parameter(char const *name, char const *field_value, size_t max_len, char *value)
-{
-	char const *str;
-	assert(max_len > 0);
-	value[0] = '\0';
-	int str_len = header_find_parameter(name, field_value, &str);
-	on_error return;
-	if (str_len >= (int)max_len) with_error(EMSGSIZE, "parameter length is %d while buf size is %zu", str_len, max_len) return;
-	memcpy(value, str, str_len);
-	value[str_len] = '\0';
-}
-
-size_t header_stripped_value(char const *field_value, size_t max_len, char *value)
-{
-	char const *v = field_value;
-	size_t len = 0;
-	while (*v != '\0' && len < max_len-1) {
-		if (*v == ';') break;
-		value[len++] = *v++;
-	}
-	while (len > 0 && isspace(value[len-1])) len--;
-	value[len] = '\0';
-	return len;
-}
-
-void header_digest(struct header *header, size_t size, char *buffer)
-{
-	(void)size;	// FIXME: not me but the digest interface
-	struct varbuf vb;
-	varbuf_ctor(&vb, 5000, true);
-	on_error return;
-	do {
-		header_dump(header, &vb);
-		on_error break;
-		size_t dig_len = digest(buffer, vb.used, vb.buf);
-		buffer[dig_len] = '\0';
-	} while (0);
-	varbuf_dtor(&vb);
+	int fd = open(filename, O_WRONLY|O_CREAT, 0640);
+	if (fd < 0) with_error(errno, "open(%s)", filename) return;
+	header_write(h, fd);
+	(void)close(fd);
 }
 
 struct header *header_from_file(char const *filename)
@@ -396,13 +374,11 @@ struct header *header_from_file(char const *filename)
 	if (fd < 0) with_error(errno, "open(%s)", filename) return NULL;
 	struct header *h;
 	do {
-		h = header_new();
-		on_error {
+		if_fail (h = header_new()) {
 			h = NULL;
 			break;
 		}
-		header_read(h, fd);
-		on_error {
+		if_fail (header_read(h, fd)) {
 			header_unref(h);
 			h = NULL;
 			break;
@@ -412,18 +388,53 @@ struct header *header_from_file(char const *filename)
 	return h;
 }
 
-void header_to_file(struct header *h, char const *filename)
+static void field_dump(struct header_field const *hf, struct varbuf *vb)
 {
-	int fd = open(filename, O_WRONLY|O_CREAT, 0640);
-	if (fd < 0) with_error(errno, "open(%s)", filename) return;
-	header_write(h, fd);
-	close(fd);
+	varbuf_append_strs(vb, hf->name, ": ", hf->value, "\n", NULL);
+}
+
+void header_dump(struct header const *h, struct varbuf *vb)
+{
+	varbuf_clean(vb);
+	struct header_field *hf;
+	LIST_FOREACH(hf, &h->fields, entry) {
+		field_dump(hf, vb);
+	}
+}
+
+void header_debug(struct header *h)
+{
+	struct varbuf vb;
+	if_fail (varbuf_ctor(&vb, 1000, true)) {
+		error_clear();
+		return;
+	}
+	header_dump(h, &vb);
+	varbuf_stringify(&vb);
+	if (! is_error()) debug("header :\n%s", vb.buf);
+	varbuf_dtor(&vb);
+	error_clear();
+}
+
+void header_digest(struct header *h, size_t size, char *buffer)
+{
+	(void)size;	// FIXME: not me but the digest interface
+	struct varbuf vb;
+	varbuf_ctor(&vb, 5000, true);
+	on_error return;
+	do {
+		header_dump(h, &vb);
+		on_error break;
+		size_t dig_len = digest(buffer, vb.used, vb.buf);
+		buffer[dig_len] = '\0';
+	} while (0);
+	varbuf_dtor(&vb);
 }
 
 bool header_has_type(struct header *h, char const *type)
 {
-	char const *h_type = header_search(h, SC_TYPE_FIELD);
-	return h_type && 0==strcmp(h_type, type);
+	struct header_field *hf = header_find(h, SC_TYPE_FIELD, NULL);
+	return hf && 0==strcmp(hf->value, type);
 }
 
 bool header_is_directory(struct header *h)
@@ -433,8 +444,8 @@ bool header_is_directory(struct header *h)
 
 mdir_version header_target(struct header *h)
 {
-	char const *target = header_search(h, SC_TARGET_FIELD);
-	if (! target) with_error(0, "Header lacks a target") return 0;
-	return mdir_str2version(target);
+	struct header_field *hf = header_find(h, SC_TARGET_FIELD, NULL);
+	if (! hf) with_error(0, "Header lacks a target") return 0;
+	return mdir_str2version(hf->value);
 }
 

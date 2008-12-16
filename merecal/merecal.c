@@ -388,17 +388,17 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	assert(action == MDIR_ADD);
 	struct cal_folder *cf = (struct cal_folder *)data;
 	struct cal_date start, stop;
-	char const *start_str = header_search(header, SC_START_FIELD);
-	if (start_str) {
-		if_fail (cal_date_ctor_from_str(&start, start_str)) return;
+	struct header_field *start_field = header_find(header, SC_START_FIELD, NULL);
+	if (start_field) {
+		if_fail (cal_date_ctor_from_str(&start, start_field->value)) return;
 	} else {
 		error("Invalid calendar message with no "SC_START_FIELD" field");
 		return;
 	}
-	debug("new event is version %lld, start str = '%s'", version, start_str);
-	char const *stop_str = header_search(header, SC_STOP_FIELD);
-	if (stop_str) {
-		if_fail (cal_date_ctor_from_str(&stop, stop_str)) {
+	debug("new event is version %lld, start str = '%s'", version, start_field->value);
+	struct header_field *stop_field = header_find(header, SC_STOP_FIELD, NULL);
+	if (stop_field) {
+		if_fail (cal_date_ctor_from_str(&stop, stop_field->value)) {
 			error_save();
 			cal_date_dtor(&start);
 			error_restore();
@@ -407,8 +407,8 @@ static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_act
 	} else {
 		cal_date_ctor(&stop, 0, 0, 0, 0, 0);
 	}
-	char const *desc = header_search(header, SC_DESCR_FIELD);
-	unless_error (void)cal_event_new(cf, &start, &stop, desc, version);
+	struct header_field *desc_field = header_find(header, SC_DESCR_FIELD, NULL);
+	(void)cal_event_new(cf, &start, &stop, desc_field ? desc_field->value : "", version);
 	on_error error_clear();	// forget this event, go ahead with others
 	cal_date_dtor(&stop);
 	cal_date_dtor(&start);
@@ -443,14 +443,11 @@ int main(int nb_args, char *args[])
 	if_fail (auth_begin()) return EXIT_FAILURE;
 	atexit(auth_end);
 	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
-	unsigned nb_folders;
-	char const **folders = header_search_all(mdir_user_header(user), "cal-dir", &nb_folders);
-	on_error return EXIT_FAILURE;
-
-	while (nb_folders --) {
-		if_fail ((void)cal_folder_new(folders[nb_folders])) return EXIT_FAILURE;
+	
+	struct header_field *folder = NULL;
+	while (NULL != (folder = header_find(mdir_user_header(user), "cal-dir", folder))) {
+		if_fail ((void)cal_folder_new(folder->value)) return EXIT_FAILURE;
 	}
-	free(folders);
 	refresh();
 	GtkWidget *cal_window = make_cal_window();
 	if (! cal_window) return EXIT_FAILURE;

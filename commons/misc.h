@@ -20,6 +20,8 @@
 
 #include <stddef.h>	// size_t (? FIXME)
 #include <stdbool.h>
+#include <sys/types.h>
+
 void Write(int fd, void const *buf, size_t len);
 void Write_strs(int fd, ...)
 #ifdef __GNUC__

@@ -127,13 +127,13 @@ static void add_msg(struct mdir *mdir, struct header *h, enum mdir_action action
 		}
 	} else {	// MDIR_ADD
 		// To be a message, a new patch must have a from, descr and start field (duck typping)
-		char const *from = header_search(h, SC_FROM_FIELD);
+		struct header_field *from = header_find(h, SC_FROM_FIELD, NULL);
 		if (! from) return;
-		char const *descr = header_search(h, SC_DESCR_FIELD);
+		struct header_field *descr = header_find(h, SC_DESCR_FIELD, NULL);
 		if (! descr) return;
-		char const *date = header_search(h, SC_START_FIELD);
+		struct header_field *date = header_find(h, SC_START_FIELD, NULL);
 		if (! date) return;
-		if_fail (msg = msg_new(maildir, from, descr, date, version)) return;
+		if_fail (msg = msg_new(maildir, from->value, descr->value, date->value, version)) return;
 	}
 }
 

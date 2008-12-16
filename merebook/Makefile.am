@@ -11,7 +11,8 @@ desktop_DATA=merebook.desktop
 merebook_SOURCES = \
 	merebook.c \
 	book_view.c \
-	contact_view.c
+	contact_view.c \
+	field_view.c
 
 merebook_LDADD = ../merelib/libgui.la ../lib/libscambio.la ../commons/libcommons.la $(GTKS_LIBS)
 

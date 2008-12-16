@@ -23,11 +23,13 @@
 #include "merelib.h"
 #include "meremail.h"
 #include "varbuf.h"
+#include "misc.h"
 
 /*
  * Make a Window to display a mail
  */
 
+// type is allowed to be NULL
 static GtkWidget *make_view_widget(char const *type, char const *resource, GtkWindow *win)
 {
 	debug("type='%s', resource='%s'", type, resource);
@@ -48,35 +50,34 @@ static GtkWidget *make_view_widget(char const *type, char const *resource, GtkWi
 	// For html, use GtkHtml,
 	// For image, display as an image
 	// For other types, display a launcher for external app
-	if (0 == strncmp(type, "text/html", 9)) {
+	if (type && 0 == strncmp(type, "text/html", 9)) {
 		if_fail (varbuf_ctor_from_file(&vb, filename)) return NULL;
 		widget = gtk_html_new_from_string(vb.buf, vb.used);
 		varbuf_dtor(&vb);
-	} else if (0 == strncmp(type, "text/", 5)) {	// all other text types are treated the same
+	} else if (type && 0 == strncmp(type, "text/", 5)) {	// all other text types are treated the same
 		GtkTextBuffer *buffer = gtk_text_buffer_new(NULL);
-		char charset[64];	// wild guess
-		if_fail (header_copy_parameter("charset", type, sizeof(charset), charset)) {
-			if (error_code() == ENOENT) {
-				error_clear();
-				snprintf(charset, sizeof(charset), "us-ascii");
-			} else return NULL;
-		}
-		if_fail (varbuf_ctor_from_file(&vb, filename)) return NULL;
-		// convert to UTF-8
-		gsize utf8size;
-		gchar *utf8text = g_convert_with_fallback(vb.buf, vb.used, "utf-8", charset, NULL, NULL, &utf8size, NULL);
-		varbuf_dtor(&vb);
-		if (! utf8text) with_error(0, "Cannot convert from '%s' to utf8", charset) return NULL;
-		gtk_text_buffer_set_text(GTK_TEXT_BUFFER(buffer), utf8text, utf8size);
-		widget = gtk_text_view_new_with_buffer(buffer);
-		g_object_unref(G_OBJECT(buffer));
-		g_free(utf8text);
-	} else if (0 == strncmp(type, "image/", 6)) {
+		char *charset = parameter_extract(type, "charset");
+		if (! charset) charset = Strdup("us-ascii");
+		do {
+			if_fail (varbuf_ctor_from_file(&vb, filename)) break;
+			// convert to UTF-8
+			gsize utf8size;
+			gchar *utf8text = g_convert_with_fallback(vb.buf, vb.used, "utf-8", charset, NULL, NULL, &utf8size, NULL);
+			varbuf_dtor(&vb);
+			if (! utf8text) with_error(0, "Cannot convert from '%s' to utf8", charset) break;
+			gtk_text_buffer_set_text(GTK_TEXT_BUFFER(buffer), utf8text, utf8size);
+			widget = gtk_text_view_new_with_buffer(buffer);
+			g_object_unref(G_OBJECT(buffer));
+			g_free(utf8text);
+		} while (0);
+		free(charset);
+		on_error return NULL;
+	} else if (type && 0 == strncmp(type, "image/", 6)) {
 		widget = gtk_image_new_from_file(filename);	// Oh! All mighty gtk !
 	}
 	if (! widget) {
 		widget = gtk_label_new(NULL);
-		char *str = g_markup_printf_escaped("<b>Cannot display this part</b> which have type '<i>%s</i>'", type);
+		char *str = g_markup_printf_escaped("<b>Cannot display this part</b> which have type '<i>%s</i>'", type ? type:"NONE");
 		gtk_label_set_markup(GTK_LABEL(widget), str);
 		g_free(str);
 	}
@@ -96,9 +97,6 @@ GtkWidget *make_mail_window(struct msg *msg)
 	struct header *h = mdir_read(&msg->maildir->mdir, msg->version, &action);
 	on_error return NULL;
 	assert(action == MDIR_ADD);
-	unsigned nb_resources;
-	char const **resources = header_search_all(h, SC_RESOURCE_FIELD, &nb_resources);
-	on_error goto q1;
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(win), vbox);
@@ -119,35 +117,23 @@ GtkWidget *make_mail_window(struct msg *msg)
 	GtkWidget *notebook = gtk_notebook_new();
 	gtk_notebook_set_scrollable(GTK_NOTEBOOK(notebook), TRUE);
 	// A Tab for each resources, except for the header which is put in an expander above
-	for (unsigned n = 0; n < nb_resources; n++) {
-		char resource[PATH_MAX];
-		char title[64];
-		char type[128];	// wild guess
-		bool is_header = false;
-		if_fail (header_stripped_value(resources[n], sizeof(resource), resource)) break;
-		if_fail (header_copy_parameter("name", resources[n], sizeof(title), title)) {
-			if (error_code() == ENOENT) {	// smtp header have no filename
-				error_clear();
-				is_header = true;
-			} else break;
-		}
-		if_fail (header_copy_parameter("type", resources[n], sizeof(type), type)) {
-			if (error_code() == ENOENT) {
-				error_clear();
-				type[0] = '\0';
-			} else break;
-		}
-		GtkWidget *widget = make_view_widget(type, resource, GTK_WINDOW(win));
+	struct header_field *resource = NULL;
+	while (NULL != (resource = header_find(h, SC_RESOURCE_FIELD, resource))) {
+		char *resource_stripped = parameter_suppress(resource->value);
+		char *title = parameter_extract(resource->value, "name");
+		bool is_header = !title;
+		char *type = parameter_extract(resource->value, "type");
+		GtkWidget *widget = make_view_widget(type, resource_stripped, GTK_WINDOW(win));
 		if (is_header) {
 			gtk_box_pack_start(GTK_BOX(vbox), make_expander("Headers", widget), FALSE, FALSE, 0);
 		} else {
-			if (title[0] == '\0') snprintf(title, sizeof(title), "Untitled");
-			(void)gtk_notebook_append_page(GTK_NOTEBOOK(notebook), widget, gtk_label_new(title));
+			(void)gtk_notebook_append_page(GTK_NOTEBOOK(notebook), widget, gtk_label_new(title ? title:"Untitled"));
 		}
+		FreeIfSet(&title);
+		FreeIfSet(&type);
+		FreeIfSet(&resource_stripped);
 	}
 	gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
-
-	free(resources);
 
 	GtkWidget *toolbar = make_toolbar(3,
 		GTK_STOCK_JUMP_TO, NULL,     NULL,	// Forward
@@ -160,7 +146,6 @@ GtkWidget *make_mail_window(struct msg *msg)
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 #	endif
 
-q1:
 	header_unref(h);
 	return win;
 }

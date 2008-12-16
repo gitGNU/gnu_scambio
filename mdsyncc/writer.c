@@ -62,6 +62,12 @@ static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action 
 	(void)command_new(kw, mdirc, folder, filename);
 	unless_error {
 		mdirc->nb_pending_acks ++;	// Notice : header_write may schedule the reader thread which may receive the answer before we run again. So must have to inc nb_pending_acks _before_ calling header_write
+		// Disallow to send a localid
+		struct header_field *hf;
+		while (NULL != (hf = header_find(header, SC_LOCALID_FIELD, NULL))) {
+			warning("Removing localid field");
+			header_field_del(hf);
+		}
 		header_write(header, cnx.fd);
 	}
 	// FIXME : release cnx write lock
