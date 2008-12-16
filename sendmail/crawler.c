@@ -35,9 +35,10 @@ static pth_t crawler_id, acker_id;
  * Reads all patches in to_send and build forward from them.
  */
 
-static void send_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
+static void send_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
 {
 	(void)data;
+	(void)replaced;
 	assert(mdir == to_send);
 	if (version < 0) return;	// we do not want to try to send anything if it's not synched
 	if (action != MDIR_ADD) return;	// there is little we can do about it

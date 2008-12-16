@@ -123,7 +123,7 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 // (will also list unconfirmed patches, once, with a unique version < 0)
 // (will also list directory patches - otherwise you'd never know when a
 // dir is removed)
-void mdir_patch_list(struct mdir *, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version version, void *data), void *data);
+void mdir_patch_list(struct mdir *, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action, mdir_version, mdir_version, void *data), void *data);
 
 // Forget about previous lists to restart listing all available patches.
 void mdir_patch_reset(struct mdir *);

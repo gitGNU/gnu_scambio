@@ -482,7 +482,7 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
  * List
  */
 
-void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version, void *), void *data)
+void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version, mdir_version, void *), void *data)
 {
 	mdir_reload(mdir);	// journals may have changed, other appended
 	struct jnl *jnl;
@@ -501,13 +501,14 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				on_error return;
 				if (! h) continue;
 				bool skip = false;
+				mdir_version replaced_version = 0;
 				struct header_field *localid_field = header_find(h, SC_LOCALID_FIELD, NULL);
 				if (localid_field) {	// then the local file does not exist anymore, but we may already have reported it when it was present
 					mdir_version local = mdir_str2version(localid_field->value);
 					on_error {
 						error_clear();
 					} else {
-						if (local <= mdir->last_listed_unsync) skip = true;	// we already reported it
+						if (local <= mdir->last_listed_unsync) replaced_version = local;	// we already reported it
 					}
 				}
 				if (action == MDIR_REM) {	// don't report removals of patches we did not report
@@ -520,7 +521,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 					}
 				}
 				if (! skip) {
-					cb(mdir, h, action, jnl->version + index, data);
+					cb(mdir, h, action, jnl->version + index, -replaced_version, data);
 				}
 				header_unref(h);
 				on_error return;
@@ -578,7 +579,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
-		cb(mdir, h, action, acked ? version:-version, data);
+		cb(mdir, h, action, acked ? version:-version, 0, data);
 		header_unref(h);
 		on_error break;
 	}

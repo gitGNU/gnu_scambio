@@ -45,7 +45,7 @@ static void remove_remote_file(mdir_version to_del)
 	};
 }
 
-static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
+static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
 {
 	(void)mdir;
 	(void)data;
@@ -58,6 +58,10 @@ static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_
 	char const *name, *digest, *resource;
 	if_fail (extract_file_info(header, &name, &digest, &resource)) return;
 	debug("Adding file '%s' to unmatched list", name);
+	if (replaced) {
+		debug("  in replacement for version %"PRIversion, replaced);
+		// We do not care since we check unicity of names
+	}
 	/* We allow only one file per name.
 	 * We may have severall patch for the same name if :
 	 * - the patch is not synched yet (thus has no version)

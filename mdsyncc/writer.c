@@ -49,8 +49,9 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *folder)
+static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *folder)
 {
+	(void)replaced;
 	assert(version < 0);	// as the patch is transient
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 	// not in journal and not already acked

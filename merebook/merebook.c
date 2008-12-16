@@ -137,17 +137,21 @@ static void book_del(struct book *book)
  * Utilities
  */
 
-static void list_contact_cb(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, void *data)
+static void list_contact_cb(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
 {
 	(void)mdir;
 	struct book *book = (struct book *)data;
+	mdir_version target = replaced;
 	if (action == MDIR_REM) {
-		mdir_version target = header_target(header);
-		contact_del_by_version(target, book);
-		return;
+		if_fail (target = header_target(header)) return;
 	}
-	if (! header_has_type(header, SC_CONTACT_TYPE)) return;
-	contact_new(book, header, version);
+	if (target) {
+		contact_del_by_version(target, book);
+	}
+	if (action == MDIR_ADD) {
+		if (! header_has_type(header, SC_CONTACT_TYPE)) return;
+		contact_new(book, header, version);
+	}
 }
 
 void refresh(struct book *book)
