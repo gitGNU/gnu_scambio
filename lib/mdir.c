@@ -506,10 +506,12 @@ void mdir_patch_list(
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
 				if (! h) continue;
-				if (action == MDIR_REM && rem_cb) {
-					mdir_version target = header_target(h);
-					unless_error rem_cb(mdir, target, data);
-					else error_clear();
+				if (action == MDIR_REM) {
+					if (rem_cb) {
+						mdir_version target = header_target(h);
+						unless_error rem_cb(mdir, target, data);
+						else error_clear();
+					}
 				} else {	// MDIR_ADD
 					assert(action == MDIR_ADD);
 					if (rem_cb) {

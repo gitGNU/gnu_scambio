@@ -251,7 +251,7 @@ static void send_part(int fd, struct part *part)
 static int send_forward(int fd, struct forward *fwd)
 {
 	int status;
-	if_fail (status = smtp_cmd(fd, "MAIL FROM:<", header_find(fwd->header, SC_FROM_FIELD, NULL), ">", NULL)) return 0;
+	if_fail (status = smtp_cmd(fd, "MAIL FROM:<", header_find(fwd->header, SC_FROM_FIELD, NULL)->value, ">", NULL)) return 0;
 	if (status != 250) return status;
 	struct header_field *hf = NULL;
 	while (NULL != (hf = header_find(fwd->header, SC_TO_FIELD, hf))) {
@@ -260,13 +260,13 @@ static int send_forward(int fd, struct forward *fwd)
 	}
 	if_fail (status = smtp_cmd(fd, "DATA", NULL)) return 0;
 	if (status != 354) return status;
-	if_fail (send_smtp_strs(fd, "From: ", header_find(fwd->header, SC_FROM_FIELD, NULL), NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "From: ", header_find(fwd->header, SC_FROM_FIELD, NULL)->value, NULL)) return 0;
 	bool first = true;
 	while (NULL != (hf = header_find(fwd->header, SC_TO_FIELD, hf))) {
 		if_fail (send_smtp_strs(fd, first ? "To: ":", ", hf->value, NULL)) return 0;
 		first = false;
 	}
-	if_fail (send_smtp_strs(fd, "Subject: ", header_find(fwd->header, SC_DESCR_FIELD, NULL), NULL)) return 0;
+	if_fail (send_smtp_strs(fd, "Subject: ", header_find(fwd->header, SC_DESCR_FIELD, NULL)->value, NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Message-Id: <", mdir_version2str(fwd->version), "@", my_hostname, ">", NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Mime-Version: 1.0", NULL)) return 0;
 	char const *boundary = "Do-Noy-Cross-Criminal-Scene";
@@ -418,7 +418,7 @@ static void forward_ctor(struct forward *fwd, mdir_version version, struct heade
 	fwd->status = 0;
 	fwd->version = version;
 	struct header_field *hf = NULL;
-	while (NULL != header_find(header, SC_RESOURCE_FIELD, hf)) {
+	while (NULL != (hf = header_find(header, SC_RESOURCE_FIELD, hf))) {
 		if_fail (part_new(fwd, hf->value)) break;
 	}
 }
