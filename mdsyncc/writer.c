@@ -96,6 +96,7 @@ static void ls_transients(struct mdirc *mdirc, char *folder)
 		// FIXME : release cnx write lock
 		on_error break;
 	}
+	if (closedir(dir) < 0) with_error(errno, "closedir(%.*s)", dirlen, filename) return;
 }
 
 // Subscribe to the directory, then scan it
