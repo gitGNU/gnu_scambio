@@ -333,11 +333,7 @@ GtkWidget *make_cal_window(void)
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), event_list, TRUE, TRUE, 0);
-#	ifdef WITH_MAEMO
-	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
-#	else
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
-#	endif
 	gtk_box_pack_end(GTK_BOX(vbox), calendar, FALSE, FALSE, 0);
 
 	gtk_container_add(GTK_CONTAINER(window), vbox);

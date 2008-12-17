@@ -128,11 +128,8 @@ GtkWidget *make_list_window(char const *folder)
 		GTK_STOCK_FIND,    NULL,     NULL,	// Find
 		GTK_STOCK_QUIT,    close_cb, window);
 
-#	ifdef WITH_MAEMO
-	hildon_window_add_toolbar(HILDON_WINDOW(window), toolbar);
-#	else
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
-#	endif
+
 	return window;
 }
 

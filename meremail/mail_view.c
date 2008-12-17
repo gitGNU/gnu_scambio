@@ -140,11 +140,7 @@ GtkWidget *make_mail_window(struct msg *msg)
 		GTK_STOCK_DELETE,  NULL,     NULL,	// Delete
 		GTK_STOCK_QUIT,    close_cb, win);
 
-#	ifdef WITH_MAEMO
-	hildon_window_add_toolbar(HILDON_WINDOW(win), toolbar);
-#	else
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
-#	endif
 
 	header_unref(h);
 	return win;
