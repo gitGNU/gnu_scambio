@@ -378,14 +378,10 @@ static void contact_view_fill(struct contact_view *ctv)
 			GTK_STOCK_SAVE, save_cb, ctv,
 			GTK_STOCK_CANCEL, cancel_cb, ctv->window);
 	}
-#	ifdef WITH_MAEMO
-	hildon_window_add_toolbar(HILDON_WINDOW(ctv->window), toolbar);
-#	else
 	gtk_box_pack_end(GTK_BOX(page), toolbar, FALSE, FALSE, 0);
-#	endif
 	gtk_container_add(GTK_CONTAINER(ctv->window), page);
 	gtk_widget_show_all(ctv->window);
-	}
+}
 
 static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 {

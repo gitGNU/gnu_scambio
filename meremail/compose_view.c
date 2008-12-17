@@ -254,11 +254,7 @@ GtkWidget *make_compose_window(char const *from, char const *to, char const *sub
 		GTK_STOCK_JUMP_TO, send_cb, comp,
 		GTK_STOCK_CANCEL,  cancel_cb, comp);
 
-#	ifdef WITH_MAEMO
-	hildon_window_add_toolbar(HILDON_WINDOW(comp->win), toolbar);
-#	else
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
-#	endif
 
 	return comp->win;
 }
