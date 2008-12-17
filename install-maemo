@@ -1,0 +1,23 @@
+#!/bin/sh
+
+N810_IP="192.168.2.15"
+ICONDIRS="scalable 26x26 40x40"
+APPS="meremail merecal merebook"
+SC_APPS="mdsyncc merefs"
+
+for id in $ICONDIRS ; do
+	scp icons/$id/*.png root@$N810_IP:/usr/share/icons/hicolor/$id/apps/
+done
+
+scp build/lib/.libs/libscambio.so.0 root@$N810_IP:/usr/lib/
+
+for app in $APPS ; do
+	scp build/$app/.libs/$app root@$N810_IP:/usr/bin/
+	scp build/$app/org.happyleptic.$app.service root@$N810_IP:/usr/share/dbus-1/services/
+	scp build/$app/$app.desktop root@$N810_IP:/usr/share/applications/hildon/
+done
+
+for app in $SC_APPS ; do
+	scp build/$app/.libs/sc_$app root@$N810_IP:/usr/bin/
+done
+
