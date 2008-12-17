@@ -46,6 +46,10 @@ struct contact {
 };
 extern struct contacts contacts;
 
+struct contact *contact_new(struct book *, struct header *, mdir_version);
+void contact_del(struct contact *);
+void contact_rename(struct contact *, char const *new_name);
+
 void refresh(struct book *book);
 void refresh_contact_list(void);	// refresh all the books, and renew the list displayed by the book view
 GtkWidget *make_book_window(void);
@@ -58,5 +62,14 @@ struct field_dialog {
 
 struct field_dialog *field_dialog_new(GtkWindow *parent, char const *cat_name, char const *field_name, char const *value);
 void field_dialog_del(struct field_dialog *fd);
+
+struct name_dialog {
+	GtkWidget *dialog;
+	GtkWidget *name_entry;
+};
+
+struct name_dialog *name_dialog_new(GtkWindow *parent, char const *default_name);
+void name_dialog_del(struct name_dialog *);
+
 
 #endif

@@ -16,6 +16,7 @@
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <string.h>
+#include <assert.h>
 #include "scambio.h"
 #include "merebook.h"
 #include "merelib.h"
@@ -74,11 +75,21 @@ static void add_cb(GtkToolButton *button, gpointer user_data)
 		alert(GTK_MESSAGE_ERROR, "Please choose a book first (not \"All\")");
 		return;
 	}
-	struct book *book = book_of_entry(entry);
-	debug("Add a contact in book %s", book->name);
-	// TODO : a new contact dialog, into which we enter juste the name, then we run the contact_view
-	// with a special flag that removes the "quit" button (so that user must save or cancel with confirm
-	// message).
+	struct book *default_book = book_of_entry(entry);
+	debug("Add a contact in book %s", default_book->name);
+	// Create the contact
+	struct header *h = header_new();
+	(void)header_field_new(h, SC_TYPE_FIELD, SC_CONTACT_TYPE);
+	(void)header_field_new(h, SC_NAME_FIELD, "Unnamed");
+	struct contact *ct = contact_new(default_book, h, 0);
+	header_unref(h);
+	assert(ct);
+	// And run a view window for it
+	(void)make_contact_window(ct);
+	on_error {
+		alert(GTK_MESSAGE_ERROR, error_str());
+		error_clear();
+	}
 }
 
 static void quit_cb(GtkToolButton *button, gpointer user_data)

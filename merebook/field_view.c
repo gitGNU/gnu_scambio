@@ -21,13 +21,7 @@
 #include "merebook.h"
 #include "merelib.h"
 
-#if TRUE != GTK_CHECK_VERSION(2, 14, 0)
-static GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog)
-{
-	return dialog->vbox;
-}
-#endif
-
+// Throw no error.
 static void field_dialog_ctor(struct field_dialog *fd, GtkWindow *parent, char const *cat_name, char const *field_name, char const *value)
 {
 	fd->dialog = gtk_dialog_new_with_buttons("Edit entry", parent,
@@ -71,11 +65,7 @@ static void field_dialog_ctor(struct field_dialog *fd, GtkWindow *parent, char c
 struct field_dialog *field_dialog_new(GtkWindow *parent, char const *cat_name, char const *field_name, char const *value)
 {
 	struct field_dialog *fd = Malloc(sizeof(*fd));
-	on_error return NULL;
-	if_fail (field_dialog_ctor(fd, parent, cat_name, field_name, value)) {
-		free(fd);
-		fd = NULL;
-	}
+	field_dialog_ctor(fd, parent, cat_name, field_name, value);
 	return fd;
 }
 

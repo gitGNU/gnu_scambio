@@ -245,14 +245,33 @@ static void save_cb(GtkWidget *widget, gpointer data)
 	(void)widget;
 	struct contact_view *const ctv = (struct contact_view *)data;
 	debug("saving contact '%s'", ctv->ct->name);
-	if_fail (mdir_del_request(ctv->ct->book->mdir, ctv->ct->version)) {
-		alert_error();
-		return;
+	if (ctv->ct->version != 0) {
+		if_fail (mdir_del_request(ctv->ct->book->mdir, ctv->ct->version)) {
+			alert_error();
+			return;
+		}
 	}
 	if_fail (mdir_patch_request(ctv->ct->book->mdir, MDIR_ADD, ctv->ct->header)) alert_error();
+	if (ctv->ct->version == 0) {
+		contact_del(ctv->ct);
+		ctv->ct = NULL;
+	}
 	gtk_widget_destroy(ctv->window);
 	refresh_contact_list();
 }
+
+void cancel_cb(GtkToolButton *button, gpointer data)
+{
+	(void)button;
+	struct contact_view *const ctv = (struct contact_view *)data;
+	debug("cancel");
+	if (confirm("Cancel adding this contact ?")) {
+		contact_del(ctv->ct);
+		ctv->ct = NULL;
+		gtk_widget_destroy(ctv->window);
+	}
+}
+
 
 static void del_cb(GtkWidget *widget, gpointer data)
 {
@@ -265,6 +284,26 @@ static void del_cb(GtkWidget *widget, gpointer data)
 		}
 		gtk_widget_destroy(ctv->window);
 	}
+}
+
+static void rename_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct contact_view *const ctv = (struct contact_view *)data;
+	struct name_dialog *nd = name_dialog_new(GTK_WINDOW(ctv->window), ctv->ct->name);
+	on_error goto err;
+	// Run the dialog untill the user either cancels or saves
+	if (gtk_dialog_run(GTK_DIALOG(nd->dialog)) == GTK_RESPONSE_ACCEPT) {
+		// Edit the header within the contact struct
+		// (do not request a patch untill the user saves this page)
+		contact_rename(ctv->ct, gtk_entry_get_text(GTK_ENTRY(nd->name_entry)));
+		// Rebuild our view in order to show the change
+		contact_view_reload(ctv);
+	}
+	name_dialog_del(nd);
+	return;
+err:
+	alert_error();
 }
 
 // The window was destroyed for some reason : release the ref to it
@@ -300,10 +339,14 @@ static void contact_view_fill(struct contact_view *ctv)
 	gtk_label_set_markup(GTK_LABEL(name_label), mark_name);
 	g_free(mark_name);
 	
+	GtkWidget *edit_button = gtk_button_new_from_stock(GTK_STOCK_EDIT);
+	g_signal_connect(edit_button, "clicked", G_CALLBACK(rename_cb), ctv);
+
 	GtkWidget *page = gtk_vbox_new(FALSE, 0);
 	GtkWidget *head_hbox = gtk_hbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(head_hbox), photo, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(head_hbox), name_label, TRUE, TRUE, 0);
+	gtk_box_pack_end(GTK_BOX(head_hbox), edit_button, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(page), head_hbox, FALSE, FALSE, 0);
 	
 	// Category boxes
@@ -320,13 +363,21 @@ static void contact_view_fill(struct contact_view *ctv)
 		gtk_box_pack_start(GTK_BOX(page), category_widget(cat), FALSE, FALSE, 0);
 	}
 	// Then a toolbar
-	GtkWidget *toolbar = ctv->ct->version > 0 ?
-		make_toolbar(4,
+	GtkWidget *toolbar;
+	if (ctv->ct->version > 0) {	// synched
+		toolbar = make_toolbar(4,
 			GTK_STOCK_ADD,  add_cb, ctv,
 			GTK_STOCK_SAVE, save_cb, ctv,
 			GTK_STOCK_DELETE, del_cb, ctv,
-			GTK_STOCK_QUIT, close_cb, ctv->window) :
-		make_toolbar(1, GTK_STOCK_QUIT, close_cb, ctv->window);
+			GTK_STOCK_QUIT, close_cb, ctv->window);
+	} else if (ctv->ct->version < 0) {	// transient : not editable
+		toolbar = make_toolbar(1, GTK_STOCK_QUIT, close_cb, ctv->window);
+	} else {	// v=0 -> new contact
+		toolbar = make_toolbar(3,
+			GTK_STOCK_ADD,  add_cb, ctv,
+			GTK_STOCK_SAVE, save_cb, ctv,
+			GTK_STOCK_CANCEL, cancel_cb, ctv->window);
+	}
 #	ifdef WITH_MAEMO
 	hildon_window_add_toolbar(HILDON_WINDOW(ctv->window), toolbar);
 #	else
@@ -334,7 +385,7 @@ static void contact_view_fill(struct contact_view *ctv)
 #	endif
 	gtk_container_add(GTK_CONTAINER(ctv->window), page);
 	gtk_widget_show_all(ctv->window);
-}
+	}
 
 static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 {
@@ -347,7 +398,6 @@ static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 static struct contact_view *contact_view_new(struct contact *ct)
 {
 	struct contact_view *ctv = Malloc(sizeof(*ctv));
-	on_error return NULL;
 	if_fail (contact_view_ctor(ctv, ct)) {
 		free(ctv);
 		ctv = NULL;

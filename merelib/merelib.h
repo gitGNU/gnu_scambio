@@ -52,4 +52,8 @@ GtkWidget *make_frame(char const *title, GtkWidget *wdg);
 GtkWidget *make_expander(char const *title, GtkWidget *wdg);
 void empty_container(GtkWidget *container);
 
+#if TRUE != GTK_CHECK_VERSION(2, 14, 0)
+GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog);
+#endif
+
 #endif

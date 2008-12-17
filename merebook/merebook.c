@@ -49,7 +49,6 @@ static void contact_ctor(struct contact *ct, struct book *book, struct header *h
 struct contact *contact_new(struct book *book, struct header *header, mdir_version version)
 {
 	struct contact *ct = Malloc(sizeof(*ct));
-	on_error return NULL;
 	if_fail (contact_ctor(ct, book, header, version)) {
 		free(ct);
 		ct = NULL;
@@ -62,6 +61,7 @@ static void contact_dtor(struct contact *ct)
 	debug("contact@%p", ct);
 	header_unref(ct->header);
 	ct->header = NULL;
+	ct->name = NULL;
 	LIST_REMOVE(ct, book_entry);
 	LIST_REMOVE(ct, entry);
 }
@@ -82,6 +82,14 @@ static void contact_del_by_version(mdir_version version, struct book *book)
 			return;
 		}
 	}
+}
+
+void contact_rename(struct contact *ct, char const *new_name)
+{
+	struct header_field *hf = header_find(ct->header, SC_NAME_FIELD, NULL);
+	assert(hf);
+	header_field_set(hf, NULL, new_name);
+	ct->name = hf->value;
 }
 
 /*

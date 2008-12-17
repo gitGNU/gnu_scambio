@@ -266,3 +266,11 @@ void empty_container(GtkWidget *container)
 	gtk_container_foreach(GTK_CONTAINER(container), remove_child, GTK_CONTAINER(container));
 }
 
+#if TRUE != GTK_CHECK_VERSION(2, 14, 0)
+GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog)
+{
+	return dialog->vbox;
+}
+#endif
+
+
