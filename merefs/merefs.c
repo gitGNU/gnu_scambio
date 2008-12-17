@@ -37,6 +37,7 @@ char const *mdir_name;
 char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
+struct mdir_cursor mdir_cursor = MDIR_CURSOR_INITIALIZER;
 static struct persist last_time_stamp;
 bool quit = false;
 struct chn_cnx ccnx;

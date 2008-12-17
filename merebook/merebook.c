@@ -106,6 +106,7 @@ static void book_ctor(struct book *book, char const *path)
 	book->name = book->path + len;
 	while (book->name > book->path && *(book->name-1) != '/') book->name--;
 	if_fail (book->mdir = mdir_lookup(book->path)) return;
+	mdir_cursor_ctor(&book->cursor);
 	LIST_INSERT_HEAD(&books, book, entry);
 	LIST_INIT(&book->contacts);
 }
@@ -134,6 +135,7 @@ static void book_dtor(struct book *book)
 	debug("book@%p, named %s", book, book->name);
 	LIST_REMOVE(book, entry);
 	book_empty(book);
+	mdir_cursor_dtor(&book->cursor);
 }
 
 static void book_del(struct book *book)
@@ -164,7 +166,7 @@ static void add_contact_cb(struct mdir *mdir, struct header *header, mdir_versio
 void refresh(struct book *book)
 {
 	debug("refreshing book %s", book->name);
-	mdir_patch_list(book->mdir, false, add_contact_cb, rem_contact_cb, book);
+	mdir_patch_list(book->mdir, &book->cursor, false, add_contact_cb, rem_contact_cb, book);
 }
 
 /*

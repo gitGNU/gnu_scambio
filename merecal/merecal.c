@@ -326,6 +326,7 @@ static void cal_folder_ctor(struct cal_folder *cf, char const *path)
 	cf->name = cf->path + len;
 	while (cf->name > cf->path && *(cf->name-1) != '/') cf->name--;
 	if_fail (cf->mdir = mdir_lookup(path)) return;
+	mdir_cursor_ctor(&cf->cursor);
 	cf->displayed = true;	// TODO: save user prefs somewhere
 	LIST_INSERT_HEAD(&cal_folders, cf, entry);
 }
@@ -355,6 +356,7 @@ static void cal_folder_dtor(struct cal_folder *cf)
 {
 	cal_folder_del_events(cf);
 	LIST_REMOVE(cf, entry);
+	mdir_cursor_dtor(&cf->cursor);
 }
 
 static void cal_folder_del(struct cal_folder *cf)
@@ -418,7 +420,7 @@ static void add_event_cb(struct mdir *mdir, struct header *header, mdir_version 
 static void refresh_folder(struct cal_folder *cf)
 {
 	debug("refreshing folder %s", cf->name);
-	mdir_patch_list(cf->mdir, false, add_event_cb, rem_event_cb, cf);
+	mdir_patch_list(cf->mdir, &cf->cursor, false, add_event_cb, rem_event_cb, cf);
 }
 
 void refresh(void)

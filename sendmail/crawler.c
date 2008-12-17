@@ -28,6 +28,7 @@
  */
 
 static struct mdir *to_send, *sent;
+static struct mdir_cursor to_send_cursor = MDIR_CURSOR_INITIALIZER;
 static pth_t crawler_id, acker_id; 
 
 /*
@@ -61,7 +62,7 @@ static void *crawler_thread(void *data)
 {
 	(void)data;
 	while (! is_error() && ! terminate) {
-		mdir_patch_list(to_send, false, send_patch, NULL, NULL);
+		mdir_patch_list(to_send, &to_send_cursor, false, send_patch, NULL, NULL);
 		(void)pth_sleep(1);	// FIXME: a signal when something new is received ?
 	}
 	debug("Exiting crawler thread");

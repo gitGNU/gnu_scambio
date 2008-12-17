@@ -90,6 +90,7 @@ static struct mdir *maildir_alloc(void)
 	if (! maildir) with_error(ENOMEM, "malloc maildir") return NULL;
 	LIST_INIT(&maildir->msgs);
 	maildir->nb_msgs = 0;
+	mdir_cursor_ctor(&maildir->cursor);
 	return &maildir->mdir;
 }
 
@@ -100,6 +101,7 @@ static void maildir_free(struct mdir *mdir)
 	while (NULL != (msg = LIST_FIRST(&maildir->msgs))) {
 		msg_del(msg);
 	}
+	mdir_cursor_dtor(&maildir->cursor);
 	free(maildir);
 }
 
@@ -143,7 +145,7 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 void maildir_refresh(struct maildir *maildir)
 {
 	debug("Refreshing maildir %s", maildir->mdir.path);
-	mdir_patch_list(&maildir->mdir, false, add_msg, rem_msg, NULL);
+	mdir_patch_list(&maildir->mdir, &maildir->cursor, false, add_msg, rem_msg, NULL);
 }
 
 /*

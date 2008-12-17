@@ -54,6 +54,7 @@ struct cal_folder {
 	char path[PATH_MAX];
 	char *name;	// points onto path
 	struct mdir *mdir;
+	struct mdir_cursor cursor;
 	bool displayed;
 };
 

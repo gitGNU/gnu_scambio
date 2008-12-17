@@ -35,6 +35,7 @@ struct msg {
 struct maildir {
 //	LIST_ENTRY(maildir) entry;	// in maildirs
 	struct mdir mdir;
+	struct mdir_cursor cursor;
 	LIST_HEAD(msgs, msg) msgs;
 	unsigned nb_msgs;
 };
