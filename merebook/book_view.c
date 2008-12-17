@@ -58,10 +58,27 @@ static void view_cb(GtkToolButton *button, gpointer user_data)
 	}
 }
 
+static struct book *book_of_entry(unsigned entry)
+{
+	struct book *book = LIST_FIRST(&books);
+	while (--entry) book = LIST_NEXT(book, entry);
+	return book;
+}
+
 static void add_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	(void)user_data;
+	unsigned entry = gtk_combo_box_get_active(GTK_COMBO_BOX(book_combo));
+	if (0 == entry) {
+		alert(GTK_MESSAGE_ERROR, "Please choose a book first (not \"All\")");
+		return;
+	}
+	struct book *book = book_of_entry(entry);
+	debug("Add a contact in book %s", book->name);
+	// TODO : a new contact dialog, into which we enter juste the name, then we run the contact_view
+	// with a special flag that removes the "quit" button (so that user must save or cancel with confirm
+	// message).
 }
 
 static void quit_cb(GtkToolButton *button, gpointer user_data)
@@ -90,8 +107,7 @@ static void select_list(GtkComboBox *combo, gpointer user_data)
 	if (0 == entry) {	// all
 		LIST_FOREACH(ct, &contacts, entry) add_contact(store, ct);
 	} else {	// a book
-		struct book *book = LIST_FIRST(&books);
-		while (--entry) book = LIST_NEXT(book, entry);
+		struct book *book = book_of_entry(entry);
 		LIST_FOREACH(ct, &book->contacts, book_entry) add_contact(store, ct);
 	}
 }

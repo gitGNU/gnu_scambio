@@ -482,7 +482,7 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
  * List
  */
 
-void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir *, struct header *, enum mdir_action action, mdir_version, mdir_version, void *), void *data)
+void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct mdir *, struct header *, mdir_version, void *), void (*rem_cb)(struct mdir *, mdir_version, void *), void *data)
 {
 	mdir_reload(mdir);	// journals may have changed, other appended
 	struct jnl *jnl;
@@ -491,7 +491,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 		debug("listing synched from version %"PRIversion, from);
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
 			if (jnl->version + jnl->nb_patches <= from) {
-				debug("  jnl starting at %"PRIversion" too short (%u)", jnl->version, jnl->nb_patches);
+				debug("  jnl from %"PRIversion" to %"PRIversion" is too short (%u)", jnl->version, jnl->version + jnl->nb_patches);
 				continue;
 			}
 			if (from < jnl->version) from = jnl->version;	// a gap
@@ -500,36 +500,32 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 				struct header *h = jnl_read(jnl, index, &action);
 				on_error return;
 				if (! h) continue;
-				bool skip = false;
-				mdir_version replaced_version = 0;
-				struct header_field *localid_field = header_find(h, SC_LOCALID_FIELD, NULL);
-				if (localid_field) {	// then the local file does not exist anymore, but we may already have reported it when it was present
-					mdir_version local = mdir_str2version(localid_field->value);
-					on_error {
-						error_clear();
-					} else {
-						if (local <= mdir->last_listed_unsync) replaced_version = local;	// we already reported it
-					}
-				}
-				if (action == MDIR_REM) {	// don't report removals of patches we did not report
+				if (action == MDIR_REM && rem_cb) {
 					mdir_version target = header_target(h);
-					on_error {
-						error_clear();
-						skip = true;
-					} else if (target >= from) {
-						skip = true;
+					unless_error rem_cb(mdir, target, data);
+					else error_clear();
+				} else {	// MDIR_ADD
+					assert(action == MDIR_ADD);
+					if (rem_cb) {
+						struct header_field *localid_field = header_find(h, SC_LOCALID_FIELD, NULL);
+						if (localid_field) {	// we may already have reported it when it was present
+							mdir_version local = mdir_str2version(localid_field->value);
+							on_error error_clear();
+							else if (local <= mdir->last_listed_unsync) {	// we already reported it
+								rem_cb(mdir, -local, data);
+							}
+						}
 					}
-				}
-				if (! skip) {
-					cb(mdir, h, action, jnl->version + index, -replaced_version, data);
+					if (put_cb) put_cb(mdir, h, jnl->version + index, data);
 				}
 				header_unref(h);
-				on_error return;
 				mdir->last_listed_sync = jnl->version + index;
+				on_error return;
 			}
 		}
 	}
-	// List content of ".tmp" subdirectory which holds both synched and not yet synched patches.
+	// List content of ".tmp" subdirectory which holds not yet acked patches.
+	// These are removed by mdsyncc when the patch is acked.
 	char temp[PATH_MAX];
 	int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
 	debug("listing %s from transient version %"PRIversion, temp, mdir->last_listed_unsync);
@@ -538,7 +534,6 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 		if (errno == ENOENT) return;
 		with_error(errno, "opendir(%s)", temp) return;
 	}
-	mdir_version last_version = mdir_last_version(mdir);	// used to remove transient acked patches already on the journals (ie synched down)
 	struct dirent *dirent;
 	mdir_version const last_listed_unsync_start = mdir->last_listed_unsync;	// we will only report patches that are new relative to this version (mdir->last_listed_unsync will be updated within the loop)
 	while (NULL != (dirent = readdir(dir))) {	// will return the patches in random order
@@ -550,36 +545,23 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*cb)(struct mdir
 		else if (filename[0] == '-') action = MDIR_REM;
 		else continue;
 		snprintf(temp+dirlen, sizeof(temp)-dirlen, "/%s", filename);
-		// then filename may be either a transient version number (patch was not sent or not acked yet)
-		// or "=version" (patch was sent and acked with this version number)
-		bool acked = filename[1] == '=';
 		mdir_version version = 0;
-		if (acked) {	// maybe we already synchronized it down into the journal ?
-			if_fail (version = mdir_str2version(filename+2)) {
-				error("please fix %s", temp);
-				error_clear();
-				continue;
-			}
-			if (version <= last_version) {	// already on our journal so remove it
-				debug("unlinking %s", temp);
-				if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) break;
-				continue;
-			}
-			if (unsync_only) continue;
-			if (version <= mdir->last_listed_sync) continue;
-			mdir->last_listed_sync = version;
-		} else {	// not acked
-			if_fail (version = mdir_str2version(filename+1)) {
-				error("please fix %s", temp);
-				error_clear();
-				continue;
-			}
-			if (version <= last_listed_unsync_start) continue;
-			if (version > mdir->last_listed_unsync) mdir->last_listed_unsync = version;
+		if_fail (version = mdir_str2version(filename+1)) {
+			error("please fix %s", temp);
+			error_clear();
+			continue;
 		}
+		if (version <= last_listed_unsync_start) continue;	// already reported
+		if (version > mdir->last_listed_unsync) mdir->last_listed_unsync = version;
 		struct header *h = header_from_file(temp);
 		on_error break;
-		cb(mdir, h, action, acked ? version:-version, 0, data);
+		if (action == MDIR_REM && rem_cb) {
+			mdir_version target = header_target(h);
+			unless_error rem_cb(mdir, target, data);
+			else error_clear();
+		} else if (put_cb) {	// MDIR_ADD
+			put_cb(mdir, h, -version, data);
+		}
 		header_unref(h);
 		on_error break;
 	}

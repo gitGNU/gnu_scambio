@@ -45,23 +45,22 @@ static void remove_remote_file(mdir_version to_del)
 	};
 }
 
-static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
+static void rem_remote_file(struct mdir *mdir, mdir_version version, void *data)
 {
 	(void)mdir;
 	(void)data;
-	if (action == MDIR_REM) {
-		// Event if this is a full reread, we may have pending transiant removals.
-		remove_remote_file(header_target(header));
-		return;
-	}
+	// Event if this is a full reread, we may have pending transiant removals.
+	remove_remote_file(version);
+}
+
+static void add_remote_file(struct mdir *mdir, struct header *header, mdir_version version, void *data)
+{
+	(void)mdir;
+	(void)data;
 	if (! header_has_type(header, SC_FILE_TYPE)) return;
 	char const *name, *digest, *resource;
 	if_fail (extract_file_info(header, &name, &digest, &resource)) return;
 	debug("Adding file '%s' to unmatched list", name);
-	if (replaced) {
-		debug("  in replacement for version %"PRIversion, replaced);
-		// We do not care since we check unicity of names
-	}
 	/* We allow only one file per name.
 	 * We may have severall patch for the same name if :
 	 * - the patch is not synched yet (thus has no version)
@@ -80,20 +79,13 @@ static void add_remote_file(struct mdir *mdir, struct header *header, enum mdir_
 	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0, version)) return;
 }
 
-// Will read the whole mdir and create an entry (on unmatched list) for each file
-void start_read_mdir(void)
-{
-	if_fail (mdir_patch_list(mdir, false, add_remote_file, NULL)) return;
-}
-
 /*
  * Read new entries
  */
 
-// Will append to unmatched list the new entry
-void reread_mdir(void)
+void read_mdir(void)
 {
-	if_fail (mdir_patch_list(mdir, false, add_remote_file, NULL)) return;
+	if_fail (mdir_patch_list(mdir, false, add_remote_file, rem_remote_file, NULL)) return;
 }
 
 // If some remote files are still unmatched, create them

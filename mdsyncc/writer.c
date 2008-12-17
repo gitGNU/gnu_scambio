@@ -49,29 +49,53 @@ static void wait_signal(void)
 	debug("got signal");
 }
 
-static void ls_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *folder)
+static void ls_transients(struct mdirc *mdirc, char *folder)
 {
-	(void)replaced;
-	assert(version < 0);	// as the patch is transient
-	struct mdirc *mdirc = mdir2mdirc(mdir);
-	// not in journal and not already acked
-	// and as patch_list returns patches only once we a certain we did not sent it already
-	char const *kw = action == MDIR_ADD ? kw_put:kw_rem;
 	char filename[PATH_MAX];
-	snprintf(filename, sizeof(filename), "%s/.tmp/%c%"PRIversion, mdir->path, action == MDIR_ADD ? '+':'-', -version);
-	// FIXME : grasp cnx write lock
-	(void)command_new(kw, mdirc, folder, filename);
-	unless_error {
-		mdirc->nb_pending_acks ++;	// Notice : header_write may schedule the reader thread which may receive the answer before we run again. So must have to inc nb_pending_acks _before_ calling header_write
+	int dirlen = snprintf(filename, sizeof(filename), "%s/.tmp", mdirc->mdir.path);
+	debug("Listing all transient pathes in '%s'", filename);
+	DIR *dir = opendir(filename);
+	if (! dir) {
+		if (errno == ENOENT) return;
+		with_error(errno, "opendir(%s)", filename) return;
+	}
+	struct dirent *dirent;
+	while (NULL != (dirent = readdir(dir))) {
+		char const *kw;
+		if (dirent->d_name[0] == '+') kw = kw_put;
+		else if (dirent->d_name[0] == '-') kw = kw_rem;
+		else continue;
+		snprintf(filename+dirlen, sizeof(filename)-dirlen, "/%s", dirent->d_name);
+		debug("Considering '%s'", filename);
+		// Already a command for this ?
+		struct command *command = command_get_by_path(mdirc, kw, filename);
+		if (command) {	// TODO: timeout
+			debug("Already a command for this file, skipping");
+			continue;
+		}
+		// Read the file
+		struct header *h = header_from_file(filename);
+		on_error {
+			error_clear();
+			continue;
+		}
 		// Disallow to send a localid
 		struct header_field *hf;
-		while (NULL != (hf = header_find(header, SC_LOCALID_FIELD, NULL))) {
+		while (NULL != (hf = header_find(h, SC_LOCALID_FIELD, NULL))) {
 			warning("Removing localid field");
 			header_field_del(hf);
 		}
-		header_write(header, cnx.fd);
+		// FIXME : grasp cnx write lock
+		if_fail ((void)command_new(kw, mdirc, folder, filename)) {
+			debug("Skipping this file");
+			error_clear();
+			continue;
+		}
+		mdirc->nb_pending_acks ++;	// Notice : header_write may schedule the reader thread which may receive the answer before we run again. So must have to inc nb_pending_acks _before_ calling header_write
+		header_write(h, cnx.fd);
+		// FIXME : release cnx write lock
+		on_error break;
 	}
-	// FIXME : release cnx write lock
 }
 
 // Subscribe to the directory, then scan it
@@ -97,7 +121,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	}
 	// Synchronize up its content
 	debug("list patches");
-	mdir_patch_list(&mdirc->mdir, true, ls_patch, path);
+	ls_transients(mdirc, path);
 	on_error return;
 	// Recurse
 	debug("list folders");

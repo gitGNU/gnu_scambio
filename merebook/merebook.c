@@ -74,8 +74,9 @@ void contact_del(struct contact *ct)
 
 static void contact_del_by_version(mdir_version version, struct book *book)
 {
-	struct contact *ct, *tmp;
-	LIST_FOREACH_SAFE(ct, &book->contacts, book_entry, tmp) {
+	debug("Looking for version %"PRIversion, version);
+	struct contact *ct;
+	LIST_FOREACH(ct, &book->contacts, book_entry) {
 		if (ct->version == version) {
 			contact_del(ct);
 			return;
@@ -137,27 +138,25 @@ static void book_del(struct book *book)
  * Utilities
  */
 
-static void list_contact_cb(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
+static void rem_contact_cb(struct mdir *mdir, mdir_version version, void *data)
 {
 	(void)mdir;
 	struct book *book = (struct book *)data;
-	mdir_version target = replaced;
-	if (action == MDIR_REM) {
-		if_fail (target = header_target(header)) return;
-	}
-	if (target) {
-		contact_del_by_version(target, book);
-	}
-	if (action == MDIR_ADD) {
-		if (! header_has_type(header, SC_CONTACT_TYPE)) return;
-		contact_new(book, header, version);
-	}
+	contact_del_by_version(version, book);
+}
+
+static void add_contact_cb(struct mdir *mdir, struct header *header, mdir_version version, void *data)
+{
+	(void)mdir;
+	struct book *book = (struct book *)data;
+	if (! header_has_type(header, SC_CONTACT_TYPE)) return;
+	contact_new(book, header, version);
 }
 
 void refresh(struct book *book)
 {
 	debug("refreshing book %s", book->name);
-	mdir_patch_list(book->mdir, false, list_contact_cb, book);
+	mdir_patch_list(book->mdir, false, add_contact_cb, rem_contact_cb, book);
 }
 
 /*

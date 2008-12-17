@@ -33,8 +33,7 @@ extern bool quit;
 extern struct chn_cnx ccnx;
 
 time_t last_run_start(void);
-void start_read_mdir(void);
-void reread_mdir(void);
+void read_mdir(void);
 void unmatch_all(void);
 void traverse_local_path(void);
 void create_unmatched_files(void);

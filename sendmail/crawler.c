@@ -35,13 +35,11 @@ static pth_t crawler_id, acker_id;
  * Reads all patches in to_send and build forward from them.
  */
 
-static void send_patch(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
+static void send_patch(struct mdir *mdir, struct header *header, mdir_version version, void *data)
 {
 	(void)data;
-	(void)replaced;
 	assert(mdir == to_send);
 	if (version < 0) return;	// we do not want to try to send anything if it's not synched
-	if (action != MDIR_ADD) return;	// there is little we can do about it
 	if (! header_has_type(header, SC_MAIL_TYPE)) return;
 	if (! header_find(header, SC_FROM_FIELD, NULL)) {
 		debug("No From, skip");
@@ -63,7 +61,7 @@ static void *crawler_thread(void *data)
 {
 	(void)data;
 	while (! is_error() && ! terminate) {
-		mdir_patch_list(to_send, false, send_patch, NULL);
+		mdir_patch_list(to_send, false, send_patch, NULL, NULL);
 		(void)pth_sleep(1);	// FIXME: a signal when something new is received ?
 	}
 	debug("Exiting crawler thread");

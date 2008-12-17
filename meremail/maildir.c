@@ -110,42 +110,40 @@ extern inline struct maildir *mdir2maildir(struct mdir *mdir);
  * Note: Cannot do that while in mdir_alloc because the mdir is not usable yet.
  */
 
-static void add_msg(struct mdir *mdir, struct header *h, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
+static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
+{
+	(void)data;
+	struct msg *msg;
+	struct maildir *maildir = mdir2maildir(mdir);
+	debug("searching version %"PRIversion, version);
+	LIST_FOREACH(msg, &maildir->msgs, entry) {	// TODO: hash me using version please
+		if (msg->version == version) {
+			msg_del(msg);
+			break;
+		}
+	}
+}
+
+static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
 	(void)data;
 	debug("try to add msg version %"PRIversion, version);
 	struct msg *msg;
 	struct maildir *maildir = mdir2maildir(mdir);
-	mdir_version target = replaced;
-	if (action == MDIR_REM) {	// remove one of our previous message ?
-		target = header_target(h);
-		on_error return;
-	}
-	if (target) {
-		debug("searching version %"PRIversion, target);
-		LIST_FOREACH(msg, &maildir->msgs, entry) {	// TODO: hash me using version please
-			if (msg->version == target) {
-				msg_del(msg);
-				break;
-			}
-		}
-	}
-	if (action == MDIR_ADD) {
-		// To be a message, a new patch must have a from, descr and start field (duck typing)
-		struct header_field *from = header_find(h, SC_FROM_FIELD, NULL);
-		if (! from) return;
-		struct header_field *descr = header_find(h, SC_DESCR_FIELD, NULL);
-		if (! descr) return;
-		struct header_field *date = header_find(h, SC_START_FIELD, NULL);
-		if (! date) return;
-		if_fail (msg = msg_new(maildir, from->value, descr->value, date->value, version)) return;
-	}
+	// To be a message, a new patch must have a from, descr and start field (duck typing)
+	struct header_field *from = header_find(h, SC_FROM_FIELD, NULL);
+	if (! from) return;
+	struct header_field *descr = header_find(h, SC_DESCR_FIELD, NULL);
+	if (! descr) return;
+	struct header_field *date = header_find(h, SC_START_FIELD, NULL);
+	if (! date) return;
+	if_fail (msg = msg_new(maildir, from->value, descr->value, date->value, version)) return;
 }
 
 void maildir_refresh(struct maildir *maildir)
 {
 	debug("Refreshing maildir %s", maildir->mdir.path);
-	mdir_patch_list(&maildir->mdir, false, add_msg, NULL);
+	mdir_patch_list(&maildir->mdir, false, add_msg, rem_msg, NULL);
 }
 
 /*

@@ -369,58 +369,56 @@ static void cal_folder_del(struct cal_folder *cf)
  * (reload calendar data)
  */
 
-static void add_event_cb(struct mdir *mdir, struct header *header, enum mdir_action action, mdir_version version, mdir_version replaced, void *data)
+static void rem_event_cb(struct mdir *mdir, mdir_version version, void *data)
 {
-	debug("action=%s, version=%"PRIversion", replaced=%"PRIversion, action==MDIR_ADD ? "add":"rem", version, replaced);
 	(void)mdir;
-	mdir_version target = target;
-	if (action == MDIR_REM) {
-		target = header_target(header);
-		on_error return;
-	}
-	if (target) {
-		struct cal_event *ce, *tmp;
-		LIST_FOREACH_SAFE(ce, &cal_events, entry, tmp) {
-			if (ce->folder->mdir == mdir && ce->version && ce->version == target) {
-				cal_event_del(ce);
-				break;
-			}
+	debug("version=%"PRIversion, version);
+	struct cal_folder *cf = (struct cal_folder *)data;
+	struct cal_event *ce;
+	LIST_FOREACH(ce, &cal_events, entry) {
+		if (ce->folder == cf && ce->version == version) {
+			cal_event_del(ce);
+			break;
 		}
 	}
-	if (action == MDIR_ADD) {
-		struct cal_folder *cf = (struct cal_folder *)data;
-		struct cal_date start, stop;
-		struct header_field *start_field = header_find(header, SC_START_FIELD, NULL);
-		if (start_field) {
-			if_fail (cal_date_ctor_from_str(&start, start_field->value)) return;
-		} else {
-			error("Invalid calendar message with no "SC_START_FIELD" field");
+}
+
+static void add_event_cb(struct mdir *mdir, struct header *header, mdir_version version, void *data)
+{
+	(void)mdir;
+	debug("version=%"PRIversion, version);
+	struct cal_folder *cf = (struct cal_folder *)data;
+	struct cal_date start, stop;
+	struct header_field *start_field = header_find(header, SC_START_FIELD, NULL);
+	if (start_field) {
+		if_fail (cal_date_ctor_from_str(&start, start_field->value)) return;
+	} else {
+		error("Invalid calendar message with no "SC_START_FIELD" field");
+		return;
+	}
+	debug("new event is version %lld, start str = '%s'", version, start_field->value);
+	struct header_field *stop_field = header_find(header, SC_STOP_FIELD, NULL);
+	if (stop_field) {
+		if_fail (cal_date_ctor_from_str(&stop, stop_field->value)) {
+			error_save();
+			cal_date_dtor(&start);
+			error_restore();
 			return;
 		}
-		debug("new event is version %lld, start str = '%s'", version, start_field->value);
-		struct header_field *stop_field = header_find(header, SC_STOP_FIELD, NULL);
-		if (stop_field) {
-			if_fail (cal_date_ctor_from_str(&stop, stop_field->value)) {
-				error_save();
-				cal_date_dtor(&start);
-				error_restore();
-				return;
-			}
-		} else {
-			cal_date_ctor(&stop, 0, 0, 0, 0, 0);
-		}
-		struct header_field *desc_field = header_find(header, SC_DESCR_FIELD, NULL);
-		(void)cal_event_new(cf, &start, &stop, desc_field ? desc_field->value : "", version);
-		on_error error_clear();	// forget this event, go ahead with others
-		cal_date_dtor(&stop);
-		cal_date_dtor(&start);
+	} else {
+		cal_date_ctor(&stop, 0, 0, 0, 0, 0);
 	}
+	struct header_field *desc_field = header_find(header, SC_DESCR_FIELD, NULL);
+	(void)cal_event_new(cf, &start, &stop, desc_field ? desc_field->value : "", version);
+	on_error error_clear();	// forget this event, go ahead with others
+	cal_date_dtor(&stop);
+	cal_date_dtor(&start);
 }
 
 static void refresh_folder(struct cal_folder *cf)
 {
 	debug("refreshing folder %s", cf->name);
-	mdir_patch_list(cf->mdir, false, add_event_cb, cf);
+	mdir_patch_list(cf->mdir, false, add_event_cb, rem_event_cb, cf);
 }
 
 void refresh(void)

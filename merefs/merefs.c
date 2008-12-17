@@ -99,11 +99,11 @@ time_t last_run_start(void)
 
 static void loop(void)
 {
-	start_read_mdir();	// Will read the whole mdir and create an entry (on unmatched list) for each file
+	read_mdir();	// Will read the whole mdir and create an entry (on unmatched list) for each file
 	while (! quit) {
 		time_t current_run_start = time(NULL);
 		unmatch_all();
-		if_fail (reread_mdir()) break;	// Will append to unmatched list the new entry
+		if_fail (read_mdir()) break;	// Will append to unmatched list the new entry
 		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
 		if_fail (create_unmatched_files()) break;	// Will add to local tree the new entries
 		persist_write(&last_time_stamp, &current_run_start);
