@@ -35,19 +35,11 @@
  * Public Functions
  */
 
-#include <time.h>
-bool command_timeouted(struct command *cmd)
-{
-#	define CMD_TIMEOUT 15
-	return time(NULL) - cmd->creation > CMD_TIMEOUT;
-}
-
 static void command_ctor(struct command *cmd, char const *kw, struct mdirc *mdirc, char const *folder, char const *filename)
 {
 	if (folder[0] == '\0') folder = "/";	// should not happen
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	cmd->mdirc = mdirc;
-	cmd->creation = time(NULL);	// FIXME: timeout of queries should go into mdir_cnx_read()
 	cmd->kw = kw;
 	debug("cmd @%p, folder = '%s', mdir id = '%s'", cmd, folder, mdir_id(&mdirc->mdir));
 	if_fail (mdir_cnx_query(&cnx, kw, &cmd->sq, folder, kw == kw_sub ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
@@ -56,10 +48,8 @@ static void command_ctor(struct command *cmd, char const *kw, struct mdirc *mdir
 
 struct command *command_new(char const *kw, struct mdirc *mdirc, char const *folder, char const *filename)
 {
-	struct command *cmd = malloc(sizeof(*cmd));
-	if (! cmd) with_error(ENOMEM, "malloc cmd") return NULL;
-	command_ctor(cmd, kw, mdirc, folder, filename);
-	on_error {
+	struct command *cmd = Malloc(sizeof(*cmd));
+	if_fail (command_ctor(cmd, kw, mdirc, folder, filename)) {
 		free(cmd);
 		cmd = NULL;
 	}

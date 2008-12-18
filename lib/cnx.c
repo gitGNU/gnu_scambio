@@ -58,13 +58,19 @@ extern inline void mdir_sent_query_dtor(struct mdir_sent_query *sq);
 
 struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd)
 {
+	time_t now = time(NULL);
 	// look for the mdir_sent_query
-	struct mdir_sent_query *sq;
-	LIST_FOREACH(sq, &cnx->sent_queries, cnx_entry) {
+	struct mdir_sent_query *sq, *tmp;
+	LIST_FOREACH_SAFE(sq, &cnx->sent_queries, cnx_entry, tmp) {
 		if (sq->seq == cmd->seq) {
 			// FIXME : call the user provided del function (for instance, chn commands include a send_query and should be freed now)
 			mdir_sent_query_dtor(sq);
 			return sq;
+		}
+#		define SQ_TIMEOUT 20
+		if (sq->creation + SQ_TIMEOUT < now) {
+			warning("Timeouting query which seqnum=%lld", sq->seq);
+			mdir_sent_query_dtor(sq);	// FIXME : same as above
 		}
 	}
 	with_error(0, "Unexpected answer for seq# %lld", cmd->seq) return NULL;

@@ -26,7 +26,6 @@ struct command {
 	struct mdirc *mdirc;	// backlink
 	char const *kw;
 	char filename[PATH_MAX];	// associated file (for put/rem)
-	time_t creation;	// FIXME: should be handled by mdir_cnx
 	struct mdir_sent_query sq;
 };
 
