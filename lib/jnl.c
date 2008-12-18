@@ -69,9 +69,9 @@ void jnl_begin(void)
 {
 	jnl_alloc = jnl_alloc_default;
 	jnl_free = jnl_free_default;
-	conf_set_default_int("MDIR_MAX_JNL_SIZE", 2000);
+	conf_set_default_int("SC_MDIR_MAX_JNL_SIZE", 2000);
 	on_error return;
-	max_jnl_size = conf_get_int("MDIR_MAX_JNL_SIZE");
+	max_jnl_size = conf_get_int("SC_MDIR_MAX_JNL_SIZE");
 }
 
 void jnl_end(void)

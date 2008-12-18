@@ -1,8 +1,8 @@
 export MALLOC_CHECK_=2
 export SC_LOG_DIR=/tmp
 export SC_LOG_LEVEL=5
-export MDIRD_HOST=scambio.happyleptic.org
-export MDIRD_PORT=21654
+export SC_MDIRD_HOST=scambio.happyleptic.org
+export SC_MDIRD_PORT=21654
 export SC_FILED_HOST=scambio.happyleptic.org
 export SC_FILED_PORT=21436
 export SC_SMTPD_PORT=1025
@@ -28,13 +28,13 @@ EOF
 }
 
 function auth_users {
-	mkdir -p $MDIR_USERS_DIR
-	auth_user $MDIR_USERS_DIR Alice
-	auth_user $MDIR_USERS_DIR Bob
+	mkdir -p $SC_MDIR_USERS_DIR
+	auth_user $SC_MDIR_USERS_DIR Alice
+	auth_user $SC_MDIR_USERS_DIR Bob
 }
 
 function send_content {
-	nc $MDIRD_HOST $MDIRD_PORT <<EOF
+	nc $SC_MDIRD_HOST $SC_MDIRD_PORT <<EOF
 1 auth Alice
 2 put /
 sc-type: dir

@@ -194,20 +194,20 @@ void mdir_begin(void)
 	mdir_alloc = mdir_alloc_default;
 	mdir_free = mdir_free_default;
 	// Default configuration values
-	conf_set_default_str("MDIR_ROOT_DIR", "/var/lib/scambio/mdir");
-	conf_set_default_str("MDIR_DIRSEQ", "/var/lib/scambio/mdir/.dirid.seq");
-	conf_set_default_str("MDIR_TRANSIENTSEQ", "/var/lib/scambio/mdir/.transient.seq");
+	conf_set_default_str("SC_MDIR_ROOT_DIR", "/var/lib/scambio/mdir");
+	conf_set_default_str("SC_MDIR_DIRSEQ", "/var/lib/scambio/mdir/.dirid.seq");
+	conf_set_default_str("SC_MDIR_TRANSIENTSEQ", "/var/lib/scambio/mdir/.transient.seq");
 	on_error return;
 	if_fail (jnl_begin()) return;
 	// Inits
 	LIST_INIT(&mdirs);
-	mdir_root = conf_get_str("MDIR_ROOT_DIR");
+	mdir_root = conf_get_str("SC_MDIR_ROOT_DIR");
 	mdir_root_len = strlen(mdir_root);
 	char root_path[PATH_MAX];
 	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
 	if_fail (Mkdir(root_path)) return;
-	persist_ctor_sequence(&dirid_seq, conf_get_str("MDIR_DIRSEQ"), 0);
-	persist_ctor_sequence(&transient_version, conf_get_str("MDIR_TRANSIENTSEQ"), 1);
+	persist_ctor_sequence(&dirid_seq, conf_get_str("SC_MDIR_DIRSEQ"), 0);
+	persist_ctor_sequence(&transient_version, conf_get_str("SC_MDIR_TRANSIENTSEQ"), 1);
 }
 
 void mdir_end(void)
