@@ -69,7 +69,7 @@ struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdi
 		}
 #		define SQ_TIMEOUT 20
 		if (sq->creation + SQ_TIMEOUT < now) {
-			warning("Timeouting query which seqnum=%lld", sq->seq);
+			warning("Timeouting query which seqnum=%lld (created at TS=%lu)", sq->seq, sq->creation);
 			mdir_sent_query_dtor(sq);	// FIXME : same as above
 		}
 	}
@@ -100,6 +100,7 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
 		if_fail (Write(cnx->fd, vb.buf, vb.used-1)) break;	// do not output the final '\0'
 		if (sq) {
 			sq->seq = seq;
+			sq->creation = time(NULL);
 			LIST_INSERT_HEAD(&cnx->sent_queries, sq, cnx_entry);
 		}
 	} while (0);

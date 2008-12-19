@@ -19,7 +19,6 @@
 #define CNX_H_081016
 #include <scambio/cmd.h>
 #include <limits.h>
-#include <time.h>
 
 /* These store the keywords usefull for the mdir protocol.
  * Keyword are compared by address so it's usefull to have all these here.
@@ -56,7 +55,6 @@ struct mdir_sent_query {
 static inline void mdir_sent_query_ctor(struct mdir_sent_query *sq)
 {
 	sq->seq = 0;
-	sq->creation = time(NULL);
 }
 
 static inline void mdir_sent_query_dtor(struct mdir_sent_query *sq)
