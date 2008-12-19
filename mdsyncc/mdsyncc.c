@@ -96,8 +96,8 @@ static void client_begin(void)
 	on_error return;
 	mdir_alloc = mdirc_alloc;
 	mdir_free = mdirc_free;
-	conf_set_default_str("MDIRD_HOST", "127.0.0.1");
-	conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
+	conf_set_default_str("SC_MDIRD_HOST", "127.0.0.1");
+	conf_set_default_str("SC_MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
 	on_error goto q0;
 	if_fail (writer_begin()) goto q0;
 	if_fail (reader_begin()) goto q1;

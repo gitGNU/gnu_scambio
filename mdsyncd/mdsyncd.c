@@ -68,7 +68,7 @@ static void init_conf(void)
 {
 	conf_set_default_str("SC_LOG_DIR", "/var/log/scambio");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
-	conf_set_default_int("MDIRD_PORT", DEFAULT_MDIRD_PORT);
+	conf_set_default_int("SC_MDIRD_PORT", DEFAULT_MDIRD_PORT);
 }
 
 static void init_log(void)
@@ -125,7 +125,7 @@ static void init_server(void)
 	debug("init server");
 	if_fail (init_syntax()) return;
 	if(0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
-	if_fail (server_ctor(&server, conf_get_int("MDIRD_PORT"))) return;
+	if_fail (server_ctor(&server, conf_get_int("SC_MDIRD_PORT"))) return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
 	mdir_begin();
 	mdir_alloc = mdird_alloc;
