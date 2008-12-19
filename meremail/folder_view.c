@@ -161,7 +161,9 @@ GtkWidget *make_folder_window(char const *parent)
 	if_fail (fill_folder_store_rec(root_mdir, NULL)) return NULL;
 	
 	GtkWidget *folder_tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(folder_store));
+#	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
 	gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(folder_tree), TRUE);
+#	endif
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(folder_tree), FALSE);
 	gtk_tree_view_expand_all(GTK_TREE_VIEW(folder_tree));
 

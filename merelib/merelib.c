@@ -241,7 +241,13 @@ void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent)
 	gtk_window_set_title(GTK_WINDOW(win), "Waiting...");
 	gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
 	gtk_window_set_transient_for(GTK_WINDOW(win), parent);
-	gtk_window_set_type_hint(GTK_WINDOW(win), GDK_WINDOW_TYPE_HINT_NOTIFICATION);
+	gtk_window_set_type_hint(GTK_WINDOW(win),
+#		if TRUE == GTK_CHECK_VERSION(2,10,14)
+		GDK_WINDOW_TYPE_HINT_NOTIFICATION
+#		else
+		GDK_WINDOW_TYPE_HINT_DIALOG
+#		endif
+	);
 	GtkWidget *bar = gtk_progress_bar_new();
 	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(bar), "Transfering files");
 	gtk_container_add(GTK_CONTAINER(win), bar);

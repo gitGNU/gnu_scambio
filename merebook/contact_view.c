@@ -332,7 +332,13 @@ static void contact_view_fill(struct contact_view *ctv)
 	}
 	GtkWidget *photo = picture_field ?
 		gtk_image_new_from_file(fname) :
-		gtk_image_new_from_stock(GTK_STOCK_ORIENTATION_PORTRAIT, GTK_ICON_SIZE_DIALOG);
+		gtk_image_new_from_stock(
+#			if TRUE == GTK_CHECK_VERSION(2, 10, 0)
+			GTK_STOCK_ORIENTATION_PORTRAIT,
+#			else
+			GTK_STOCK_NEW,
+#			endif
+		GTK_ICON_SIZE_DIALOG);
 
 	GtkWidget *name_label = gtk_label_new(NULL);
 	char *mark_name = g_markup_printf_escaped("<span size=\"x-large\"><b>%s</b></span>", ctv->ct->name);

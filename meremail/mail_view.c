@@ -110,7 +110,9 @@ GtkWidget *make_mail_window(struct msg *msg)
 	gtk_label_set_markup(GTK_LABEL(title), title_str);
 	gtk_misc_set_alignment(GTK_MISC(title), 0, 0);
 	gtk_label_set_line_wrap(GTK_LABEL(title), TRUE);
+#	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
 	gtk_label_set_line_wrap_mode(GTK_LABEL(title), PANGO_WRAP_WORD_CHAR);
+#	endif
 	g_free(title_str);
 	gtk_box_pack_start(GTK_BOX(vbox), title, FALSE, FALSE, 0);
 
