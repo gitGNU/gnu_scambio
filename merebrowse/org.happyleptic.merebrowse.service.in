@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.happyleptic.merebrowse
+Exec=@prefix@/bin/merebrowse
+

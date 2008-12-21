@@ -1,0 +1,204 @@
+/* Copyright 2008 Cedric Cellier.
+ *
+ * This file is part of Scambio.
+ *
+ * Scambio is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Scambio is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#include <string.h>
+#include <assert.h>
+#include "misc.h"
+#include "merelib.h"
+#include "browser.h"
+#include "mdirb.h"
+
+enum {
+	FIELD_NAME,
+	FIELD_SIZE,
+	FIELD_MDIR,
+	NB_FIELDS
+};
+
+/*
+ * Init
+ */
+
+void browser_init(void)
+{
+}
+
+/*
+ * Construction
+ */
+
+// The window was destroyed for some reason : release the ref to it
+static void unref_win(GtkWidget *widget, gpointer data)
+{
+	debug("unref browser window");
+	(void)widget;
+	struct browser *const browser = (struct browser *)data;
+	if (browser->window) browser->window = NULL;
+	browser_del(browser);
+}
+
+static void select_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	// Retrieve select row, check there is something in there, and change the view
+	GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(browser->tree));
+	GtkTreeIter iter;
+	if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
+		error("No selection");
+		return;
+	}
+	GValue gptr;
+	memset(&gptr, 0, sizeof(gptr));
+	gtk_tree_model_get_value(GTK_TREE_MODEL(browser->store), &iter, FIELD_MDIR, &gptr);
+	assert(G_VALUE_HOLDS_POINTER(&gptr));
+	struct mdirb *mdirb = g_value_get_pointer(&gptr);
+	g_value_unset(&gptr);
+	if (mdirb_size(mdirb) == 0) {
+		alert(GTK_MESSAGE_INFO, "No messages in this folder");
+		return;
+	}
+	debug("Enter list view in '%s'", mdirb->mdir.path);
+	if_fail (mdirb_display(mdirb)) {
+		alert(GTK_MESSAGE_ERROR, error_str());
+		error_clear();
+	}
+}
+
+static void browser_ctor(struct browser *browser, char const *root)
+{
+	debug("brower@%p", browser);
+
+	struct mdir *mdir = mdir_lookup(root);
+	on_error return;
+	browser->mdirb = mdir2mdirb(mdir);
+	browser->iter = NULL;
+
+	browser->store = gtk_tree_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_UINT, G_TYPE_POINTER);
+	browser->tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->store));
+#	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
+	gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(browser->tree), TRUE);
+#	endif
+	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(browser->tree), FALSE);
+	gtk_tree_view_expand_all(GTK_TREE_VIEW(browser->tree));
+
+	GtkCellRenderer *text_renderer = gtk_cell_renderer_text_new();
+	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(
+		"Name",
+		text_renderer,
+		"text", FIELD_NAME,
+		NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(browser->tree), column);
+
+	column = gtk_tree_view_column_new_with_attributes(
+		"Size",
+		text_renderer,
+		"text", FIELD_SIZE,
+		NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(browser->tree), column);
+
+	browser->window = make_window(unref_win, browser);
+
+	GtkWidget *toolbar = make_toolbar(4,
+		GTK_STOCK_OK,      select_cb, browser,
+		GTK_STOCK_DELETE,  NULL, NULL,
+		GTK_STOCK_REFRESH, NULL, NULL,
+		GTK_STOCK_QUIT,    close_cb, browser->window);
+
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), make_scrollable(browser->tree), TRUE, TRUE, 0);
+	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
+
+	gtk_container_add(GTK_CONTAINER(browser->window), vbox);
+
+	browser_refresh(browser);
+
+	gtk_widget_show_all(browser->window);
+}
+
+struct browser *browser_new(char const *root)
+{
+	struct browser *browser = Malloc(sizeof(*browser));
+	if_fail (browser_ctor(browser, root)) {
+		free(browser);
+		browser = NULL;
+	}
+	return browser;
+}
+
+/*
+ * Destruction
+ */
+
+static void browser_dtor(struct browser *browser)
+{
+	debug("brower@%p", browser);
+	if (browser->window) {	// may not be present
+		gtk_widget_destroy(browser->window);
+		browser->window = NULL;
+	}
+}
+
+void browser_del(struct browser *browser)
+{
+	browser_dtor(browser);
+	free(browser);
+}
+
+/*
+ * Refresh
+ */
+
+static void add_subfolder_rec(struct browser *browser, char const *name);
+static void add_subfolder_cb(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data)
+{
+	(void)parent;
+	(void)synched;	// TODO: display this in a way or another (italic ?)
+	struct browser *browser = (struct browser *)data;
+
+	// Recursive call
+	struct mdirb *prev_mdirb = browser->mdirb;
+	browser->mdirb = mdir2mdirb(child);
+	add_subfolder_rec(browser, name);
+	browser->mdirb = prev_mdirb;
+}
+
+static void add_subfolder_rec(struct browser *browser, char const *name)
+{
+	// Add this name as a child of the given iterator
+	mdirb_refresh(browser->mdirb);
+	debug("mdir '%s' (%s) has size %u", name, browser->mdirb->mdir.path, mdirb_size(browser->mdirb));
+	GtkTreeIter iter;
+	gtk_tree_store_append(browser->store, &iter, browser->iter);
+	gtk_tree_store_set(browser->store, &iter,
+		FIELD_NAME, name,
+		FIELD_SIZE, mdirb_size(browser->mdirb),
+		FIELD_MDIR, browser->mdirb,
+		-1);
+
+	// Jump into this new iter
+	GtkTreeIter *prev_iter = browser->iter;
+	browser->iter = &iter;
+	// and find all the children
+	mdir_folder_list(&browser->mdirb->mdir, false, add_subfolder_cb, browser);
+	browser->iter = prev_iter;
+}
+
+void browser_refresh(struct browser *browser)
+{
+	add_subfolder_rec(browser, "root");
+}

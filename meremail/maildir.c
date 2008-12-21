@@ -50,8 +50,7 @@ static void msg_ctor(struct msg *msg, struct maildir *maildir, char const *from,
 
 struct msg *msg_new(struct maildir *maildir, char const *from, char const *descr, char const *date_str, mdir_version version)
 {
-	struct msg *msg = malloc(sizeof(*msg));
-	if (! msg) with_error(ENOMEM, "malloc(msg)") return NULL;
+	struct msg *msg = Malloc(sizeof(*msg));
 	if_fail (msg_ctor(msg, maildir, from, descr, date_str, version)) {
 		free(msg);
 		msg = NULL;

@@ -150,8 +150,7 @@ static void refresh_cb(GtkToolButton *button, gpointer user_data)
 
 GtkWidget *make_folder_window(char const *parent)
 {
-	root_mdir = mdir_lookup(parent);
-	on_error return NULL;
+	if_fail (root_mdir = mdir_lookup(parent)) return NULL;
 
 	GtkWidget *window = make_window(destroy_cb, NULL);
 

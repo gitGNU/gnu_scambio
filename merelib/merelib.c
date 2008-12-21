@@ -24,6 +24,7 @@
 #include "scambio.h"
 #include "scambio/mdir.h"
 #include "scambio/channel.h"
+#include "scambio/timetools.h"
 #include "merelib.h"
 
 /*
@@ -134,7 +135,6 @@ bool confirm(char const *text)
 void close_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
-	debug("close");
 	GtkWidget *window = (GtkWidget *)user_data;
 	gtk_widget_destroy(window);
 }
@@ -279,4 +279,78 @@ GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog)
 }
 #endif
 
+void color_it(GtkWidget *widget, char const *color_name)
+{
+	GdkColor color;
+	gdk_color_parse (color_name, &color);
+	gtk_widget_modify_bg(widget, GTK_STATE_NORMAL, &color);
+}
+
+GtkWidget *make_msg_widget(struct header *h)
+{
+	// Fetch everything we may need from the header
+	struct header_field *type   = header_find(h, SC_TYPE_FIELD, NULL);
+	struct header_field *name   = header_find(h, SC_NAME_FIELD, NULL);
+	struct header_field *descr  = header_find(h, SC_DESCR_FIELD, NULL);
+	struct header_field *from   = header_find(h, SC_FROM_FIELD, NULL);
+	struct header_field *start  = header_find(h, SC_START_FIELD, NULL);
+	struct header_field *stop   = header_find(h, SC_STOP_FIELD, NULL);
+	//struct header_field *status = header_find(h, SC_STATUS_FIELD, NULL);
+	
+	// We want an icon representing the message type, a short title, and a longer summary.
+	char const *icon = GTK_STOCK_ABOUT;
+	char *title = NULL, *sumry = NULL;
+	if (! type) {
+		icon = GTK_STOCK_FILE;
+		title = g_markup_printf_escaped("<span size=\"large\">%s</span>", name ? name->value : "New message");
+		sumry = g_markup_printf_escaped("%s", descr ? descr->value : "?");
+	} else if (0 == strcmp(type->value, SC_DIR_TYPE)) {
+  		icon = GTK_STOCK_DIRECTORY;
+		title = g_markup_printf_escaped("<span size=\"large\">New directory <b>%s</b></span>", name ? name->value : "???");
+	} else if (0 == strcmp(type->value, SC_MAIL_TYPE)) {
+		icon = GTK_STOCK_DND;
+		title = g_markup_printf_escaped("<span size=\"large\">Mail from <b>%s</b></span>", from ? from->value : "???");
+		sumry = g_markup_printf_escaped("%s", descr ? descr->value : "<i>No subject</i>");
+	} else if (0 == strcmp(type->value, SC_CAL_TYPE)) {
+		icon = GTK_STOCK_YES;
+		char start_str[32], stop_str[32];
+		if (start) sc_gmfield2str(start_str, sizeof(start_str), start->value);
+		if (stop)  sc_gmfield2str(stop_str,  sizeof(stop_str),  stop->value);
+		unless_error {
+			title = g_markup_printf_escaped("<span size=\"large\">%s%s%s</span>",
+				start ? start_str : "",
+				start && stop ? " - " : "",
+				stop ? stop_str : "");
+		} else {
+			title = g_markup_printf_escaped("<b>%s</b>", error_str());
+			error_clear();
+		}
+		sumry = g_markup_printf_escaped("%s", descr ? descr->value : "");
+	} else if (0 == strcmp(type->value, SC_CONTACT_TYPE)) {
+		icon = GTK_STOCK_ORIENTATION_PORTRAIT;
+		title = g_markup_printf_escaped("<span size=\"large\">New contact <i>%s</i></span>", name ? name->value : "???");
+	}
+	
+	// Pack all this in a hbox
+	GtkWidget *hbox = gtk_hbox_new(FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), gtk_image_new_from_stock(icon, GTK_ICON_SIZE_LARGE_TOOLBAR), FALSE, FALSE, 0);
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+	if (title) {
+		GtkWidget *title_label = gtk_label_new(NULL);
+		gtk_label_set_markup(GTK_LABEL(title_label), title);
+		gtk_box_pack_start(GTK_BOX(vbox), title_label, TRUE, TRUE, 0);
+		g_free(title);
+		gtk_misc_set_alignment(GTK_MISC(title_label), 0., 0.);
+	}
+	if (sumry) {
+		GtkWidget *sumry_label = gtk_label_new(NULL);
+		gtk_label_set_markup(GTK_LABEL(sumry_label), sumry);
+		gtk_box_pack_start(GTK_BOX(vbox), sumry_label, TRUE, TRUE, 0);
+		g_free(sumry);
+		gtk_misc_set_alignment(GTK_MISC(sumry_label), 0., 0.);
+	}
+	gtk_box_pack_start(GTK_BOX(hbox), vbox, TRUE, TRUE, 0);
+
+	return hbox;
+}
 

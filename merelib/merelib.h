@@ -25,6 +25,7 @@
 #include <gtk/gtkmain.h>
 #endif
 #include "varbuf.h"
+#include "scambio/header.h"
 
 void init(char const *app_name, int nb_args, char *args[]);
 void destroy_cb(GtkWidget *widget, gpointer data);
@@ -55,5 +56,10 @@ void empty_container(GtkWidget *container);
 #if TRUE != GTK_CHECK_VERSION(2, 14, 0)
 GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog);
 #endif
+
+/* Returns a widget displaying a message description (suitable for
+ * listing messages in a folder for instance).
+ */
+GtkWidget *make_msg_widget(struct header *);
 
 #endif

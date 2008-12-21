@@ -15,14 +15,33 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef TIMETOOLS_H_081119
-#define TIMETOOLS_H_081119
+#include <stdlib.h>
+#include <assert.h>
+#include <string.h>
+#include <pth.h>
+#include "scambio.h"
+#include "scambio/header.h"
+#include "scambio.h"
+#include "merelib.h"
+#include "auth.h"
+#include "misc.h"
+#include "mdirb.h"
+#include "browser.h"
 
-char const *sc_tm2gmfield(struct tm *tm, bool with_hour);
-char const *sc_ts2gmfield(time_t ts, bool with_hour);
-void sc_gmfield2uint(char const *str, unsigned *year, unsigned *month, unsigned *day, unsigned *hour, unsigned *min, unsigned *sec, bool *hour_set);
-time_t sc_gmfield2ts(char const *str, bool *hour_set);
-int month_days(unsigned year, unsigned month);	// month is from 0 to 11
-int sc_gmfield2str(char *buf, size_t maxlen, char const *gm);
+/*
+ * Main
+ */
 
-#endif
+int main(int nb_args, char *args[])
+{
+	if_fail (init("merebrowse", nb_args, args)) return EXIT_FAILURE;
+	if_fail (mdirb_init()) return EXIT_FAILURE;
+	if_fail (browser_init()) return EXIT_FAILURE;
+
+	struct browser *browser = browser_new("/");
+	on_error return EXIT_FAILURE;
+	exit_when_closed(browser->window);
+	gtk_main();
+	return EXIT_SUCCESS;
+}
+

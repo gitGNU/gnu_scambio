@@ -65,7 +65,7 @@ static struct notif *notif_new_from_mail(struct header *header)
 {
 	struct varbuf vb;
 	// Is it a new mail ?
-	if (NULL != header_find(header, SC_SENT_DATE, NULL)) return NULL;
+	if (NULL != header_find(header, SC_STOP_FIELD, NULL)) return NULL;
 	if_fail (varbuf_ctor(&vb, 1024, true)) return NULL;
 	struct notif *notif = NULL;
 	do {

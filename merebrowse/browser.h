@@ -15,14 +15,23 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef TIMETOOLS_H_081119
-#define TIMETOOLS_H_081119
+#ifndef BROWSER_H_081220
+#define BROWSER_H_081220
 
-char const *sc_tm2gmfield(struct tm *tm, bool with_hour);
-char const *sc_ts2gmfield(time_t ts, bool with_hour);
-void sc_gmfield2uint(char const *str, unsigned *year, unsigned *month, unsigned *day, unsigned *hour, unsigned *min, unsigned *sec, bool *hour_set);
-time_t sc_gmfield2ts(char const *str, bool *hour_set);
-int month_days(unsigned year, unsigned month);	// month is from 0 to 11
-int sc_gmfield2str(char *buf, size_t maxlen, char const *gm);
+#include "mdirb.h"
+#include "merelib.h"
+
+struct browser {
+	GtkWidget *window;
+	GtkWidget *tree;
+	GtkTreeStore *store;
+	struct mdirb *mdirb;
+	GtkTreeIter *iter;
+};
+
+void browser_init(void);
+struct browser *browser_new(char const *root);
+void browser_del(struct browser *);
+void browser_refresh(struct browser *);
 
 #endif
