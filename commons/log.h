@@ -36,7 +36,11 @@ void log_end(void);
 	fflush(log_file); \
 } while(0)
 #endif
-void log_print(char const *fmt, ...);
+void log_print(char const *fmt, ...)
+#ifdef __GNUC__
+	__attribute__ ((__format__ (__printf__, 1, 2)))
+#endif
+;
 
 #define error(...)      do if (log_level > 0) log_print("ERR: " __VA_ARGS__); while(0)
 #define error1(str)     do if (log_level > 0) log_print("ERR: %s", (str)); while(0)

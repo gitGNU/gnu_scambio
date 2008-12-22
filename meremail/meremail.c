@@ -26,7 +26,6 @@
  */
 
 struct chn_cnx ccnx;
-struct mdir_user *user;
 struct mdir *outbox;
 
 /*
@@ -35,8 +34,7 @@ struct mdir *outbox;
 
 void ccnx_init(void)
 {
-	if_fail (chn_begin(false)) return;
-	atexit(chn_end);
+	if_fail (chn_init(false)) return;
 	// TODO: we could also put the filed host/port on the resource line, and use a pool of ccnx ?
 	conf_set_default_str("SC_FILED_HOST", "localhost");
 	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
@@ -48,12 +46,7 @@ int main(int nb_args, char *args[])
 {
 	if_fail (init("meremail", nb_args, args)) return EXIT_FAILURE;
 	if_fail (maildir_init()) return EXIT_FAILURE;
-	conf_set_default_str("SC_USERNAME", "Alice");
-	if_fail (auth_begin()) return EXIT_FAILURE;
-	atexit(auth_end);
-	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
 	struct header_field *outbox_name = header_find(mdir_user_header(user), "smtp-outbox", NULL);
-	on_error return EXIT_FAILURE;
 	if (outbox_name) {
 		if_fail (outbox = mdir_lookup(outbox_name->value)) return EXIT_FAILURE;
 	} else {

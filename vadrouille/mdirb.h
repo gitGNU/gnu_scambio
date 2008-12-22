@@ -23,21 +23,12 @@
 #include "scambio/mdir.h"
 #include "merelib.h"
 
-struct mdirb;
-struct msg {
-	LIST_ENTRY(msg) entry;
-	struct header *header;
-	mdir_version version;
-	struct mdirb *mdirb;	// backlink for easy manipulation of mdirb->msg_count
-};
-
+struct sc_msg;
 struct mdirb {
 	struct mdir mdir;
 	struct mdir_cursor cursor;
 	unsigned nb_msgs;
-	LIST_HEAD(msgs, msg) msgs;
-	GtkWidget *window;	// not necessarily set
-	GtkWidget *page;		// only relevant if window is set
+	LIST_HEAD(msgs, sc_msg) msgs;
 };
 
 static inline struct mdirb *mdir2mdirb(struct mdir *mdir)
@@ -52,6 +43,5 @@ static inline unsigned mdirb_size(struct mdirb *mdirb)
 
 void mdirb_init(void);
 void mdirb_refresh(struct mdirb *);
-void mdirb_display(struct mdirb *);
 
 #endif

@@ -26,6 +26,9 @@
 #endif
 #include "varbuf.h"
 #include "scambio/header.h"
+#include "auth.h"
+
+struct mdir_user *user;
 
 void init(char const *app_name, int nb_args, char *args[]);
 void destroy_cb(GtkWidget *widget, gpointer data);
@@ -37,14 +40,24 @@ void exit_when_closed(GtkWidget *);
  * GTK_MESSAGE_ERROR,
  * GTK_MESSAGE_OTHER
  */
-void alert(GtkMessageType type, char const *text);
+void alert(GtkMessageType type, char const *fmt, ...)
+#ifdef __GNUC__
+	__attribute__ ((__format__ (__printf__, 2, 3)))
+#endif
+;
 void alert_error(void);
 bool confirm(char const *);
 void varbuf_ctor_from_gtk_text_view(struct varbuf *vb, GtkWidget *widget);
 void close_cb(GtkToolButton *button, gpointer user_data);	// a simple callback that just deletes the given window
 struct chn_cnx;
 void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent);
-GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer), gpointer);
+enum window_class {
+	WC_FOLDERS,
+	WC_MSGLIST,
+	WC_VIEWER,
+	WC_EDITOR,
+};
+GtkWidget *make_window(enum window_class, void (*cb)(GtkWidget *, gpointer), gpointer);
 GtkWidget *make_labeled_hbox(char const *label, GtkWidget *other);
 GtkWidget *make_labeled_hboxes(unsigned nb_rows, ...);
 GtkWidget *make_toolbar(unsigned nb_buttons, ...);
@@ -56,10 +69,5 @@ void empty_container(GtkWidget *container);
 #if TRUE != GTK_CHECK_VERSION(2, 14, 0)
 GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog);
 #endif
-
-/* Returns a widget displaying a message description (suitable for
- * listing messages in a folder for instance).
- */
-GtkWidget *make_msg_widget(struct header *);
 
 #endif

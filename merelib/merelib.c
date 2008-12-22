@@ -25,6 +25,7 @@
 #include "scambio/mdir.h"
 #include "scambio/channel.h"
 #include "scambio/timetools.h"
+#include "auth.h"
 #include "merelib.h"
 
 /*
@@ -38,6 +39,7 @@ static HildonProgram *hildon_program;
 osso_context_t *osso_ctx;
 #endif
 static char const *app_name;
+struct mdir_user *user;
 
 /*
  * Inits
@@ -47,6 +49,7 @@ static void init_conf(void)
 {
 	conf_set_default_str("SC_LOG_DIR", "/tmp");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
+	conf_set_default_str("SC_USERNAME", "Alice");
 }
 
 static void init_log(char const *appname)
@@ -65,16 +68,39 @@ static void deinit_osso(void)
 }
 #endif
 
+static GtkWidget *make_window_detached(void)
+{
+#	ifdef WITH_MAEMO
+	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
+	hildon_program_add_window(hildon_program, win);
+#	else
+	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_title(GTK_WINDOW(win), app_name);
+#	endif
+	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
+	return GTK_WIDGET(win);
+}
+
+// FIXME: To allow various layout to be implemented, takes the toolbar options as well
+GtkWidget *make_window(enum window_class wc, void (*cb)(GtkWidget *, gpointer), gpointer user_data)
+{
+	(void)wc;
+	GtkWidget *widget = make_window_detached();
+	if (cb) g_signal_connect(G_OBJECT(widget), "destroy", G_CALLBACK(cb), user_data);
+	return widget;
+}
+
 void init(char const *name, int nb_args, char *args[])
 {
 	app_name = name;
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
-	if_fail(init_conf()) return;
-	if_fail(init_log(name)) return;
-	if_fail(mdir_begin()) return;
-	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	if_fail (init_conf()) return;
+	if_fail (init_log(name)) return;
+	if_fail (mdir_init()) return;
+	if_fail (auth_init()) return;
+	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return;
 #	ifdef WITH_MAEMO
 	gtk_init(&nb_args, &args);
 	g_set_application_name(app_name);
@@ -111,16 +137,21 @@ void destroy_cb(GtkWidget *widget, gpointer data)
 	gtk_main_quit();
 }
 
-void alert(GtkMessageType type, char const *text)
+void alert(GtkMessageType type, char const *fmt, ...)
 {
-	GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT, type, GTK_BUTTONS_CLOSE, text);
+	char str[512];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(str, sizeof(str), fmt, ap);
+	va_end(ap);
+	GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT, type, GTK_BUTTONS_CLOSE, str);
 	g_signal_connect_swapped(dialog, "response", G_CALLBACK(gtk_widget_destroy), dialog);
 	gtk_widget_show_all(dialog);
 }
 
 void alert_error(void)
 {
-	alert(GTK_MESSAGE_ERROR, error_str());
+	alert(GTK_MESSAGE_ERROR, "%s", error_str());
 	error_clear();
 }
 
@@ -137,20 +168,6 @@ void close_cb(GtkToolButton *button, gpointer user_data)
 	(void)button;
 	GtkWidget *window = (GtkWidget *)user_data;
 	gtk_widget_destroy(window);
-}
-
-GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer), gpointer user_data)
-{
-#	ifdef WITH_MAEMO
-	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
-	hildon_program_add_window(hildon_program, win);
-#	else
-	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW(win), app_name);
-#	endif
-	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
-	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), user_data);
-	return GTK_WIDGET(win);
 }
 
 GtkWidget *make_labeled_hbox(char const *label_text, GtkWidget *other)
@@ -284,73 +301,5 @@ void color_it(GtkWidget *widget, char const *color_name)
 	GdkColor color;
 	gdk_color_parse (color_name, &color);
 	gtk_widget_modify_bg(widget, GTK_STATE_NORMAL, &color);
-}
-
-GtkWidget *make_msg_widget(struct header *h)
-{
-	// Fetch everything we may need from the header
-	struct header_field *type   = header_find(h, SC_TYPE_FIELD, NULL);
-	struct header_field *name   = header_find(h, SC_NAME_FIELD, NULL);
-	struct header_field *descr  = header_find(h, SC_DESCR_FIELD, NULL);
-	struct header_field *from   = header_find(h, SC_FROM_FIELD, NULL);
-	struct header_field *start  = header_find(h, SC_START_FIELD, NULL);
-	struct header_field *stop   = header_find(h, SC_STOP_FIELD, NULL);
-	//struct header_field *status = header_find(h, SC_STATUS_FIELD, NULL);
-	
-	// We want an icon representing the message type, a short title, and a longer summary.
-	char const *icon = GTK_STOCK_ABOUT;
-	char *title = NULL, *sumry = NULL;
-	if (! type) {
-		icon = GTK_STOCK_FILE;
-		title = g_markup_printf_escaped("<span size=\"large\">%s</span>", name ? name->value : "New message");
-		sumry = g_markup_printf_escaped("%s", descr ? descr->value : "?");
-	} else if (0 == strcmp(type->value, SC_DIR_TYPE)) {
-  		icon = GTK_STOCK_DIRECTORY;
-		title = g_markup_printf_escaped("<span size=\"large\">New directory <b>%s</b></span>", name ? name->value : "???");
-	} else if (0 == strcmp(type->value, SC_MAIL_TYPE)) {
-		icon = GTK_STOCK_DND;
-		title = g_markup_printf_escaped("<span size=\"large\">Mail from <b>%s</b></span>", from ? from->value : "???");
-		sumry = g_markup_printf_escaped("%s", descr ? descr->value : "<i>No subject</i>");
-	} else if (0 == strcmp(type->value, SC_CAL_TYPE)) {
-		icon = GTK_STOCK_YES;
-		char start_str[32], stop_str[32];
-		if (start) sc_gmfield2str(start_str, sizeof(start_str), start->value);
-		if (stop)  sc_gmfield2str(stop_str,  sizeof(stop_str),  stop->value);
-		unless_error {
-			title = g_markup_printf_escaped("<span size=\"large\">%s%s%s</span>",
-				start ? start_str : "",
-				start && stop ? " - " : "",
-				stop ? stop_str : "");
-		} else {
-			title = g_markup_printf_escaped("<b>%s</b>", error_str());
-			error_clear();
-		}
-		sumry = g_markup_printf_escaped("%s", descr ? descr->value : "");
-	} else if (0 == strcmp(type->value, SC_CONTACT_TYPE)) {
-		icon = GTK_STOCK_ORIENTATION_PORTRAIT;
-		title = g_markup_printf_escaped("<span size=\"large\">New contact <i>%s</i></span>", name ? name->value : "???");
-	}
-	
-	// Pack all this in a hbox
-	GtkWidget *hbox = gtk_hbox_new(FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(hbox), gtk_image_new_from_stock(icon, GTK_ICON_SIZE_LARGE_TOOLBAR), FALSE, FALSE, 0);
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
-	if (title) {
-		GtkWidget *title_label = gtk_label_new(NULL);
-		gtk_label_set_markup(GTK_LABEL(title_label), title);
-		gtk_box_pack_start(GTK_BOX(vbox), title_label, TRUE, TRUE, 0);
-		g_free(title);
-		gtk_misc_set_alignment(GTK_MISC(title_label), 0., 0.);
-	}
-	if (sumry) {
-		GtkWidget *sumry_label = gtk_label_new(NULL);
-		gtk_label_set_markup(GTK_LABEL(sumry_label), sumry);
-		gtk_box_pack_start(GTK_BOX(vbox), sumry_label, TRUE, TRUE, 0);
-		g_free(sumry);
-		gtk_misc_set_alignment(GTK_MISC(sumry_label), 0., 0.);
-	}
-	gtk_box_pack_start(GTK_BOX(hbox), vbox, TRUE, TRUE, 0);
-
-	return hbox;
 }
 

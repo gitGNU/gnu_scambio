@@ -189,7 +189,18 @@ struct mdir *mdir_lookup(char const *name)
  * Init
  */
 
-void mdir_begin(void)
+static void mdir_deinit(void)
+{
+	jnl_end();
+	struct mdir *mdir;
+	while (NULL != (mdir = LIST_FIRST(&mdirs))) {
+		mdir_del(mdir);
+	}
+	persist_dtor(&dirid_seq);
+	persist_dtor(&transient_version);
+}
+
+void mdir_init(void)
 {
 	mdir_alloc = mdir_alloc_default;
 	mdir_free = mdir_free_default;
@@ -208,17 +219,7 @@ void mdir_begin(void)
 	if_fail (Mkdir(root_path)) return;
 	persist_ctor_sequence(&dirid_seq, conf_get_str("SC_MDIR_DIRSEQ"), 0);
 	persist_ctor_sequence(&transient_version, conf_get_str("SC_MDIR_TRANSIENTSEQ"), 1);
-}
-
-void mdir_end(void)
-{
-	jnl_end();
-	struct mdir *mdir;
-	while (NULL != (mdir = LIST_FIRST(&mdirs))) {
-		mdir_del(mdir);
-	}
-	persist_dtor(&dirid_seq);
-	persist_dtor(&transient_version);
+	atexit(mdir_deinit);
 }
 
 /*
@@ -497,7 +498,7 @@ void mdir_patch_list(
 		debug("listing synched from version %"PRIversion, from);
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
 			if (jnl->version + jnl->nb_patches <= from) {
-				debug("  jnl from %"PRIversion" to %"PRIversion" is too short (%u)", jnl->version, jnl->version + jnl->nb_patches);
+				debug("  jnl from %"PRIversion" to %"PRIversion" is too short", jnl->version, jnl->version + jnl->nb_patches);
 				continue;
 			}
 			if (from < jnl->version) from = jnl->version;	// a gap

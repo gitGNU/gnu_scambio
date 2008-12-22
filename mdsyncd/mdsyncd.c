@@ -127,16 +127,12 @@ static void init_server(void)
 	if(0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
 	if_fail (server_ctor(&server, conf_get_int("SC_MDIRD_PORT"))) return;
 	if (0 != atexit(deinit_server)) with_error(0, "atexit") return;
-	mdir_begin();
+	if_fail (mdir_init()) return;
 	mdir_alloc = mdird_alloc;
 	mdir_free = mdird_free;
-	on_error return;
-	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
-	exec_begin();
-	on_error return;
+	if_fail (exec_begin()) return;
 	if (0 != atexit(exec_end)) with_error(0, "atexit") return;
-	if_fail (auth_begin()) return;
-	if (0 != atexit(auth_end)) with_error(0, "atexit") return;
+	if_fail (auth_init()) return;
 }
 
 static void init(void)

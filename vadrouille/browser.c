@@ -19,8 +19,8 @@
 #include <assert.h>
 #include "misc.h"
 #include "merelib.h"
+#include "vadrouille.h"
 #include "browser.h"
-#include "mdirb.h"
 
 enum {
 	FIELD_NAME,
@@ -28,14 +28,6 @@ enum {
 	FIELD_MDIR,
 	NB_FIELDS
 };
-
-/*
- * Init
- */
-
-void browser_init(void)
-{
-}
 
 /*
  * Construction
@@ -51,10 +43,12 @@ static void unref_win(GtkWidget *widget, gpointer data)
 	browser_del(browser);
 }
 
-static void select_cb(GtkToolButton *button, gpointer user_data)
+static void dir_function_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
-	struct browser *browser = (struct browser *)user_data;
+	struct dirfunc2myself *d2m = (struct dirfunc2myself *)user_data;
+	struct browser *browser = d2m->myself;
+	
 	// Retrieve select row, check there is something in there, and change the view
 	GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(browser->tree));
 	GtkTreeIter iter;
@@ -72,11 +66,16 @@ static void select_cb(GtkToolButton *button, gpointer user_data)
 		alert(GTK_MESSAGE_INFO, "No messages in this folder");
 		return;
 	}
-	debug("Enter list view in '%s'", mdirb->mdir.path);
-	if_fail (mdirb_display(mdirb)) {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
-	}
+	debug("Execute dir function '%s'", mdirb->mdir.path);
+	if_fail (d2m->function->cb(mdirb)) alert_error();
+}
+
+static void global_function_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	debug("Execute global function");
+	struct sc_plugin_global_function *function = (struct sc_plugin_global_function *)user_data;
+	if_fail (function->cb()) alert_error();
 }
 
 static void browser_ctor(struct browser *browser, char const *root)
@@ -94,7 +93,6 @@ static void browser_ctor(struct browser *browser, char const *root)
 	gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(browser->tree), TRUE);
 #	endif
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(browser->tree), FALSE);
-	gtk_tree_view_expand_all(GTK_TREE_VIEW(browser->tree));
 
 	GtkCellRenderer *text_renderer = gtk_cell_renderer_text_new();
 	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(
@@ -111,13 +109,34 @@ static void browser_ctor(struct browser *browser, char const *root)
 		NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(browser->tree), column);
 
-	browser->window = make_window(unref_win, browser);
+	browser->window = make_window(WC_FOLDERS, unref_win, browser);
 
-	GtkWidget *toolbar = make_toolbar(4,
-		GTK_STOCK_OK,      select_cb, browser,
+	GtkWidget *toolbar = make_toolbar(3,
 		GTK_STOCK_DELETE,  NULL, NULL,
 		GTK_STOCK_REFRESH, NULL, NULL,
 		GTK_STOCK_QUIT,    close_cb, browser->window);
+	// Add per plugin global functions
+	struct sc_plugin *plugin;
+	LIST_FOREACH(plugin, &sc_plugins, entry) {
+		if (plugin->nb_global_functions == 0 && plugin->nb_dir_functions == 0) continue;
+		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_separator_tool_item_new(), -1);
+		GtkToolItem *title = gtk_tool_item_new();
+		gtk_container_add(GTK_CONTAINER(title), gtk_label_new(plugin->name));
+		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), title, -1);
+		for (unsigned f = 0; f < plugin->nb_global_functions; f++) {
+			GtkToolItem *button = gtk_tool_button_new(plugin->global_functions[f].icon, plugin->global_functions[f].label);
+			gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
+			if (plugin->global_functions[f].cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(global_function_cb), plugin->global_functions+f);
+		}
+		for (unsigned f = 0; f < plugin->nb_dir_functions; f++) {
+			GtkToolItem *button = gtk_tool_button_new(plugin->dir_functions[f].icon, plugin->dir_functions[f].label);
+			gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
+			COMPILE_ASSERT(sizeof_array(browser->dirfunc2myself) == sizeof_array(plugin->dir_functions));
+			browser->dirfunc2myself[f].function = plugin->dir_functions+f;
+			browser->dirfunc2myself[f].myself = browser;
+			if (plugin->dir_functions[f].cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(dir_function_cb), browser->dirfunc2myself+f);
+		}
+	}
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), make_scrollable(browser->tree), TRUE, TRUE, 0);
@@ -201,4 +220,15 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 void browser_refresh(struct browser *browser)
 {
 	add_subfolder_rec(browser, "root");
+	gtk_tree_view_expand_all(GTK_TREE_VIEW(browser->tree));
 }
+
+/*
+ * Init
+ */
+
+void browser_init(void)
+{
+}
+
+

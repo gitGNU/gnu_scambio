@@ -20,14 +20,89 @@
 #include <string.h>
 #include <glib.h>
 #include <gtkhtml/gtkhtml.h>
-#include "merelib.h"
-#include "meremail.h"
+#include "scambio/channel.h"
+#include "scambio/timetools.h"
+#include "mail.h"
 #include "varbuf.h"
 #include "misc.h"
+#include "vadrouille.h"
 
 /*
- * Make a Window to display a mail
+ * Mail Message
  */
+
+struct mail_msg {
+	struct sc_msg msg;
+	char *from;
+	char *descr;
+	time_t date;
+};
+
+static inline struct mail_msg *msg2mmsg(struct sc_msg *msg)
+{
+	return DOWNCAST(msg, msg, mail_msg);
+}
+
+static struct sc_plugin plugin;
+static void mail_msg_ctor(struct mail_msg *mmsg, struct mdirb *mdirb, struct header *h, mdir_version version)
+{
+	debug("msg version %"PRIversion, version);
+
+	// To be a mail message, a new patch must have a from, descr and start field (duck typing)
+	struct header_field *from = header_find(h, SC_FROM_FIELD, NULL);
+	struct header_field *descr = header_find(h, SC_DESCR_FIELD, NULL);
+	struct header_field *date = header_find(h, SC_START_FIELD, NULL);
+	if (!from || !descr || !date) with_error(0, "Not a mail") return;
+
+	bool dummy;
+	if_fail (mmsg->date = sc_gmfield2ts(date->value, &dummy)) return;
+	if_fail (mmsg->from = Strdup(from->value)) return;
+	if_fail (mmsg->descr = Strdup(descr->value)) {
+		free(mmsg->from);
+		return;
+	}
+
+	sc_msg_ctor(&mmsg->msg, mdirb, h, version, &plugin);
+}
+
+static struct sc_msg *mail_msg_new(struct mdirb *mdirb, struct header *h, mdir_version version)
+{
+	struct mail_msg *mmsg = Malloc(sizeof(*mmsg));
+	if_fail (mail_msg_ctor(mmsg, mdirb, h, version)) {
+		free(mmsg);
+		return NULL;
+	}
+	return &mmsg->msg;
+}
+
+static void mail_msg_dtor(struct mail_msg *mmsg)
+{
+	debug("mmsg '%s'", mmsg->descr);
+	FreeIfSet(&mmsg->from);
+	FreeIfSet(&mmsg->descr);
+	sc_msg_dtor(&mmsg->msg);
+}
+
+static void mail_msg_del(struct sc_msg *msg)
+{
+	struct mail_msg *mmsg = msg2mmsg(msg);
+	mail_msg_dtor(mmsg);
+	free(mmsg);
+}
+
+static char *mail_msg_descr(struct sc_msg *msg)
+{
+	struct mail_msg *mmsg = msg2mmsg(msg);
+	return g_markup_printf_escaped("Mail from <b>%s</b> : %s", mmsg->from, mmsg->descr);
+}
+
+/*
+ * Message view
+ */
+
+struct mail_msg_view {
+	struct sc_msg_view view;
+};
 
 // type is allowed to be NULL
 static GtkWidget *make_view_widget(char const *type, char const *resource, GtkWindow *win)
@@ -84,48 +159,63 @@ static GtkWidget *make_view_widget(char const *type, char const *resource, GtkWi
 q:	return make_scrollable(widget);
 }
 
-GtkWidget *make_mail_window(struct msg *msg)
+// FIXME: put this in sc_msg_view ?
+static void mail_msg_view_del(struct sc_msg_view *view);
+static void unref_win(GtkWidget *widget, gpointer data)
+{
+	debug("unref mdirb window");
+	(void)widget;
+	struct mail_msg_view *const view = (struct mail_msg_view *)data;
+	if (view->view.window) view->view.window = NULL;
+	mail_msg_view_del(&view->view);
+}
+
+static char const *ts2staticstr(time_t ts)
+{
+	static char date_str[64];
+	struct tm *tm = localtime(&ts);
+	(void)strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M", tm);
+	return date_str;
+}
+
+static void mail_msg_view_ctor(struct mail_msg_view *view, struct sc_msg *msg)
 {
 	/* The mail view is merely a succession of all the attached files,
 	 * preceeded with our mail patch.
-	 * It would be great if some of the files be closed by default
-	 * (for the first one, the untouched headers, is not of much use).
 	 */
-	debug("for msg %s", msg->descr);
-	GtkWidget *win = make_window(WC_VIEWER, NULL, NULL);
-	enum mdir_action action;
-	struct header *h = mdir_read(&msg->maildir->mdir, msg->version, &action);
-	on_error return NULL;
-	assert(action == MDIR_ADD);
+	debug("view=%p, msg=%p", view, msg);
+	struct mail_msg *mmsg = msg2mmsg(msg);
+
+	GtkWidget *window = make_window(WC_VIEWER, unref_win, view);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
-	gtk_container_add(GTK_CONTAINER(win), vbox);
+	gtk_container_add(GTK_CONTAINER(window), vbox);
 
 	// The header
 	GtkWidget *title = gtk_label_new(NULL);
 	char *title_str = g_markup_printf_escaped(
 		"<b>From</b> <i>%s</i>, <b>Received on</b> <i>%s</i>\n"
 		"<b>Subject :</b> %s",
-		msg->from, ts2staticstr(msg->date), msg->descr);
+		mmsg->from, ts2staticstr(mmsg->date), mmsg->descr);
 	gtk_label_set_markup(GTK_LABEL(title), title_str);
+	g_free(title_str);
 	gtk_misc_set_alignment(GTK_MISC(title), 0, 0);
 	gtk_label_set_line_wrap(GTK_LABEL(title), TRUE);
 #	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
 	gtk_label_set_line_wrap_mode(GTK_LABEL(title), PANGO_WRAP_WORD_CHAR);
 #	endif
-	g_free(title_str);
 	gtk_box_pack_start(GTK_BOX(vbox), title, FALSE, FALSE, 0);
 
 	GtkWidget *notebook = gtk_notebook_new();
 	gtk_notebook_set_scrollable(GTK_NOTEBOOK(notebook), TRUE);
-	// A Tab for each resources, except for the header which is put in an expander above
+	// A Tab for each resource, except for the header which is put in an expander above
 	struct header_field *resource = NULL;
-	while (NULL != (resource = header_find(h, SC_RESOURCE_FIELD, resource))) {
+	while (NULL != (resource = header_find(msg->header, SC_RESOURCE_FIELD, resource))) {
 		char *resource_stripped = parameter_suppress(resource->value);
 		char *title = parameter_extract(resource->value, "name");
 		bool is_header = !title;
 		char *type = parameter_extract(resource->value, "type");
-		GtkWidget *widget = make_view_widget(type, resource_stripped, GTK_WINDOW(win));
+		GtkWidget *widget = make_view_widget(type, resource_stripped, GTK_WINDOW(window));
 		if (is_header) {
 			gtk_box_pack_start(GTK_BOX(vbox), make_expander("Headers", widget), FALSE, FALSE, 0);
 		} else {
@@ -140,10 +230,79 @@ GtkWidget *make_mail_window(struct msg *msg)
 	GtkWidget *toolbar = make_toolbar(3,
 		GTK_STOCK_JUMP_TO, NULL,     NULL,	// Forward
 		GTK_STOCK_DELETE,  NULL,     NULL,	// Delete
-		GTK_STOCK_QUIT,    close_cb, win);
+		GTK_STOCK_QUIT,    close_cb, window);
 
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
-
-	header_unref(h);
-	return win;
+	
+	sc_msg_view_ctor(&view->view, msg, window);
 }
+
+static struct sc_msg_view *mail_msg_view_new(struct sc_msg *msg)
+{
+	struct mail_msg_view *view = Malloc(sizeof(*view));
+	if_fail (mail_msg_view_ctor(view, msg)) {
+		free(view);
+		return NULL;
+	}
+	return &view->view;
+}
+
+static void mail_msg_view_dtor(struct mail_msg_view *view)
+{
+	sc_msg_view_dtor(&view->view);
+}
+
+static void mail_msg_view_del(struct sc_msg_view *view)
+{
+	struct mail_msg_view *mview = DOWNCAST(view, view, mail_msg_view);
+	mail_msg_view_dtor(mview);
+	free(mview);
+}
+
+/*
+ * Additional Functions
+ */
+
+static void compose_cb(void)
+{
+	if_fail ((void)mail_composer_new(NULL, NULL, NULL)) alert_error();
+}
+
+/*
+ * Init
+ */
+
+struct mdir *mail_outbox;
+
+static struct sc_plugin_ops const ops = {
+	.msg_new      = mail_msg_new,
+	.msg_del      = mail_msg_del,
+	.msg_descr    = mail_msg_descr,
+	.msg_view_new = mail_msg_view_new,
+	.msg_view_del = mail_msg_view_del,
+	.dir_view_new = NULL,
+	.dir_view_del = NULL,
+};
+static struct sc_plugin plugin = {
+	.name = "mail",
+	.type = SC_MAIL_TYPE,
+	.ops = &ops,
+	.nb_global_functions = 1,
+	.global_functions = {
+		{ NULL, "New", compose_cb },
+	},
+	.nb_dir_functions = 0,
+	.dir_functions = {},
+};
+
+void mail_init(void)
+{
+	struct header_field *outbox_name = header_find(mdir_user_header(user), "smtp-outbox", NULL);
+	if (outbox_name) {
+		if_fail (mail_outbox = mdir_lookup(outbox_name->value)) return;
+	} else {
+		warning("No outbox defined : Cannot send");
+	}
+	sc_plugin_register(&plugin);
+}
+

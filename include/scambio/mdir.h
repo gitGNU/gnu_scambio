@@ -80,8 +80,7 @@ extern struct mdir *(*mdir_alloc)(void);
 extern void (*mdir_free)(struct mdir *);
 
 struct header;
-void mdir_begin(void);
-void mdir_end(void);
+void mdir_init(void);
 
 // add/remove a header into a mdir
 // do not use this in plugins : only the server decides how and when to apply a patch

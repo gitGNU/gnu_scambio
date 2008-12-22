@@ -25,8 +25,37 @@
 #include "merelib.h"
 #include "auth.h"
 #include "misc.h"
+#include "vadrouille.h"
 #include "mdirb.h"
 #include "browser.h"
+#include "mail.h"
+
+/*
+ * Plugins
+ */
+
+struct sc_plugins sc_plugins = LIST_HEAD_INITIALIZER(&sc_plugins);
+
+void sc_plugin_register(struct sc_plugin *plugin)
+{
+	LIST_INSERT_HEAD(&sc_plugins, plugin, entry);
+}
+
+/*
+ * Init
+ */
+
+struct chn_cnx ccnx;
+
+void ccnx_init(void)
+{
+	if_fail (chn_init(false)) return;
+	// TODO: we could also put the filed host/port on the resource line, and use a pool of ccnx ?
+	conf_set_default_str("SC_FILED_HOST", "localhost");
+	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
+	on_error return;
+	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
+}
 
 /*
  * Main
@@ -34,13 +63,17 @@
 
 int main(int nb_args, char *args[])
 {
-	if_fail (init("merebrowse", nb_args, args)) return EXIT_FAILURE;
+	if_fail (init("vadrouille", nb_args, args)) return EXIT_FAILURE;
+	if_fail (ccnx_init()) return EXIT_FAILURE;
 	if_fail (mdirb_init()) return EXIT_FAILURE;
+	if_fail (sc_msg_init()) return EXIT_FAILURE;
+	if_fail (mail_init()) return EXIT_FAILURE;
 	if_fail (browser_init()) return EXIT_FAILURE;
 
 	struct browser *browser = browser_new("/");
 	on_error return EXIT_FAILURE;
 	exit_when_closed(browser->window);
+
 	gtk_main();
 	return EXIT_SUCCESS;
 }

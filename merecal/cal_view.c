@@ -293,7 +293,7 @@ GtkWidget *make_cal_window(void)
 		TAILQ_INIT(day2events+i);
 	}
 
-	GtkWidget *window = make_window(destroy_cb, NULL);
+	GtkWidget *window = make_window(WC_VIEWER, destroy_cb, NULL);
 	
 	event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	GtkWidget *event_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(event_store));

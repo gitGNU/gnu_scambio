@@ -105,19 +105,21 @@ struct header *mdir_user_header(struct mdir_user *user)
  * Initialization
  */
 
-void auth_begin(void)
-{
-	if_fail (conf_set_default_str("SC_MDIR_USERS_DIR", "/var/lib/scambio/users")) return;
-	users_root = conf_get_str("SC_MDIR_USERS_DIR");
-	LIST_INIT(&users);
-	Mkdir(users_root);
-}
-
-void auth_end(void)
+static void auth_deinit(void)
 {
 	struct mdir_user *usr;
 	while (NULL != (usr = LIST_FIRST(&users))) {
 		user_del(usr);
 	}
 }
+void auth_init(void)
+{
+	if_fail (conf_set_default_str("SC_USERNAME", "Alice")) return;
+	if_fail (conf_set_default_str("SC_MDIR_USERS_DIR", "/var/lib/scambio/users")) return;
+	users_root = conf_get_str("SC_MDIR_USERS_DIR");
+	LIST_INIT(&users);
+	Mkdir(users_root);
+	atexit(auth_deinit);
+}
+
 

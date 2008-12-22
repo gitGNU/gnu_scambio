@@ -114,8 +114,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	} while (0);
 	header_unref(h);
 	on_error {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
+		alert_error();
 		return;
 	}
 	// Now that the new msg is in, remove the replaced one
@@ -137,7 +136,7 @@ GtkWidget *make_edit_window(struct cal_folder *default_cf, struct cal_date *star
 	editor->replaced_version = replaced;
 	editor->replaced_folder = default_cf;
 
-	editor->window = make_window(NULL, NULL);
+	editor->window = make_window(WC_EDITOR, NULL, NULL);
 
 	// First the combo to choose the folder from
 	editor->folder_combo = gtk_combo_box_new_text();

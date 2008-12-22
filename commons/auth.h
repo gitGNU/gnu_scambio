@@ -43,8 +43,7 @@
  */
 
 struct mdir_user;
-void auth_begin(void);
-void auth_end(void);
+void auth_init(void);
 struct mdir_user *mdir_user_load(char const *name);
 struct header *mdir_user_header(struct mdir_user *user);
 

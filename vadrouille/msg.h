@@ -15,23 +15,37 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef BROWSER_H_081220
-#define BROWSER_H_081220
+#ifndef MSG_H_081222
+#define MSG_H_081222
 
-#include "mdirb.h"
-#include "merelib.h"
+#include "vadrouille.h"
 
-struct browser {
-	GtkWidget *window;
-	GtkWidget *tree;
-	GtkTreeStore *store;
-	struct mdirb *mdirb;
-	GtkTreeIter *iter;
+struct mdirb;
+struct sc_plugin;
+
+struct sc_msg {
+	LIST_ENTRY(sc_msg) entry;
+	struct header *header;
+	mdir_version version;
+	struct mdirb *mdirb;	// backlink for easy manipulation of mdirb->msg_count
+	struct sc_plugin *plugin;	// plugin responsible for this, or NULL if none
+	int count;
 };
 
-void browser_init(void);
-struct browser *browser_new(char const *root);
-void browser_del(struct browser *);
-void browser_refresh(struct browser *);
+void sc_msg_ctor(struct sc_msg *, struct mdirb *, struct header *, mdir_version, struct sc_plugin *);
+void sc_msg_dtor(struct sc_msg *);
+
+static inline struct sc_msg *sc_msg_ref(struct sc_msg *msg)
+{
+	msg->count++;
+	return msg;
+}
+
+static inline void sc_msg_unref(struct sc_msg *msg)
+{
+	if (--msg->count <= 0) msg->plugin->ops->msg_del(msg);
+}
+
+void sc_msg_init(void);
 
 #endif

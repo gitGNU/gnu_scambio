@@ -393,7 +393,7 @@ static void contact_view_ctor(struct contact_view *ctv, struct contact *ct)
 {
 	debug("ctv@%p", ctv);
 	ctv->ct = ct;
-	ctv->window = make_window(unref_win, ctv);
+	ctv->window = make_window(WC_VIEWER, unref_win, ctv);
 	contact_view_fill(ctv);
 }
 

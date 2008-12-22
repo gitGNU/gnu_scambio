@@ -54,8 +54,7 @@ static void view_cb(GtkToolButton *button, gpointer user_data)
 	debug("Viewing contact %s", ct->name);
 	(void)make_contact_window(ct);
 	on_error {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
+		alert_error();
 	}
 }
 
@@ -87,8 +86,7 @@ static void add_cb(GtkToolButton *button, gpointer user_data)
 	// And run a view window for it
 	(void)make_contact_window(ct);
 	on_error {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
+		alert_error();
 	}
 }
 
@@ -173,7 +171,7 @@ static GtkWidget *make_contacts_list(void)
 
 GtkWidget *make_book_window(void)
 {
-	GtkWidget *win = make_window(destroy_cb, NULL);
+	GtkWidget *win = make_window(WC_MSGLIST, destroy_cb, NULL);
 	/* The book window is composed of :
 	 * - a book selector (ALL/book1/book2/etc)
 	 * - a list of all contact in this book list (or global contacts list), sorted

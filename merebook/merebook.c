@@ -177,8 +177,7 @@ struct chn_cnx ccnx;
 
 void ccnx_init(void)
 {
-	if_fail (chn_begin(false)) return;
-	atexit(chn_end);
+	if_fail (chn_init(false)) return;
 	conf_set_default_str("SC_FILED_HOST", "localhost");
 	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
 	on_error return;
@@ -188,12 +187,6 @@ void ccnx_init(void)
 int main(int nb_args, char *args[])
 {
 	if_fail (init("merebook", nb_args, args)) return EXIT_FAILURE;
-
-	static struct mdir_user *user;
-	conf_set_default_str("SC_USERNAME", "Alice");
-	if_fail (auth_begin()) return EXIT_FAILURE;
-	atexit(auth_end);
-	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
 	if_fail (ccnx_init()) return EXIT_FAILURE;
 
 	struct header_field *book_name = NULL;

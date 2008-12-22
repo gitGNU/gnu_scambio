@@ -441,12 +441,6 @@ int main(int nb_args, char *args[])
 {
 	if_fail (init("merecal", nb_args, args)) return EXIT_FAILURE;
 
-	static struct mdir_user *user;
-	conf_set_default_str("SC_USERNAME", "Alice");
-	if_fail (auth_begin()) return EXIT_FAILURE;
-	atexit(auth_end);
-	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
-	
 	struct header_field *folder = NULL;
 	while (NULL != (folder = header_find(mdir_user_header(user), "cal-dir", folder))) {
 		if_fail ((void)cal_folder_new(folder->value)) return EXIT_FAILURE;
