@@ -29,6 +29,7 @@ struct mdirb {
 	struct mdir_cursor cursor;
 	unsigned nb_msgs;
 	LIST_HEAD(msgs, sc_msg) msgs;
+	char name[PATH_MAX];
 };
 
 static inline struct mdirb *mdir2mdirb(struct mdir *mdir)
@@ -43,5 +44,10 @@ static inline unsigned mdirb_size(struct mdirb *mdirb)
 
 void mdirb_init(void);
 void mdirb_refresh(struct mdirb *);
+static inline char const *mdirb_name(struct mdirb *mdirb)
+{
+	return mdirb->name;
+}
+void mdirb_set_name(struct mdirb *, char const *);
 
 #endif

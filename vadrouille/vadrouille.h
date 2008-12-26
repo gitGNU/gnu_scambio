@@ -18,6 +18,7 @@
 #ifndef VADROUILLE_H_081222
 #define VADROUILLE_H_081222
 
+#include <assert.h>
 #include "scambio/channel.h"
 
 struct chn_cnx ccnx;
@@ -27,6 +28,7 @@ struct chn_cnx ccnx;
 
 #include "mdirb.h"
 
+struct sc_view;
 struct sc_msg_view;
 struct sc_dir_view;
 
@@ -39,9 +41,9 @@ struct sc_plugin {
 		void (*msg_del)(struct sc_msg *);
 		char *(*msg_descr)(struct sc_msg *msg);
 		struct sc_msg_view *(*msg_view_new)(struct sc_msg *);
-		void (*msg_view_del)(struct sc_msg_view *);
+		void (*msg_view_del)(struct sc_view *);
 		struct sc_dir_view *(*dir_view_new)(struct mdirb *);
-		void (*dir_view_del)(struct sc_dir_view *);
+		void (*dir_view_del)(struct sc_view *);
 	} const *ops;
 	unsigned nb_global_functions;
 	struct sc_plugin_global_function {
@@ -57,27 +59,51 @@ struct sc_plugin {
 	} dir_functions[8];
 };
 
+struct sc_view {
+	GtkWidget *window;
+	void (*del)(struct sc_view *);
+};
+
+void unref_view(GtkWidget *widget, gpointer data);
+static inline void sc_view_ctor(struct sc_view *view, void (*del)(struct sc_view *), GtkWidget *window)
+{
+	view->window = window;
+	view->del = del;
+	g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(unref_view), view);
+	gtk_widget_show_all(window);
+}
+
+static inline void sc_view_dtor(struct sc_view *view)
+{
+	debug("view@%p, window = %p", view, view->window);
+	if (view->window) {
+		gtk_widget_destroy(view->window);
+		assert(view->window == NULL);
+	}
+}
+
 #include "msg.h"
 
 struct sc_msg_view {
-	GtkWidget *window;
+	struct sc_view view;
 	struct sc_msg *msg;
 };
 
-static inline void sc_msg_view_ctor(struct sc_msg_view *view, struct sc_msg *msg, GtkWidget *window)
+static inline struct sc_msg_view *view2msg_view(struct sc_view *view)
 {
-	view->window = window;
+	return DOWNCAST(view, view, sc_msg_view);
+}
+
+static inline void sc_msg_view_ctor(struct sc_msg_view *view, struct sc_plugin *plugin, struct sc_msg *msg, GtkWidget *window)
+{
 	view->msg = sc_msg_ref(msg);
-	gtk_widget_show_all(window);
+	sc_view_ctor(&view->view, plugin->ops->msg_view_del, window);
 }
 
 #include <assert.h>
 static inline void sc_msg_view_dtor(struct sc_msg_view *view)
 {
-	if (view->window) {
-		gtk_widget_destroy(view->window);
-		assert(view->window == NULL);
-	}
+	sc_view_dtor(&view->view);
 	if (view->msg) {
 		sc_msg_unref(view->msg);
 		view->msg = NULL;
@@ -85,25 +111,25 @@ static inline void sc_msg_view_dtor(struct sc_msg_view *view)
 }
 
 struct sc_dir_view {
-	GtkWidget *window;
+	struct sc_view view;
 	struct mdirb *mdirb;
 };
 
-static inline void sc_dir_view_ctor(struct sc_dir_view *view, struct mdirb *mdirb, GtkWidget *window)
+static inline struct sc_dir_view *view2dir_view(struct sc_view *view)
 {
-	view->window = window;
+	return DOWNCAST(view, view, sc_dir_view);
+}
+
+static inline void sc_dir_view_ctor(struct sc_dir_view *view, struct sc_plugin *plugin, struct mdirb *mdirb, GtkWidget *window)
+{
 	view->mdirb = mdirb;
-	gtk_widget_show_all(window);
+	sc_view_ctor(&view->view, plugin->ops->dir_view_del, window);
 }
 
 static inline void sc_dir_view_dtor(struct sc_dir_view *view)
 {
-	if (view->window) {
-		gtk_widget_destroy(view->window);
-		assert(view->window == NULL);
-	}
+	sc_view_dtor(&view->view);
 }
-
 
 extern LIST_HEAD(sc_plugins, sc_plugin) sc_plugins;
 

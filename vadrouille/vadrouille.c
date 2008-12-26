@@ -28,7 +28,9 @@
 #include "vadrouille.h"
 #include "mdirb.h"
 #include "browser.h"
+// Plugins (TODO)
 #include "mail.h"
+#include "calendar.h"
 
 /*
  * Plugins
@@ -40,6 +42,27 @@ void sc_plugin_register(struct sc_plugin *plugin)
 {
 	LIST_INSERT_HEAD(&sc_plugins, plugin, entry);
 }
+
+// Called whenever a view is deleted
+void unref_view(GtkWidget *widget, gpointer data)
+{
+	struct sc_view *const view = (struct sc_view *)data;
+	debug("unref view@%p, window = %p", view, view->window);
+	if (view->window) {
+		assert(widget == view->window);
+		view->window = NULL;
+	}
+	view->del(view);
+}
+
+extern inline void sc_view_ctor(struct sc_view *, void (*del)(struct sc_view *), GtkWidget *window);
+extern inline void sc_view_dtor(struct sc_view *);
+extern inline struct sc_msg_view *view2msg_view(struct sc_view *);
+extern inline void sc_msg_view_ctor(struct sc_msg_view *, struct sc_plugin *, struct sc_msg *, GtkWidget *window);
+extern inline void sc_msg_view_dtor(struct sc_msg_view *);
+extern inline struct sc_dir_view *view2dir_view(struct sc_view *);
+extern inline void sc_dir_view_ctor(struct sc_dir_view *, struct sc_plugin *, struct mdirb *, GtkWidget *window);
+extern inline void sc_dir_view_dtor(struct sc_dir_view *);
 
 /*
  * Init
@@ -68,6 +91,7 @@ int main(int nb_args, char *args[])
 	if_fail (mdirb_init()) return EXIT_FAILURE;
 	if_fail (sc_msg_init()) return EXIT_FAILURE;
 	if_fail (mail_init()) return EXIT_FAILURE;
+	if_fail (calendar_init()) return EXIT_FAILURE;
 	if_fail (browser_init()) return EXIT_FAILURE;
 
 	struct browser *browser = browser_new("/");

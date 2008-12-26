@@ -56,11 +56,8 @@ static void mail_msg_ctor(struct mail_msg *mmsg, struct mdirb *mdirb, struct hea
 
 	bool dummy;
 	if_fail (mmsg->date = sc_gmfield2ts(date->value, &dummy)) return;
-	if_fail (mmsg->from = Strdup(from->value)) return;
-	if_fail (mmsg->descr = Strdup(descr->value)) {
-		free(mmsg->from);
-		return;
-	}
+	mmsg->from = Strdup(from->value);
+	mmsg->descr = Strdup(descr->value);
 
 	sc_msg_ctor(&mmsg->msg, mdirb, h, version, &plugin);
 }
@@ -159,17 +156,6 @@ static GtkWidget *make_view_widget(char const *type, char const *resource, GtkWi
 q:	return make_scrollable(widget);
 }
 
-// FIXME: put this in sc_msg_view ?
-static void mail_msg_view_del(struct sc_msg_view *view);
-static void unref_win(GtkWidget *widget, gpointer data)
-{
-	debug("unref mdirb window");
-	(void)widget;
-	struct mail_msg_view *const view = (struct mail_msg_view *)data;
-	if (view->view.window) view->view.window = NULL;
-	mail_msg_view_del(&view->view);
-}
-
 static char const *ts2staticstr(time_t ts)
 {
 	static char date_str[64];
@@ -186,7 +172,7 @@ static void mail_msg_view_ctor(struct mail_msg_view *view, struct sc_msg *msg)
 	debug("view=%p, msg=%p", view, msg);
 	struct mail_msg *mmsg = msg2mmsg(msg);
 
-	GtkWidget *window = make_window(WC_VIEWER, unref_win, view);
+	GtkWidget *window = make_window(WC_VIEWER, NULL, NULL);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(window), vbox);
@@ -234,7 +220,7 @@ static void mail_msg_view_ctor(struct mail_msg_view *view, struct sc_msg *msg)
 
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 	
-	sc_msg_view_ctor(&view->view, msg, window);
+	sc_msg_view_ctor(&view->view, &plugin, msg, window);
 }
 
 static struct sc_msg_view *mail_msg_view_new(struct sc_msg *msg)
@@ -252,9 +238,9 @@ static void mail_msg_view_dtor(struct mail_msg_view *view)
 	sc_msg_view_dtor(&view->view);
 }
 
-static void mail_msg_view_del(struct sc_msg_view *view)
+static void mail_msg_view_del(struct sc_view *view)
 {
-	struct mail_msg_view *mview = DOWNCAST(view, view, mail_msg_view);
+	struct mail_msg_view *mview = DOWNCAST(view2msg_view(view), view, mail_msg_view);
 	mail_msg_view_dtor(mview);
 	free(mview);
 }

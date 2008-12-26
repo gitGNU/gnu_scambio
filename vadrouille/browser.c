@@ -66,7 +66,7 @@ static void dir_function_cb(GtkToolButton *button, gpointer user_data)
 		alert(GTK_MESSAGE_INFO, "No messages in this folder");
 		return;
 	}
-	debug("Execute dir function '%s'", mdirb->mdir.path);
+	debug("Execute dir function for '%s'", mdirb->mdir.path);
 	if_fail (d2m->function->cb(mdirb)) alert_error();
 }
 
@@ -86,6 +86,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 	on_error return;
 	browser->mdirb = mdir2mdirb(mdir);
 	browser->iter = NULL;
+	browser->nb_d2m = 0;
 
 	browser->store = gtk_tree_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_UINT, G_TYPE_POINTER);
 	browser->tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->store));
@@ -131,10 +132,11 @@ static void browser_ctor(struct browser *browser, char const *root)
 		for (unsigned f = 0; f < plugin->nb_dir_functions; f++) {
 			GtkToolItem *button = gtk_tool_button_new(plugin->dir_functions[f].icon, plugin->dir_functions[f].label);
 			gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
-			COMPILE_ASSERT(sizeof_array(browser->dirfunc2myself) == sizeof_array(plugin->dir_functions));
-			browser->dirfunc2myself[f].function = plugin->dir_functions+f;
-			browser->dirfunc2myself[f].myself = browser;
-			if (plugin->dir_functions[f].cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(dir_function_cb), browser->dirfunc2myself+f);
+			COMPILE_ASSERT(sizeof_array(browser->dirfunc2myself) >= sizeof_array(plugin->dir_functions));
+			browser->dirfunc2myself[browser->nb_d2m].function = plugin->dir_functions+f;
+			browser->dirfunc2myself[browser->nb_d2m].myself = browser;
+			if (plugin->dir_functions[f].cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(dir_function_cb), browser->dirfunc2myself+browser->nb_d2m);
+			browser->nb_d2m++;
 		}
 	}
 
@@ -200,6 +202,7 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 {
 	// Add this name as a child of the given iterator
 	mdirb_refresh(browser->mdirb);
+	mdirb_set_name(browser->mdirb, name);
 	debug("mdir '%s' (%s) has size %u", name, browser->mdirb->mdir.path, mdirb_size(browser->mdirb));
 	GtkTreeIter iter;
 	gtk_tree_store_append(browser->store, &iter, browser->iter);

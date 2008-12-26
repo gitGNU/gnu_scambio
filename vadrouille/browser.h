@@ -27,10 +27,11 @@ struct browser {
 	struct mdirb *mdirb;
 	GtkTreeIter *iter;
 	// This is a little odd but for the dir_function to be called we need these little structs
+	unsigned nb_d2m;
 	struct dirfunc2myself {
 		struct sc_plugin_dir_function *function;
 		struct browser *myself;
-	} dirfunc2myself[8];
+	} dirfunc2myself[16];
 };
 
 void browser_init(void);

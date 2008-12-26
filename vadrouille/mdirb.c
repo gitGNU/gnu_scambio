@@ -37,6 +37,7 @@ static struct mdir *mdirb_alloc(void)
 	LIST_INIT(&mdirb->msgs);
 	mdirb->nb_msgs = 0;
 	mdir_cursor_ctor(&mdirb->cursor);
+	mdirb->name[0] = '\0';
 	return &mdirb->mdir;
 }
 
@@ -108,6 +109,13 @@ void mdirb_refresh(struct mdirb *mdirb)
 {
 	debug("Refreshing mdirb %s", mdirb->mdir.path);
 	mdir_patch_list(&mdirb->mdir, &mdirb->cursor, false, add_msg, rem_msg, NULL);
+}
+
+extern inline char const *mdirb_name(struct mdirb *mdirb);
+
+void mdirb_set_name(struct mdirb *mdirb, char const *name)
+{
+	snprintf(mdirb->name, sizeof(mdirb->name), "%s", name);
 }
 
 /*

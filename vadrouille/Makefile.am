@@ -14,7 +14,10 @@ vadrouille_SOURCES = \
 	browser.c \
 	msg.c \
 	mail.c \
-	mail_composer.c
+	mail_composer.c \
+	calendar.c \
+	cal_date.c \
+	cal_editor.c
 
 vadrouille_LDADD = ../merelib/libgui.la ../lib/libscambio.la ../commons/libcommons.la $(GTKS_LIBS) $(GTKHTML_LIBS)
 

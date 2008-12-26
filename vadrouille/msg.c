@@ -120,7 +120,7 @@ extern inline void sc_msg_unref(struct sc_msg *msg);
  * Generic Directory View
  */
 
-extern inline void sc_dir_view_ctor(struct sc_dir_view *, struct mdirb *, GtkWidget *);
+extern inline void sc_dir_view_ctor(struct sc_dir_view *, struct sc_plugin *, struct mdirb *, GtkWidget *);
 extern inline void sc_dir_view_dtor(struct sc_dir_view *);
 
 struct gen_dir_view {
@@ -173,18 +173,6 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 	}
 }
 
-static void unref_win(GtkWidget *widget, gpointer data)
-{
-	debug("unref gen_dir_view window");
-	(void)widget;
-	struct gen_dir_view *const view = (struct gen_dir_view *)data;
-	if (view->view.window) {
-		view->view.window = NULL;
-		g_object_unref(G_OBJECT(view->store));
-		view->store = NULL;
-	}
-}
-
 static void reload_store(struct gen_dir_view *view)
 {
 	gtk_list_store_clear(view->store);
@@ -211,7 +199,7 @@ static void reload_store(struct gen_dir_view *view)
 
 static void dir_view_ctor(struct gen_dir_view *view, struct mdirb *mdirb)
 {
-	GtkWidget *window = make_window(WC_MSGLIST, unref_win, view);
+	GtkWidget *window = make_window(WC_MSGLIST, NULL, NULL);
 	GtkWidget *page = gtk_vbox_new(FALSE, 0);
 	
 	view->store = gtk_list_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
@@ -237,7 +225,7 @@ static void dir_view_ctor(struct gen_dir_view *view, struct mdirb *mdirb)
 		GTK_STOCK_QUIT,   close_cb, window);
 	gtk_box_pack_end(GTK_BOX(page), toolbar, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(window), page);
-	sc_dir_view_ctor(&view->view, mdirb, window);
+	sc_dir_view_ctor(&view->view, &default_plugin, mdirb, window);
 	
 	reload_store(view);
 }
@@ -257,9 +245,9 @@ static void dir_view_dtor(struct gen_dir_view *view)
 	sc_dir_view_dtor(&view->view);
 }
 
-static void dir_view_del(struct sc_dir_view *view_)
+static void dir_view_del(struct sc_view *view_)
 {
-	struct gen_dir_view *view = DOWNCAST(view_, view, gen_dir_view);
+	struct gen_dir_view *view = DOWNCAST(view2dir_view(view_), view, gen_dir_view);
 	dir_view_dtor(view);
 	free(view);
 }
