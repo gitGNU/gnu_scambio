@@ -398,7 +398,7 @@ static void add_event_cb(struct mdir *mdir, struct header *header, mdir_version 
 		error("Invalid calendar message with no "SC_START_FIELD" field");
 		return;
 	}
-	debug("new event is version %lld, start str = '%s'", version, start_field->value);
+	debug("new event is version %"PRIversion", start str = '%s'", version, start_field->value);
 	struct header_field *stop_field = header_find(header, SC_STOP_FIELD, NULL);
 	if (stop_field) {
 		if_fail (cal_date_ctor_from_str(&stop, stop_field->value)) {
