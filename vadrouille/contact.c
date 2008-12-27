@@ -477,6 +477,7 @@ static void contact_new_cb(struct mdirb *mdirb)
 	// And run a view window for it
 	(void)contact_view_new(msg);
 	on_error alert_error();
+	sc_msg_unref(msg);	// make the view the only ref to this message
 }
 
 /*
