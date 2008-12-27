@@ -157,15 +157,6 @@ struct day2event {
 	struct cal_msg *cmsg;
 };
 
-struct cal_dir_view {
-	struct sc_dir_view view;
-	GtkWidget *calendar, *event_list;
-	GtkListStore *event_store;
-	TAILQ_HEAD(day2events, day2event) day2events[31];
-	unsigned nb_dirs;
-	struct mdirb *dirs[32];
-};
-
 static struct cal_dir_view *global_view;
 
 static void day2event_new(struct cal_dir_view *view, struct cal_msg *cmsg, unsigned day)
@@ -265,7 +256,7 @@ static void select_event(struct cal_dir_view *view, struct cal_msg *cmsg, void *
 static bool view_this_dir(struct cal_dir_view *view, struct mdirb *mdirb)
 {
 	for (unsigned i = 0; i < view->nb_dirs; i++) {
-		if (view->dirs[i] == mdirb) return true;
+		if (view->dirs[i].mdirb == mdirb) return true;
 	}
 	return false;
 }
@@ -321,9 +312,8 @@ static void refresh_cb(GtkToolButton *button, gpointer user_data)
 	(void)button;
 	struct cal_dir_view *view = (struct cal_dir_view *)user_data;
 	for (unsigned d = 0; d < view->nb_dirs; d++) {
-		mdirb_refresh(view->dirs[d]);
+		mdirb_refresh(view->dirs[d].mdirb);
 	}
-	reset_month(view);
 }
 
 static void edit_cb(GtkToolButton *button, gpointer user_data)
@@ -342,7 +332,7 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 		cal_date_ctor(&stop,  0, month, day, 99, 99);
 		descr = "";
 		assert(view->nb_dirs > 0);
-		mdirb = view->dirs[0];
+		mdirb = view->dirs[0].mdirb;
 	} else {	// Retrieve selected event
 		GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view->event_list));
 		GtkTreeIter iter;
@@ -369,10 +359,7 @@ static void edit_cb(GtkToolButton *button, gpointer user_data)
 		descr = cmsg->descr;
 		mdirb = cmsg->msg.mdirb;
 	}
-	struct sc_view *editor = cal_editor_view_new(view->nb_dirs, view->dirs, mdirb, &start, &stop, descr, replaced);
-	// We want our view to be refreshed once the user quits the editor
-	// FIXME: this will *crash* if our view is destroyed before this editor
-	g_signal_connect(G_OBJECT(editor->window), "destroy", G_CALLBACK(refresh_cb), view);
+	(void)cal_editor_view_new(view, mdirb, &start, &stop, descr, replaced);
 }
 
 static void del_cb(GtkToolButton *button, gpointer user_data)
@@ -432,12 +419,33 @@ static gchar *cal_details(GtkCalendar *calendar, guint year, guint month, guint 
 }
 #endif
 
+static void dir_listener_cb(struct mdirb_listener *listener, struct mdirb *mdirb)
+{
+	(void)mdirb;
+	struct cal_dir *dir = DOWNCAST(listener, listener, cal_dir);
+	struct cal_dir_view *view = dir->view;
+	assert(mdirb == dir->mdirb);
+	reset_month(view);
+}
+
+static void cal_dir_ctor(struct cal_dir *dir, struct cal_dir_view *view, struct mdirb *mdirb)
+{
+	dir->mdirb = mdirb;
+	dir->view = view;
+	mdirb_listener_ctor(&dir->listener, mdirb, dir_listener_cb);
+}
+
+static void cal_dir_dtor(struct cal_dir *dir)
+{
+	mdirb_listener_dtor(&dir->listener);
+}
+
 static void cal_dir_view_add(struct cal_dir_view *view, struct mdirb *mdirb)
 {
 	if (view->nb_dirs >= sizeof_array(view->dirs)) {
 		with_error(0, "Too many dirs in this calendar") return;
 	}
-	view->dirs[view->nb_dirs++] = mdirb;
+	cal_dir_ctor(view->dirs+view->nb_dirs++, view, mdirb);
 	reset_month(view);
 }
 
@@ -510,6 +518,7 @@ static struct sc_dir_view *cal_dir_view_new(struct mdirb *mdirb)
 
 static void cal_dir_view_dtor(struct cal_dir_view *view)
 {
+	while (view->nb_dirs--) cal_dir_dtor(view->dirs + view->nb_dirs);
 	day2event_del_all(view);
 	g_object_unref(G_OBJECT(view->event_store));
 	if (global_view == view) global_view = NULL;
@@ -548,13 +557,14 @@ static void function_add_to_cal(struct mdirb *mdirb)
 }
 
 static struct sc_plugin_ops const ops = {
-	.msg_new      = cal_msg_new,
-	.msg_del      = cal_msg_del,
-	.msg_descr    = cal_msg_descr,
-	.msg_view_new = NULL,
-	.msg_view_del = NULL,
-	.dir_view_new = cal_dir_view_new,
-	.dir_view_del = cal_dir_view_del,
+	.msg_new          = cal_msg_new,
+	.msg_del          = cal_msg_del,
+	.msg_descr        = cal_msg_descr,
+	.msg_view_new     = NULL,
+	.msg_view_del     = NULL,
+	.dir_view_new     = cal_dir_view_new,
+	.dir_view_del     = cal_dir_view_del,
+	.dir_view_refresh = NULL,
 };
 static struct sc_plugin plugin = {
 	.name = "calendar",

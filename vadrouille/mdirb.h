@@ -24,12 +24,22 @@
 #include "merelib.h"
 
 struct sc_msg;
+struct mdirb;
+struct mdirb_listener {
+	LIST_ENTRY(mdirb_listener) entry;
+	void (*refresh)(struct mdirb_listener *, struct mdirb *);
+};
 struct mdirb {
 	struct mdir mdir;
 	struct mdir_cursor cursor;
 	unsigned nb_msgs;
 	LIST_HEAD(msgs, sc_msg) msgs;
 	char name[PATH_MAX];
+	/* We keep track of all the dir_views that uses this, so that they all get noticed when
+	 * the mdir content changes. msg_views are not noticed because they hold a ref on their
+	 * message anyway (if the message is deleted everything in it remains valid).
+	 */
+	LIST_HEAD(mdirb_listeners, mdirb_listener) listeners;
 };
 
 static inline struct mdirb *mdir2mdirb(struct mdir *mdir)
@@ -43,7 +53,20 @@ static inline unsigned mdirb_size(struct mdirb *mdirb)
 }
 
 void mdirb_init(void);
+
+static inline void mdirb_listener_ctor(struct mdirb_listener *listener, struct mdirb *mdirb, void (*cb)(struct mdirb_listener *, struct mdirb *))
+{
+	listener->refresh = cb;
+	LIST_INSERT_HEAD(&mdirb->listeners, listener, entry);
+}
+
+static inline void mdirb_listener_dtor(struct mdirb_listener *listener)
+{
+	LIST_REMOVE(listener, entry);
+}
+
 void mdirb_refresh(struct mdirb *);
+
 static inline char const *mdirb_name(struct mdirb *mdirb)
 {
 	return mdirb->name;

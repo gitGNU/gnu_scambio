@@ -261,13 +261,14 @@ static void compose_cb(void)
 struct mdir *mail_outbox;
 
 static struct sc_plugin_ops const ops = {
-	.msg_new      = mail_msg_new,
-	.msg_del      = mail_msg_del,
-	.msg_descr    = mail_msg_descr,
-	.msg_view_new = mail_msg_view_new,
-	.msg_view_del = mail_msg_view_del,
-	.dir_view_new = NULL,
-	.dir_view_del = NULL,
+	.msg_new          = mail_msg_new,
+	.msg_del          = mail_msg_del,
+	.msg_descr        = mail_msg_descr,
+	.msg_view_new     = mail_msg_view_new,
+	.msg_view_del     = mail_msg_view_del,
+	.dir_view_new     = NULL,
+	.dir_view_del     = NULL,
+	.dir_view_refresh = NULL,
 };
 static struct sc_plugin plugin = {
 	.name = "mail",

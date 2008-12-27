@@ -31,6 +31,7 @@
 // Plugins (TODO)
 #include "mail.h"
 #include "calendar.h"
+#include "contact.h"
 
 /*
  * Plugins
@@ -55,12 +56,24 @@ void unref_view(GtkWidget *widget, gpointer data)
 	view->del(view);
 }
 
+// Called whenever a dir_view's mdirb changes
+void listener_refresh_for_dirview(struct mdirb_listener *listener, struct mdirb *mdirb)
+{
+	(void)mdirb;
+	struct sc_dir_view *const view = listener2dir_view(listener);
+	assert(mdirb == view->mdirb);
+	if (view->plugin->ops->dir_view_refresh) {
+		view->plugin->ops->dir_view_refresh(view);
+	}
+}
+
 extern inline void sc_view_ctor(struct sc_view *, void (*del)(struct sc_view *), GtkWidget *window);
 extern inline void sc_view_dtor(struct sc_view *);
 extern inline struct sc_msg_view *view2msg_view(struct sc_view *);
 extern inline void sc_msg_view_ctor(struct sc_msg_view *, struct sc_plugin *, struct sc_msg *, GtkWidget *window);
 extern inline void sc_msg_view_dtor(struct sc_msg_view *);
 extern inline struct sc_dir_view *view2dir_view(struct sc_view *);
+extern inline struct sc_dir_view *listener2dir_view(struct mdirb_listener *);
 extern inline void sc_dir_view_ctor(struct sc_dir_view *, struct sc_plugin *, struct mdirb *, GtkWidget *window);
 extern inline void sc_dir_view_dtor(struct sc_dir_view *);
 
@@ -92,6 +105,7 @@ int main(int nb_args, char *args[])
 	if_fail (sc_msg_init()) return EXIT_FAILURE;
 	if_fail (mail_init()) return EXIT_FAILURE;
 	if_fail (calendar_init()) return EXIT_FAILURE;
+	if_fail (contact_init()) return EXIT_FAILURE;
 	if_fail (browser_init()) return EXIT_FAILURE;
 
 	struct browser *browser = browser_new("/");

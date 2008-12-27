@@ -44,6 +44,7 @@ struct sc_plugin {
 		void (*msg_view_del)(struct sc_view *);
 		struct sc_dir_view *(*dir_view_new)(struct mdirb *);
 		void (*dir_view_del)(struct sc_view *);
+		void (*dir_view_refresh)(struct sc_dir_view *);
 	} const *ops;
 	unsigned nb_global_functions;
 	struct sc_plugin_global_function {
@@ -113,6 +114,8 @@ static inline void sc_msg_view_dtor(struct sc_msg_view *view)
 struct sc_dir_view {
 	struct sc_view view;
 	struct mdirb *mdirb;
+	struct mdirb_listener listener;
+	struct sc_plugin *plugin;
 };
 
 static inline struct sc_dir_view *view2dir_view(struct sc_view *view)
@@ -120,14 +123,23 @@ static inline struct sc_dir_view *view2dir_view(struct sc_view *view)
 	return DOWNCAST(view, view, sc_dir_view);
 }
 
+static inline struct sc_dir_view *listener2dir_view(struct mdirb_listener *listener)
+{
+	return DOWNCAST(listener, listener, sc_dir_view);
+}
+
+void listener_refresh_for_dirview(struct mdirb_listener *, struct mdirb *);
 static inline void sc_dir_view_ctor(struct sc_dir_view *view, struct sc_plugin *plugin, struct mdirb *mdirb, GtkWidget *window)
 {
 	view->mdirb = mdirb;
+	view->plugin = plugin;
 	sc_view_ctor(&view->view, plugin->ops->dir_view_del, window);
+	mdirb_listener_ctor(&view->listener, mdirb, listener_refresh_for_dirview);
 }
 
 static inline void sc_dir_view_dtor(struct sc_dir_view *view)
 {
+	mdirb_listener_dtor(&view->listener);
 	sc_view_dtor(&view->view);
 }
 

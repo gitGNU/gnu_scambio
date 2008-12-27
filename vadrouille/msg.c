@@ -252,6 +252,11 @@ static void dir_view_del(struct sc_view *view_)
 	free(view);
 }
 
+static void dir_view_refresh(struct sc_dir_view *view)
+{
+	reload_store(DOWNCAST(view, view, gen_dir_view));
+}
+
 /*
  * Init
  */
@@ -266,13 +271,14 @@ static void function_list(struct mdirb *mdirb)
 }
 
 static struct sc_plugin_ops const ops = {
-	.msg_new      = msg_new,
-	.msg_del      = msg_del,
-	.msg_descr    = msg_descr,
-	.msg_view_new = NULL,
-	.msg_view_del = NULL,
-	.dir_view_new = dir_view_new,
-	.dir_view_del = dir_view_del,
+	.msg_new          = msg_new,
+	.msg_del          = msg_del,
+	.msg_descr        = msg_descr,
+	.msg_view_new     = NULL,
+	.msg_view_del     = NULL,
+	.dir_view_new     = dir_view_new,
+	.dir_view_del     = dir_view_del,
+	.dir_view_refresh = dir_view_refresh,
 };
 static struct sc_plugin default_plugin = {
 	.name = "default",

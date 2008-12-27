@@ -35,6 +35,7 @@ static struct mdir *mdirb_alloc(void)
 {
 	struct mdirb *mdirb = Malloc(sizeof(*mdirb));
 	LIST_INIT(&mdirb->msgs);
+	LIST_INIT(&mdirb->listeners);
 	mdirb->nb_msgs = 0;
 	mdir_cursor_ctor(&mdirb->cursor);
 	mdirb->name[0] = '\0';
@@ -48,12 +49,18 @@ static void mdirb_free(struct mdir *mdir)
 	while (NULL != (msg = LIST_FIRST(&mdirb->msgs))) {
 		sc_msg_unref(msg);
 	}
+	struct mdirb_listener *listener;
+	while (NULL != (listener = LIST_FIRST(&mdirb->listeners))) {
+		LIST_REMOVE(listener, entry);
+	}
 	mdir_cursor_dtor(&mdirb->cursor);
 	free(mdirb);
 }
 
 extern inline struct mdirb *mdir2mdirb(struct mdir *);
 extern inline unsigned mdirb_size(struct mdirb *);
+extern inline void mdirb_listener_ctor(struct mdirb_listener *, struct mdirb *, void (*)(struct mdirb_listener *, struct mdirb *));
+extern inline void mdirb_listener_dtor(struct mdirb_listener *);
 
 /*
  * Refresh an mdir msg list & count.
@@ -62,13 +69,14 @@ extern inline unsigned mdirb_size(struct mdirb *);
 
 static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 {
-	(void)data;
+	bool *changed = (bool *)data;
 	struct sc_msg *msg;
 	struct mdirb *mdirb = mdir2mdirb(mdir);
 	debug("searching version %"PRIversion, version);
 	LIST_FOREACH(msg, &mdirb->msgs, entry) {	// TODO: hash me using version please
 		if (msg->version == version) {
 			sc_msg_unref(msg);
+			*changed = true;
 			break;
 		}
 	}
@@ -77,9 +85,11 @@ static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 
 static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
-	(void)data;
 	if (header_is_directory(h)) return;
+
 	debug("try to add msg version %"PRIversion, version);
+	bool *changed = (bool *)data;
+	*changed = true;
 	struct mdirb *mdirb = mdir2mdirb(mdir);
 	struct sc_msg *msg;
 	struct sc_plugin *plugin;
@@ -108,7 +118,15 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 void mdirb_refresh(struct mdirb *mdirb)
 {
 	debug("Refreshing mdirb %s", mdirb->mdir.path);
-	mdir_patch_list(&mdirb->mdir, &mdirb->cursor, false, add_msg, rem_msg, NULL);
+	bool changed = false;
+	mdir_patch_list(&mdirb->mdir, &mdirb->cursor, false, add_msg, rem_msg, &changed);
+	if (changed) {
+		debug("noticing listeners because content changed");
+		struct mdirb_listener *listener, *tmp;
+		LIST_FOREACH_SAFE(listener, &mdirb->listeners, entry, tmp) {
+			listener->refresh(listener, mdirb);
+		}
+	}
 }
 
 extern inline char const *mdirb_name(struct mdirb *mdirb);

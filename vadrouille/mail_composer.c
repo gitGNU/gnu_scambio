@@ -50,7 +50,7 @@ void mail_composer_del(struct mail_composer *comp)
  * Callbacks
  */
 
-void cancel_cb(GtkToolButton *button, gpointer user_data)
+static void cancel_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	struct mail_composer *comp = (struct mail_composer *)user_data;

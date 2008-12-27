@@ -16,8 +16,10 @@
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef CALENDAR_H_081222
+#include "scambio.h"
 #include "scambio/mdir.h"
 #include "merelib.h"
+#include "vadrouille.h"
 
 /* The custom list for calendar is... a calendar, with a list per day.
  * The other special behaviour is that we try to have only one calendar
@@ -31,6 +33,22 @@ void calendar_init(void);
 
 struct cal_date;
 struct mdirb;
-struct sc_view *cal_editor_view_new(unsigned nb_dirs, struct mdirb **, struct mdirb *def, struct cal_date *start, struct cal_date *stop, char const *descr, mdir_version replaced);
+
+struct cal_dir_view {
+	struct sc_dir_view view;
+	GtkWidget *calendar, *event_list;
+	GtkListStore *event_store;
+	TAILQ_HEAD(day2events, day2event) day2events[31];
+	// We may view several dirs in the same dir_view. The only drawback is that
+	// we must handle our mdirb_listener ourself.
+	unsigned nb_dirs;
+	struct cal_dir {
+		struct mdirb *mdirb;
+		struct mdirb_listener listener;
+		struct cal_dir_view *view;	// back link for ease
+	} dirs[32];
+};
+
+struct sc_view *cal_editor_view_new(struct cal_dir_view *, struct mdirb *def, struct cal_date *start, struct cal_date *stop, char const *descr, mdir_version replaced);
 
 #endif

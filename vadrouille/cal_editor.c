@@ -33,8 +33,7 @@ struct editor {
 	GtkTextBuffer *descr_buffer;
 	mdir_version replaced_version;
 	struct mdirb *replaced_dir;
-	unsigned nb_dirs;
-	struct mdirb *dirs[16];
+	struct cal_dir_view *cal_dir_view;
 };
 
 /*
@@ -76,11 +75,11 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	
 	// Find the folder
 	gint f = gtk_combo_box_get_active(GTK_COMBO_BOX(editor->folder_combo));
-	if (f < 0 || f >= (int)editor->nb_dirs) {
+	if (f < 0 || f >= (int)editor->cal_dir_view->nb_dirs) {
 		alert(GTK_MESSAGE_ERROR, "You must choose a folder");
 		return;
 	}
-	struct mdirb *mdirb = editor->dirs[f];
+	struct mdirb *mdirb = editor->cal_dir_view->dirs[f].mdirb;
 
 	// build a new header
 	struct header *h = header_new();
@@ -100,6 +99,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		// To
 		if_fail (cal_date_ctor_from_input(&to_date, gtk_entry_get_text(GTK_ENTRY(editor->stop_entry)), &from_date)) break;
 		if (cal_date_is_set(&to_date)) {
+			if (cal_date_compare(&from_date, &to_date) > 0) with_error(0, "Start date must precede End date") break;
 			if_fail (cal_date_to_str(&to_date, date_str, sizeof(date_str))) break;
 			(void)header_field_new(h, SC_STOP_FIELD, date_str);
 		}
@@ -121,25 +121,25 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		mdir_del_request(&editor->replaced_dir->mdir, editor->replaced_version);
 	}
 	gtk_widget_destroy(editor->view.window);
+	mdirb_refresh(mdirb);	// refresh this mdirb
 }
 
 /*
  * Build the view
  */
 
-struct sc_view *cal_editor_view_new(unsigned nb_dirs, struct mdirb **dirs, struct mdirb *replaced_dir, struct cal_date *start, struct cal_date *stop, char const *descr, mdir_version replaced)
+struct sc_view *cal_editor_view_new(struct cal_dir_view *cal_dir_view, struct mdirb *replaced_dir, struct cal_date *start, struct cal_date *stop, char const *descr, mdir_version replaced)
 {
 	struct editor *editor = Malloc(sizeof(*editor));
 	editor->replaced_version = replaced;
 	editor->replaced_dir = replaced_dir;
-	editor->nb_dirs = nb_dirs;
+	editor->cal_dir_view = cal_dir_view;
 
 	// First the combo to choose the folder from
 	editor->folder_combo = gtk_combo_box_new_text();
-	for (unsigned i = 0; i < nb_dirs; i++) {
-		gtk_combo_box_append_text(GTK_COMBO_BOX(editor->folder_combo), dirs[i]->name);
-		if (dirs[i] == replaced_dir) gtk_combo_box_set_active(GTK_COMBO_BOX(editor->folder_combo), i);
-		editor->dirs[i] = dirs[i];
+	for (unsigned i = 0; i < cal_dir_view->nb_dirs; i++) {
+		gtk_combo_box_append_text(GTK_COMBO_BOX(editor->folder_combo), mdirb_name(cal_dir_view->dirs[i].mdirb));
+		if (cal_dir_view->dirs[i].mdirb == replaced_dir) gtk_combo_box_set_active(GTK_COMBO_BOX(editor->folder_combo), i);
 	}
 	
 	// Then two date editors (text inputs), the second one being optional
