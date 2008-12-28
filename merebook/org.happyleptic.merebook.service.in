@@ -1,4 +1,0 @@
-[D-BUS Service]
-Name=org.happyleptic.merebook
-Exec=@prefix@/bin/merebook
-

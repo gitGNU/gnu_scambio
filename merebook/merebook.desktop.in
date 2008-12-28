@@ -1,8 +1,0 @@
-[Desktop Entry]
-Encoding=UTF-8
-Version=1.0
-Type=Application
-Name=MereBook
-Exec=@prefix@/bin/merebook
-X-Osso-Service=org.happyleptic.merebook
-Icon=merebook
