@@ -238,9 +238,9 @@ static void send_file(int out, char const *filename)
 static void send_part(int fd, struct part *part)
 {
 	if_fail (send_smtp_strs(fd, "Content-Transfer-Encoding: base64", NULL)) return;
-	if (part->type[0] != '\0') {
+	if (part->type) {
 		if_fail (send_smtp_strs(fd, "Content-Type: ", part->type, ";", NULL)) return;
-		if (part->name[0] != '\0') {
+		if (part->name) {
 			if_fail (send_smtp_strs(fd, "\tname=\"", part->name, "\"", NULL)) return;
 		}
 	}
