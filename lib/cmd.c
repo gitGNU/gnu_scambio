@@ -79,6 +79,7 @@ static bool is_delimiter(int c)
 // vb stores a line terminated by \n\0 or just \0.
 static int tokenize(struct varbuf *vb, union mdir_cmd_arg *tokens)
 {
+	debug("vb='%s'", vb->buf);
 	int nb_tokens = 0;
 	size_t c = 0;
 	do {

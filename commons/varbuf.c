@@ -26,26 +26,15 @@
 #include "varbuf.h"
 #include "misc.h"
 
-/*
- * Data Definitions
- */
-
-/*
- * Private Functions
- */
-
-/*
- * Public Functions
- */
-
 extern inline void varbuf_ctor(struct varbuf *vb, size_t init_size, bool relocatable);
 extern inline void varbuf_dtor(struct varbuf *vb);
 
-void varbuf_make_room(struct varbuf *vb, size_t new_size)
+static void varbuf_make_room(struct varbuf *vb, size_t new_size)
 {
+	new_size++;	// for the nul byte we add inconditionaly
 	if (vb->actual >= new_size) return;
 	void *new_buf = realloc(vb->buf, new_size);
-	if (! new_buf) with_error(ENOMEM, "Cannot realloc varbug to %zu bytes", new_size) return;
+	if (! new_buf) with_error(ENOMEM, "Cannot realloc varbuf to %zu bytes", new_size) return;
 	if (new_buf != vb->buf && !vb->relocatable) {
 		error_push(ENOMEM, "Cannot extend not relocatable varbuf");
 		free(new_buf);
@@ -58,7 +47,7 @@ void varbuf_make_room(struct varbuf *vb, size_t new_size)
 void varbuf_append(struct varbuf *vb, size_t size, void const *buf)
 {
 	size_t pos = vb->used;
-	varbuf_put(vb, size);
+	varbuf_put(vb, size);	// will place a nul byte at the end
 	on_error return;
 	memcpy(vb->buf + pos, buf, size);
 }
@@ -70,55 +59,52 @@ void varbuf_append_strs(struct varbuf *vb, ...)
 	char const *str;
 	while (NULL != (str = va_arg(ap, char const *))) {
 		size_t const len = strlen(str);
-		varbuf_destringify(vb);
 		if_fail (varbuf_append(vb, len, str)) break;
 	}
-	varbuf_stringify(vb);
 	va_end(ap);
+}
+
+static void nulterm(struct varbuf *vb)
+{
+	vb->buf[vb->used] = '\0';
 }
 
 void varbuf_put(struct varbuf *vb, size_t size)
 {
 	if (vb->used + size > vb->actual) {
 		size_t inc = vb->used + size - vb->actual;
-		varbuf_make_room(vb, vb->actual + inc + (inc + 1)/2);
+		varbuf_make_room(vb, vb->actual + inc + (inc + 1)/2);	// will make room for one more byte
 		on_error return;
 	}
 	vb->used += size;
+	nulterm(vb);
 }
 
 void varbuf_chop(struct varbuf *vb, size_t size)
 {
-	if (vb->used < size) with_error(EINVAL, "Chop would extend") return;
+	assert(size < vb->used);
 	vb->used -= size;
+	nulterm(vb);
+}
+
+void varbuf_cut(struct varbuf *vb, char const *new_end)
+{
+	assert(new_end >= vb->buf && new_end <= vb->buf+vb->used);
+	vb->used = new_end - vb->buf;
+	nulterm(vb);
 }
 
 void varbuf_clean(struct varbuf *vb)
 {
 	vb->used = 0;
+	nulterm(vb);
 	// TODO: realloc buf toward initial guess ?
-}
-
-void varbuf_stringify(struct varbuf *vb)
-{
-	if (! vb->used || vb->buf[vb->used-1] != '\0') {	// if this is a new varbuf, start with an empty string
-		varbuf_append(vb, 1, "");
-	}
-}
-
-void varbuf_destringify(struct varbuf *vb)
-{
-	if (vb->used && vb->buf[vb->used-1] == '\0') {
-		varbuf_chop(vb, 1);
-	}
 }
 
 void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 {
 	debug("varbuf_read_line(vb=%p, fd=%d)", vb, fd);
-	varbuf_stringify(vb);
 	on_error return;
-	vb->used--;	// chop nul char
 	size_t prev_used = vb->used;
 	if (new) *new = vb->buf + vb->used;	// new line will override this nul char
 	bool was_CR = false;
@@ -142,7 +128,6 @@ void varbuf_read_line(struct varbuf *vb, int fd, size_t maxlen, char **new)
 			}
 		}
 	}
-	varbuf_stringify(vb);
 }
 
 void varbuf_write(struct varbuf const *vb, int fd)

@@ -40,10 +40,15 @@ struct editor {
  * Callbacks
  */
 
+static void editor_dtor(struct editor *editor)
+{
+	sc_view_dtor(&editor->view);
+}
+
 static void editor_del(struct sc_view *view)
 {
 	struct editor *editor = DOWNCAST(view, view, editor);
-	sc_view_dtor(&editor->view);
+	editor_dtor(editor);
 	free(editor);
 }
 

@@ -35,21 +35,21 @@
  * Public Functions
  */
 
-static void command_ctor(struct command *cmd, char const *kw, struct mdirc *mdirc, char const *folder, char const *filename)
+static void command_ctor(struct command *cmd, char const *kw, struct mdirc *mdirc, char const *folder, char const *filename, struct header *h)
 {
 	if (folder[0] == '\0') folder = "/";	// should not happen
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	cmd->mdirc = mdirc;
 	cmd->kw = kw;
 	debug("cmd @%p, folder = '%s', mdir id = '%s'", cmd, folder, mdir_id(&mdirc->mdir));
-	if_fail (mdir_cnx_query(&cnx, kw, &cmd->sq, folder, kw == kw_sub ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
+	if_fail (mdir_cnx_query(&cnx, kw, h, &cmd->sq, folder, kw == kw_sub ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
 	LIST_INSERT_HEAD(&mdirc->commands, cmd, mdirc_entry);
 }
 
-struct command *command_new(char const *kw, struct mdirc *mdirc, char const *folder, char const *filename)
+struct command *command_new(char const *kw, struct mdirc *mdirc, char const *folder, char const *filename, struct header *h)
 {
 	struct command *cmd = Malloc(sizeof(*cmd));
-	if_fail (command_ctor(cmd, kw, mdirc, folder, filename)) {
+	if_fail (command_ctor(cmd, kw, mdirc, folder, filename, h)) {
 		free(cmd);
 		cmd = NULL;
 	}

@@ -325,8 +325,7 @@ static void read_whole_mail(struct varbuf *vb, int fd)
 		varbuf_read_line(vb, fd, MAX_MAILLINE_LENGTH, &line);
 		on_error break;
 		if (line_match(line, ".")) {	// chop this line
-			vb->used = line - vb->buf + 1;
-			vb->buf[vb->used-1] = '\0';
+			varbuf_cut(vb, line);
 			break;
 		}
 	} while (1);
@@ -338,7 +337,7 @@ struct msg_tree *msg_tree_read(int fd)
 	struct varbuf vb;
 	if_fail (varbuf_ctor(&vb, 10240, true)) return NULL;
 	read_whole_mail(&vb, fd);
-	unless_error root = parse_mail_rec(vb.buf, vb.used -1 /*trailling 0 is not to be considered*/);
+	unless_error root = parse_mail_rec(vb.buf, vb.used);
 	varbuf_dtor(&vb);
 	return root;
 }

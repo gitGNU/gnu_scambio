@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include "scambio.h"
 #include "scambio/cnx.h"
+#include "scambio/header.h"
 #include "varbuf.h"
 #include "misc.h"
 #include "auth.h"
@@ -76,7 +77,7 @@ struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdi
 	with_error(0, "Unexpected answer for seq# %lld", cmd->seq) return NULL;
 }
 
-void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
+void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct header *h, struct mdir_sent_query *sq, ...)
 {
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
@@ -96,8 +97,9 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
 		va_end(ap);
 		on_error break;
 		if_fail (varbuf_append_strs(&vb, "\n", NULL)) break;
+		if (h) if_fail (header_dump(h, &vb)) break;
 		debug("Will write '%s'", vb.buf);
-		if_fail (Write(cnx->fd, vb.buf, vb.used-1)) break;	// do not output the final '\0'
+		if_fail (Write(cnx->fd, vb.buf, vb.used)) break;
 		if (sq) {
 			sq->seq = seq;
 			sq->creation = time(NULL);
@@ -144,7 +146,7 @@ void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, ch
 		struct mdir_cmd_def auth_def = MDIR_CNX_ANSW_REGISTER(kw_auth, auth_answ);
 		if_fail (mdir_syntax_register(cnx->syntax, &auth_def)) break;
 		struct auth_sent_query my_sq = { .done = false, };
-		if_fail (mdir_cnx_query(cnx, kw_auth, &my_sq.sq, username, NULL)) break;
+		if_fail (mdir_cnx_query(cnx, kw_auth, NULL, &my_sq.sq, username, NULL)) break;
 		if_fail (mdir_cnx_read(cnx)) break;
 		if_fail (mdir_syntax_unregister(cnx->syntax, &auth_def)) break;
 		if (! my_sq.done) with_error (0, "no answer to auth") break;

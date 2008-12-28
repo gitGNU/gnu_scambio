@@ -103,8 +103,10 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
  * The query must have been registered first if you do expect an answer.
  * If !sq, no seqnum will be set (and you will receive no answer).
  * Otherwise it will be linked from the cnx for later retrieval (see mdir_cnx_query_retrieve()).
+ * Will also write the given header if not NULL.
  */
-void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
+struct header;
+void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct header *h, struct mdir_sent_query *sq, ...)
 #ifdef __GNUC__
 	__attribute__ ((sentinel))
 #endif

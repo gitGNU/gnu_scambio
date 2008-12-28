@@ -78,6 +78,13 @@ static void global_function_cb(GtkToolButton *button, gpointer user_data)
 	if_fail (function->cb()) alert_error();
 }
 
+static void refresh_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	browser_refresh(browser);
+}
+
 static void browser_ctor(struct browser *browser, char const *root)
 {
 	debug("brower@%p", browser);
@@ -114,7 +121,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 
 	GtkWidget *toolbar = make_toolbar(3,
 		GTK_STOCK_DELETE,  NULL, NULL,
-		GTK_STOCK_REFRESH, NULL, NULL,
+		GTK_STOCK_REFRESH, refresh_cb, browser,
 		GTK_STOCK_QUIT,    close_cb, browser->window);
 	// Add per plugin global functions
 	struct sc_plugin *plugin;
@@ -222,6 +229,7 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 
 void browser_refresh(struct browser *browser)
 {
+	gtk_tree_store_clear(browser->store);
 	add_subfolder_rec(browser, "root");
 	gtk_tree_view_expand_all(GTK_TREE_VIEW(browser->tree));
 }

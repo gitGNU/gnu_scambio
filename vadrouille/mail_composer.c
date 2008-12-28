@@ -34,14 +34,12 @@
 
 static void mail_composer_dtor(struct mail_composer *comp)
 {
-	if (comp->window) {
-		gtk_widget_destroy(comp->window);
-		assert(comp->window == NULL);
-	}
+	sc_view_dtor(&comp->view);
 }
 
-void mail_composer_del(struct mail_composer *comp)
+static void mail_composer_del(struct sc_view *view)
 {
+	struct mail_composer *comp = DOWNCAST(view, view, mail_composer);
 	mail_composer_dtor(comp);
 	free(comp);
 }
@@ -54,7 +52,7 @@ static void cancel_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	struct mail_composer *comp = (struct mail_composer *)user_data;
-	gtk_widget_destroy(comp->window);
+	gtk_widget_destroy(comp->view.window);
 }
 
 static void send_file(char const *fname, char const *name, char const *type, struct header *header)
@@ -150,7 +148,7 @@ static void mail_composer_send(struct mail_composer *comp)
 	add_files_and_send(comp, header);
 	header_unref(header);
 	// Now wait until the upload is complete
-	wait_all_tx(&ccnx, GTK_WINDOW(comp->window));
+	wait_all_tx(&ccnx, GTK_WINDOW(comp->view.window));
 }
 
 void send_cb(GtkToolButton *button, gpointer user_data)
@@ -161,7 +159,7 @@ void send_cb(GtkToolButton *button, gpointer user_data)
 	on_error {
 		alert_error();
 	} else {
-		mail_composer_del(comp);
+		gtk_widget_destroy(comp->view.window);
 	}
 }
 
@@ -173,7 +171,7 @@ void add_file(GtkToolButton *button, gpointer user_data)
 		alert(GTK_MESSAGE_ERROR, "Too many files !");
 		return;
 	}
-	GtkWidget *file_chooser = gtk_file_chooser_dialog_new("Choose a file", GTK_WINDOW(comp->window),
+	GtkWidget *file_chooser = gtk_file_chooser_dialog_new("Choose a file", GTK_WINDOW(comp->view.window),
 		GTK_FILE_CHOOSER_ACTION_OPEN, 
 		GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
 		GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
@@ -186,15 +184,6 @@ void add_file(GtkToolButton *button, gpointer user_data)
 	gtk_widget_destroy(file_chooser);
 }
 
-static void unref_win(GtkWidget *widget, gpointer data)
-{
-	debug("unref composer window");
-	(void)widget;
-	struct mail_composer *const comp = (struct mail_composer *)data;
-	if (comp->window) comp->window = NULL;
-	mail_composer_del(comp);
-}
-
 /*
  * Construction
  */
@@ -204,8 +193,9 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 	if (! mail_outbox) {
 		with_error(0, "Cannot compose message when no outbox is configured") return;
 	}
+	comp->nb_files = 0;
 
-	comp->window = make_window(WC_EDITOR, unref_win, comp);
+	GtkWidget *window = make_window(WC_EDITOR, NULL, NULL);
 	
 	// From : combobox with all accepted from addresses (with from param preselected)
 	comp->from_combo = gtk_combo_box_new_text();
@@ -233,7 +223,7 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 
 	// Pack all this into the window
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
-	gtk_container_add(GTK_CONTAINER(comp->window), vbox);
+	gtk_container_add(GTK_CONTAINER(window), vbox);
 	GtkWidget *formH = make_labeled_hboxes(3,
 		"From :", comp->from_combo,
 	  	"To :", comp->to_entry,
@@ -253,18 +243,18 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 
-	gtk_widget_show_all(comp->window);
+	sc_view_ctor(&comp->view, mail_composer_del, window);
 }
 
-struct mail_composer *mail_composer_new(char const *from, char const *to, char const *subject)
+struct sc_view *mail_composer_new(char const *from, char const *to, char const *subject)
 {
 	debug("from=%s, to=%s, subject=%s", from, to, subject);
 	struct mail_composer *comp = Malloc(sizeof(*comp));
 	if_fail (mail_composer_ctor(comp, from, to, subject)) {
 		free(comp);
-		comp = NULL;
+		return NULL;
 	}
-	return comp;
+	return &comp->view;
 }
 
 

@@ -19,18 +19,18 @@
 #define MAIL_H_081222
 #include <time.h>
 #include "merelib.h"
+#include "vadrouille.h"
 
 extern struct mdir *mail_outbox;
 void mail_init(void);
 
 struct mail_composer {
-	GtkWidget *window;
+	struct sc_view view;
 	GtkWidget *from_combo, *to_entry, *subject_entry, *editor;
 	unsigned nb_files;
 	char filenames[32][PATH_MAX];
 };
 
-struct mail_composer *mail_composer_new(char const *from, char const *to, char const *subject);
-void mail_composer_del(struct mail_composer *);
+struct sc_view *mail_composer_new(char const *from, char const *to, char const *subject);
 
 #endif
