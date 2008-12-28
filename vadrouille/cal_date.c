@@ -107,7 +107,7 @@ void cal_date_to_str(struct cal_date *cd, char *str, size_t size)
 
 static bool issep(int c)
 {
-	return isblank(c) || c == '-' || c == '/' || c == ':' || c == 'h';
+	return isblank(c) || c == '-' || c == '/' || c == ':' || c == 'h' || c == 'H';
 }
 
 static long parse_duration(char const *str)
@@ -152,6 +152,7 @@ static long parse_duration(char const *str)
 void cal_date_ctor_from_input(struct cal_date *cd, char const *i, struct cal_date *ref)
 {
 	long year = 0, month = 0, day = 0, hour = 99, min = 0;
+	if (ref && !cal_date_is_set(ref)) ref = NULL;
 	// Try to reckognize a date and a time from user inputs
 	while (isblank(*i)) i++;
 	if (*i != '\0') {
@@ -168,6 +169,13 @@ void cal_date_ctor_from_input(struct cal_date *cd, char const *i, struct cal_dat
 		} else {	// normal date
 			year = strtol(i, (char **)&j, 10);
 			if (*j == '\0') with_error(0, "Invalid date : lacks a month") return;
+			if (ref && (*j == 'h' || *j == 'H')) {	// only hour was entered
+				day = ref->day;
+				month = ref->month;
+				year = ref->year;
+				j = i;
+				goto get_hour;
+			}
 			while (issep(*j)) j++;
 			month = strtol(j, (char **)&i, 10);
 			if (*i == '\0') with_error(0, "Invalid date : lacks a day") return;
@@ -178,6 +186,7 @@ void cal_date_ctor_from_input(struct cal_date *cd, char const *i, struct cal_dat
 			if (day < 1 || day > 31) with_error(0, "Invalid day (%ld)", day) return;
 			if (day > month_days(year, month)) with_error(0, "No such day (%ld) in this month (%ld)", day, month) return;
 			while (isblank(*j)) j++;
+get_hour:
 			if (*j != '\0') {
 				hour = strtol(j, (char **)&i, 10);
 				if (hour < 0 || hour > 23) with_error(0, "Invalid hour (%ld)", hour) return;
