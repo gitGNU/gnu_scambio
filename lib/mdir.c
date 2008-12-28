@@ -317,8 +317,10 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 			if (*prev_dirid != '_') with_error(0, "Previous link for new dirId %s points toward non transient dirId %s", dirid_field->value, prev_dirid) return;
 			// rename dirId and rebuild symlink
 			char new_path[PATH_MAX];
-			snprintf(new_path, sizeof(new_path), "%s/%s", mdir_root, prev_dirid);
+			snprintf(new_path, sizeof(new_path), "%s/%s", mdir_root, dirid_field->value);
+			debug("Renaming previous transient directory from '%s' to '%s'", prev_link, new_path);
 			if (0 != rename(prev_link, new_path)) with_error(errno, "Cannot rename transient dirId %s to %s", prev_link, new_path) return;
+			debug("Removing previous symlink '%s'", path);
 			if (0 != unlink(path)) with_error(errno, "Cannot remove previous symlink %s", path) return;
 			child = mdir_lookup_by_id(dirid_field->value, false);	// must exists by now
 			on_error return;
