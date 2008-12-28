@@ -37,7 +37,10 @@ void *connecter_thread(void *arg)
 {
 	debug("Starting connecter");
 	char *username = arg;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) return NULL;
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) {
+		error_clear();
+		return NULL;
+	}
 	// TODO: wait until completion if assynchronous ?
 	reader_pthid = pth_spawn(PTH_ATTR_DEFAULT, reader_thread, NULL);
 	writer_pthid = pth_spawn(PTH_ATTR_DEFAULT, writer_thread, NULL);
