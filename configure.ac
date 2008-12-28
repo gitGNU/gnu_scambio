@@ -36,10 +36,10 @@ else
 		PKG_CHECK_MODULES(GTKHTML, libgtkhtml-3.8, [GTKHTMLVER=380], [AC_MSG_ERROR(Cannot find GTKHTML lib)])
 	])
 	if test "x$DO_GTKAPPS" = xgtk ; then
-		AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal merebook vadrouille icons")
+		AC_SUBST(GTK_SUBDIRS, "merelib vadrouille icons")
 		AC_SUBST(MAEMO_CPPFLAGS, "")
 	else # maemo then
-		AC_SUBST(GTK_SUBDIRS, "merelib meremail merecal merebook vadrouille icons")
+		AC_SUBST(GTK_SUBDIRS, "merelib vadrouille icons")
 		AC_SUBST(MAEMO_CPPFLAGS, "-DWITH_MAEMO")
 	fi
 fi
@@ -71,15 +71,6 @@ AC_CONFIG_FILES([
 	sendmail/Makefile
 	merefs/Makefile
 	merelib/Makefile
-	meremail/Makefile
-	meremail/meremail.desktop
-	meremail/org.happyleptic.meremail.service
-	merecal/Makefile
-	merecal/merecal.desktop
-	merecal/org.happyleptic.merecal.service
-	merebook/Makefile
-	merebook/merebook.desktop
-	merebook/org.happyleptic.merebook.service
 	vadrouille/Makefile
 	vadrouille/vadrouille.desktop
 	vadrouille/org.happyleptic.vadrouille.service
