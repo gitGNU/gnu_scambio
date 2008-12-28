@@ -209,7 +209,6 @@ mdir_version header_target(struct header *);
 #define SC_FROM_FIELD     "sc-from"
 #define SC_TO_FIELD       "sc-to"
 #define SC_DESCR_FIELD    "sc-descr"
-#define SC_SENT_DATE      "sc-sent-at"
 #define SC_EXTID_FIELD    "sc-extid"
 #define SC_RESOURCE_FIELD "sc-resource"
 #define SC_START_FIELD    "sc-start"

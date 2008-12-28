@@ -32,6 +32,7 @@ struct book {
 	char path[PATH_MAX];
 	char const *name;	// points into path
 	struct mdir *mdir;
+	struct mdir_cursor cursor;
 	LIST_HEAD(contacts, contact) contacts;
 };
 extern LIST_HEAD(books, book) books;

@@ -70,8 +70,7 @@ static void init(void)
 	if_fail (init_conf()) return;
 	if_fail (init_log()) return;
 	if_fail (daemonize("sc_filed")) return;
-	if_fail (chn_begin(true)) return;
-	if (0 != atexit(chn_end)) return;
+	if_fail (chn_init(true)) return;
 	if_fail (init_server()) return;
 	if (0 != atexit(deinit_syntax)) with_error(0, "atexit") return;
 }

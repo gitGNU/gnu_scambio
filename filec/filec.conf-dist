@@ -21,5 +21,5 @@
 #export SC_RUNASGROUP=
 
 ## Where the users definition files are stored
-#export MDIR_USERS_DIR=/var/lib/scambio/users
+#export SC_MDIR_USERS_DIR=/var/lib/scambio/users
 

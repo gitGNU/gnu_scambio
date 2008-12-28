@@ -41,8 +41,7 @@
  * Init
  */
 
-void chn_begin(bool server);
-void chn_end(void);
+void chn_init(bool server);
 
 /* High level API (for clients only) */
 

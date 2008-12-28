@@ -37,6 +37,7 @@ char const *mdir_name;
 char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
+struct mdir_cursor mdir_cursor = MDIR_CURSOR_INITIALIZER;
 static struct persist last_time_stamp;
 bool quit = false;
 struct chn_cnx ccnx;
@@ -65,12 +66,11 @@ static void init_log(void)
 static void deinit_chn(void)
 {
 	chn_cnx_dtor(&ccnx);
-	chn_end();
 }
 
 static void init_chn(void)
 {
-	if_fail (chn_begin(false)) return;
+	if_fail (chn_init(false)) return;
 	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
 	if (0 != atexit(deinit_chn)) with_error(0, "atexit") return;
 }
@@ -82,8 +82,7 @@ static void init(void)
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
 	if_fail(init_conf()) return;
 	if_fail(init_log()) return;
-	if_fail(mdir_begin()) return;
-	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	if_fail(mdir_init()) return;
 	if_fail (files_begin()) return;
 	if_fail (init_chn()) return;
 }

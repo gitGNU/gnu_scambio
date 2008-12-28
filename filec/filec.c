@@ -97,8 +97,7 @@ int main(int nb_args, char const **args)
 		if_fail (daemonize("sc_filec")) return EXIT_FAILURE;
 	}
 	// Further init
-	if_fail (chn_begin(false)) return EXIT_FAILURE;
-	if (0 != atexit(chn_end)) return EXIT_FAILURE;
+	if_fail (chn_init(false)) return EXIT_FAILURE;
 	if_fail (ccnx = chn_cnx_new_outbound(conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
 	if_fail (loop()) return EXIT_FAILURE;
 	chn_cnx_del(ccnx);

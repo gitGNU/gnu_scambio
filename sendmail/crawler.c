@@ -28,6 +28,7 @@
  */
 
 static struct mdir *to_send, *sent;
+static struct mdir_cursor to_send_cursor = MDIR_CURSOR_INITIALIZER;
 static pth_t crawler_id, acker_id; 
 
 /*
@@ -61,7 +62,7 @@ static void *crawler_thread(void *data)
 {
 	(void)data;
 	while (! is_error() && ! terminate) {
-		mdir_patch_list(to_send, false, send_patch, NULL, NULL);
+		mdir_patch_list(to_send, &to_send_cursor, false, send_patch, NULL, NULL);
 		(void)pth_sleep(1);	// FIXME: a signal when something new is received ?
 	}
 	debug("Exiting crawler thread");
@@ -83,7 +84,7 @@ static void move_fwd(struct forward *fwd)
 	// We then delete this message so that it will never sent again
 	if_fail (mdir_del_request(to_send, fwd->version)) return;
 	// And copy it (modified) to the sent mdir
-	(void)header_field_new(header, SC_SENT_DATE, sc_ts2gmfield(time(NULL), true));
+	(void)header_field_new(header, SC_STOP_FIELD, sc_ts2gmfield(time(NULL), true));
 	char status[8];
 	snprintf(status, sizeof(status), "%d", fwd->status);
 	(void)header_field_new(header, SC_STATUS_FIELD, status);

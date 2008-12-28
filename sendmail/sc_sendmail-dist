@@ -29,12 +29,12 @@ fi
 
 case $1 in
 	start)
-		log_daemon_msg "Starting $SERVNAME" "sc_smtpd"
+		log_daemon_msg "Starting $SERVNAME" "sc_sendmail"
   		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --startas $DAEMON
 		log_end_msg $?
   		;;
 	stop)
-		log_daemon_msg "Stopping $SERVNAME" "sc_smtpd"
+		log_daemon_msg "Stopping $SERVNAME" "sc_sendmail"
   		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
 		log_end_msg $?
 		rm -f $PIDFILE

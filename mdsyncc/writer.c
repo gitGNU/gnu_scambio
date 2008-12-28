@@ -85,15 +85,12 @@ static void ls_transients(struct mdirc *mdirc, char *folder)
 			warning("Removing localid field");
 			header_field_del(hf);
 		}
-		// FIXME : grasp cnx write lock
-		if_fail ((void)command_new(kw, mdirc, folder, filename)) {
+		if_fail ((void)command_new(kw, mdirc, folder, filename, h)) {
 			debug("Skipping this file");
 			error_clear();
 			continue;
 		}
-		mdirc->nb_pending_acks ++;	// Notice : header_write may schedule the reader thread which may receive the answer before we run again. So must have to inc nb_pending_acks _before_ calling header_write
-		header_write(h, cnx.fd);
-		// FIXME : release cnx write lock
+		mdirc->nb_pending_acks ++;
 		on_error break;
 	}
 	if (closedir(dir) < 0) with_error(errno, "closedir(%.*s)", dirlen, filename) return;
@@ -116,7 +113,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 		if (cmd) {
 			debug("already subscribing to %s", mdir_id(&mdirc->mdir));
 		} else {
-			(void)command_new(kw_sub, mdirc, mdir_id(&mdirc->mdir), "");
+			(void)command_new(kw_sub, mdirc, mdir_id(&mdirc->mdir), "", NULL);
 		}
 		on_error return;
 	}

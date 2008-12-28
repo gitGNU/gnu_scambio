@@ -24,6 +24,8 @@
 #include "scambio.h"
 #include "scambio/mdir.h"
 #include "scambio/channel.h"
+#include "scambio/timetools.h"
+#include "auth.h"
 #include "merelib.h"
 
 /*
@@ -37,6 +39,7 @@ static HildonProgram *hildon_program;
 osso_context_t *osso_ctx;
 #endif
 static char const *app_name;
+struct mdir_user *user;
 
 /*
  * Inits
@@ -46,6 +49,7 @@ static void init_conf(void)
 {
 	conf_set_default_str("SC_LOG_DIR", "/tmp");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
+	conf_set_default_str("SC_USERNAME", "Alice");
 }
 
 static void init_log(char const *appname)
@@ -64,16 +68,39 @@ static void deinit_osso(void)
 }
 #endif
 
+static GtkWidget *make_window_detached(void)
+{
+#	ifdef WITH_MAEMO
+	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
+	hildon_program_add_window(hildon_program, win);
+#	else
+	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_title(GTK_WINDOW(win), app_name);
+#	endif
+	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
+	return GTK_WIDGET(win);
+}
+
+// FIXME: To allow various layout to be implemented, takes the toolbar options as well
+GtkWidget *make_window(enum window_class wc, void (*cb)(GtkWidget *, gpointer), gpointer user_data)
+{
+	(void)wc;
+	GtkWidget *widget = make_window_detached();
+	if (cb) g_signal_connect(G_OBJECT(widget), "destroy", G_CALLBACK(cb), user_data);
+	return widget;
+}
+
 void init(char const *name, int nb_args, char *args[])
 {
 	app_name = name;
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
-	if_fail(init_conf()) return;
-	if_fail(init_log(name)) return;
-	if_fail(mdir_begin()) return;
-	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	if_fail (init_conf()) return;
+	if_fail (init_log(name)) return;
+	if_fail (mdir_init()) return;
+	if_fail (auth_init()) return;
+	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return;
 #	ifdef WITH_MAEMO
 	gtk_init(&nb_args, &args);
 	g_set_application_name(app_name);
@@ -110,16 +137,21 @@ void destroy_cb(GtkWidget *widget, gpointer data)
 	gtk_main_quit();
 }
 
-void alert(GtkMessageType type, char const *text)
+void alert(GtkMessageType type, char const *fmt, ...)
 {
-	GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT, type, GTK_BUTTONS_CLOSE, text);
+	char str[512];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(str, sizeof(str), fmt, ap);
+	va_end(ap);
+	GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT, type, GTK_BUTTONS_CLOSE, str);
 	g_signal_connect_swapped(dialog, "response", G_CALLBACK(gtk_widget_destroy), dialog);
 	gtk_widget_show_all(dialog);
 }
 
 void alert_error(void)
 {
-	alert(GTK_MESSAGE_ERROR, error_str());
+	alert(GTK_MESSAGE_ERROR, "%s", error_str());
 	error_clear();
 }
 
@@ -134,23 +166,8 @@ bool confirm(char const *text)
 void close_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
-	debug("close");
 	GtkWidget *window = (GtkWidget *)user_data;
 	gtk_widget_destroy(window);
-}
-
-GtkWidget *make_window(void (*cb)(GtkWidget *, gpointer), gpointer user_data)
-{
-#	ifdef WITH_MAEMO
-	HildonWindow *win = HILDON_WINDOW(hildon_window_new());
-	hildon_program_add_window(hildon_program, win);
-#	else
-	GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW(win), app_name);
-#	endif
-	gtk_window_set_default_size(GTK_WINDOW(win), 700, 400);
-	if (cb) g_signal_connect(G_OBJECT(win), "destroy", G_CALLBACK(cb), user_data);
-	return GTK_WIDGET(win);
 }
 
 GtkWidget *make_labeled_hbox(char const *label_text, GtkWidget *other)
@@ -241,7 +258,13 @@ void wait_all_tx(struct chn_cnx *ccnx, GtkWindow *parent)
 	gtk_window_set_title(GTK_WINDOW(win), "Waiting...");
 	gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
 	gtk_window_set_transient_for(GTK_WINDOW(win), parent);
-	gtk_window_set_type_hint(GTK_WINDOW(win), GDK_WINDOW_TYPE_HINT_NOTIFICATION);
+	gtk_window_set_type_hint(GTK_WINDOW(win),
+#		if TRUE == GTK_CHECK_VERSION(2,10,14)
+		GDK_WINDOW_TYPE_HINT_NOTIFICATION
+#		else
+		GDK_WINDOW_TYPE_HINT_DIALOG
+#		endif
+	);
 	GtkWidget *bar = gtk_progress_bar_new();
 	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(bar), "Transfering files");
 	gtk_container_add(GTK_CONTAINER(win), bar);
@@ -273,4 +296,10 @@ GtkWidget *gtk_dialog_get_content_area(GtkDialog *dialog)
 }
 #endif
 
+void color_it(GtkWidget *widget, char const *color_name)
+{
+	GdkColor color;
+	gdk_color_parse (color_name, &color);
+	gtk_widget_modify_bg(widget, GTK_STATE_NORMAL, &color);
+}
 

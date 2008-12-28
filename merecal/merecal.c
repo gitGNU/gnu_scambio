@@ -326,6 +326,7 @@ static void cal_folder_ctor(struct cal_folder *cf, char const *path)
 	cf->name = cf->path + len;
 	while (cf->name > cf->path && *(cf->name-1) != '/') cf->name--;
 	if_fail (cf->mdir = mdir_lookup(path)) return;
+	mdir_cursor_ctor(&cf->cursor);
 	cf->displayed = true;	// TODO: save user prefs somewhere
 	LIST_INSERT_HEAD(&cal_folders, cf, entry);
 }
@@ -355,6 +356,7 @@ static void cal_folder_dtor(struct cal_folder *cf)
 {
 	cal_folder_del_events(cf);
 	LIST_REMOVE(cf, entry);
+	mdir_cursor_dtor(&cf->cursor);
 }
 
 static void cal_folder_del(struct cal_folder *cf)
@@ -396,7 +398,7 @@ static void add_event_cb(struct mdir *mdir, struct header *header, mdir_version 
 		error("Invalid calendar message with no "SC_START_FIELD" field");
 		return;
 	}
-	debug("new event is version %lld, start str = '%s'", version, start_field->value);
+	debug("new event is version %"PRIversion", start str = '%s'", version, start_field->value);
 	struct header_field *stop_field = header_find(header, SC_STOP_FIELD, NULL);
 	if (stop_field) {
 		if_fail (cal_date_ctor_from_str(&stop, stop_field->value)) {
@@ -418,7 +420,7 @@ static void add_event_cb(struct mdir *mdir, struct header *header, mdir_version 
 static void refresh_folder(struct cal_folder *cf)
 {
 	debug("refreshing folder %s", cf->name);
-	mdir_patch_list(cf->mdir, false, add_event_cb, rem_event_cb, cf);
+	mdir_patch_list(cf->mdir, &cf->cursor, false, add_event_cb, rem_event_cb, cf);
 }
 
 void refresh(void)
@@ -439,12 +441,6 @@ int main(int nb_args, char *args[])
 {
 	if_fail (init("merecal", nb_args, args)) return EXIT_FAILURE;
 
-	static struct mdir_user *user;
-	conf_set_default_str("SC_USERNAME", "Alice");
-	if_fail (auth_begin()) return EXIT_FAILURE;
-	atexit(auth_end);
-	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return EXIT_FAILURE;
-	
 	struct header_field *folder = NULL;
 	while (NULL != (folder = header_find(mdir_user_header(user), "cal-dir", folder))) {
 		if_fail ((void)cal_folder_new(folder->value)) return EXIT_FAILURE;

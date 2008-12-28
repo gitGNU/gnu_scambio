@@ -94,8 +94,7 @@ int main(int nb_args, char const**args)
 	if (action == SEND && !filename) option_missing("file");
 
 	// Connect
-	if_fail (chn_begin(false)) return EXIT_FAILURE;
-	atexit(chn_end);
+	if_fail (chn_init(false)) return EXIT_FAILURE;
 	conf_set_default_str("SC_FILED_HOST", host);
 	conf_set_default_str("SC_FILED_PORT", port);
 	if_fail (cnx = chn_cnx_new_outbound(conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) {

@@ -36,7 +36,7 @@ struct compose {
 
 static void compose_ctor(struct compose *comp, char const *from, char const *to, char const *subject)
 {
-	comp->win = make_window(NULL, NULL);
+	comp->win = make_window(WC_EDITOR, NULL, NULL);
 	// From : combobox with all accepted from addresses (with from param preselected)
 	comp->from_combo = gtk_combo_box_new_text();
 	int selected = 0;
@@ -195,8 +195,7 @@ void send_cb(GtkToolButton *button, gpointer user_data)
 	struct compose *comp = (struct compose *)user_data;
 	compose_send(comp);
 	on_error {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
+		alert_error();
 	} else {
 		compose_del(comp);
 	}

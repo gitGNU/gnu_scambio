@@ -55,14 +55,12 @@ static void init_log(void)
 static void deinit_filed(void)
 {
 	chn_cnx_dtor(&ccnx);
-	chn_end();
-	auth_end();
 }
 
 static void init_filed(void)
 {
-	if_fail (auth_begin()) return;
-	if_fail (chn_begin(false)) return;
+	if_fail (auth_init()) return;
+	if_fail (chn_init(false)) return;
 	char const *host, *serv, *user;
 	if_fail (host = conf_get_str("SC_FILED_HOST")) return;
 	if_fail (serv = conf_get_str("SC_FILED_PORT")) return;
@@ -78,8 +76,7 @@ static void init(void)
 	if_fail (init_conf()) return;
 	if_fail (init_log()) return;
 	if_fail (daemonize("sc_sendmail")) return;
-	if_fail (mdir_begin()) return;
-	if (0 != atexit(mdir_end)) with_error(0, "atexit") return;
+	if_fail (mdir_init()) return;
 	if_fail (init_filed()) return;
 }
 

@@ -104,8 +104,6 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 	STAILQ_INIT(&mdir->jnls);
 	mdir_reload(mdir);
 	unless_error LIST_INSERT_HEAD(&mdirs, mdir, entry);
-	mdir->last_listed_sync = 0;
-	mdir->last_listed_unsync = 0;
 }
 
 static struct mdir *mdir_new(char const *id, bool create)
@@ -191,28 +189,7 @@ struct mdir *mdir_lookup(char const *name)
  * Init
  */
 
-void mdir_begin(void)
-{
-	mdir_alloc = mdir_alloc_default;
-	mdir_free = mdir_free_default;
-	// Default configuration values
-	conf_set_default_str("MDIR_ROOT_DIR", "/var/lib/scambio/mdir");
-	conf_set_default_str("MDIR_DIRSEQ", "/var/lib/scambio/mdir/.dirid.seq");
-	conf_set_default_str("MDIR_TRANSIENTSEQ", "/var/lib/scambio/mdir/.transient.seq");
-	on_error return;
-	if_fail (jnl_begin()) return;
-	// Inits
-	LIST_INIT(&mdirs);
-	mdir_root = conf_get_str("MDIR_ROOT_DIR");
-	mdir_root_len = strlen(mdir_root);
-	char root_path[PATH_MAX];
-	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
-	if_fail (Mkdir(root_path)) return;
-	persist_ctor_sequence(&dirid_seq, conf_get_str("MDIR_DIRSEQ"), 0);
-	persist_ctor_sequence(&transient_version, conf_get_str("MDIR_TRANSIENTSEQ"), 1);
-}
-
-void mdir_end(void)
+static void mdir_deinit(void)
 {
 	jnl_end();
 	struct mdir *mdir;
@@ -221,6 +198,28 @@ void mdir_end(void)
 	}
 	persist_dtor(&dirid_seq);
 	persist_dtor(&transient_version);
+}
+
+void mdir_init(void)
+{
+	mdir_alloc = mdir_alloc_default;
+	mdir_free = mdir_free_default;
+	// Default configuration values
+	conf_set_default_str("SC_MDIR_ROOT_DIR", "/var/lib/scambio/mdir");
+	conf_set_default_str("SC_MDIR_DIRSEQ", "/var/lib/scambio/mdir/.dirid.seq");
+	conf_set_default_str("SC_MDIR_TRANSIENTSEQ", "/var/lib/scambio/mdir/.transient.seq");
+	on_error return;
+	if_fail (jnl_begin()) return;
+	// Inits
+	LIST_INIT(&mdirs);
+	mdir_root = conf_get_str("SC_MDIR_ROOT_DIR");
+	mdir_root_len = strlen(mdir_root);
+	char root_path[PATH_MAX];
+	snprintf(root_path, sizeof(root_path), "%s/root", mdir_root);
+	if_fail (Mkdir(root_path)) return;
+	persist_ctor_sequence(&dirid_seq, conf_get_str("SC_MDIR_DIRSEQ"), 0);
+	persist_ctor_sequence(&transient_version, conf_get_str("SC_MDIR_TRANSIENTSEQ"), 1);
+	atexit(mdir_deinit);
 }
 
 /*
@@ -482,16 +481,24 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
  * List
  */
 
-void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct mdir *, struct header *, mdir_version, void *), void (*rem_cb)(struct mdir *, mdir_version, void *), void *data)
+extern inline void mdir_cursor_ctor(struct mdir_cursor *cursor);
+extern inline void mdir_cursor_dtor(struct mdir_cursor *cursor);
+extern inline void mdir_cursor_reset(struct mdir_cursor *cursor);
+
+void mdir_patch_list(
+	struct mdir *mdir, struct mdir_cursor *cursor, bool unsync_only,
+	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *),
+	void (*rem_cb)(struct mdir *, mdir_version, void *),
+	void *data)
 {
 	mdir_reload(mdir);	// journals may have changed, other appended
 	struct jnl *jnl;
 	if (! unsync_only) { // List content of journals
-		mdir_version from = mdir->last_listed_sync + 1;
+		mdir_version from = cursor->last_listed_sync + 1;
 		debug("listing synched from version %"PRIversion, from);
 		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
 			if (jnl->version + jnl->nb_patches <= from) {
-				debug("  jnl from %"PRIversion" to %"PRIversion" is too short (%u)", jnl->version, jnl->version + jnl->nb_patches);
+				debug("  jnl from %"PRIversion" to %"PRIversion" is too short", jnl->version, jnl->version + jnl->nb_patches);
 				continue;
 			}
 			if (from < jnl->version) from = jnl->version;	// a gap
@@ -513,7 +520,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct 
 						if (localid_field) {	// we may already have reported it when it was present
 							mdir_version local = mdir_str2version(localid_field->value);
 							on_error error_clear();
-							else if (local <= mdir->last_listed_unsync) {	// we already reported it
+							else if (local <= cursor->last_listed_unsync) {	// we already reported it
 								rem_cb(mdir, -local, data);
 							}
 						}
@@ -521,7 +528,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct 
 					if (put_cb) put_cb(mdir, h, jnl->version + index, data);
 				}
 				header_unref(h);
-				mdir->last_listed_sync = jnl->version + index;
+				cursor->last_listed_sync = jnl->version + index;
 				on_error return;
 			}
 		}
@@ -530,14 +537,14 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct 
 	// These are removed by mdsyncc when the patch is acked.
 	char temp[PATH_MAX];
 	int dirlen = snprintf(temp, sizeof(temp), "%s/.tmp", mdir->path);
-	debug("listing %s from transient version %"PRIversion, temp, mdir->last_listed_unsync);
+	debug("listing %s from transient version %"PRIversion, temp, cursor->last_listed_unsync);
 	DIR *dir = opendir(temp);
 	if (! dir) {
 		if (errno == ENOENT) return;
 		with_error(errno, "opendir(%s)", temp) return;
 	}
 	struct dirent *dirent;
-	mdir_version const last_listed_unsync_start = mdir->last_listed_unsync;	// we will only report patches that are new relative to this version (mdir->last_listed_unsync will be updated within the loop)
+	mdir_version const last_listed_unsync_start = cursor->last_listed_unsync;	// we will only report patches that are new relative to this version (cursor->last_listed_unsync will be updated within the loop)
 	while (NULL != (dirent = readdir(dir))) {	// will return the patches in random order
 		char const *const filename = dirent->d_name;
 		debug("  considering '%s'", filename);
@@ -554,7 +561,7 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct 
 			continue;
 		}
 		if (version <= last_listed_unsync_start) continue;	// already reported
-		if (version > mdir->last_listed_unsync) mdir->last_listed_unsync = version;
+		if (version > cursor->last_listed_unsync) cursor->last_listed_unsync = version;
 		struct header *h = header_from_file(temp);
 		on_error break;
 		if (action == MDIR_REM && rem_cb) {
@@ -568,11 +575,6 @@ void mdir_patch_list(struct mdir *mdir, bool unsync_only, void (*put_cb)(struct 
 		on_error break;
 	}
 	if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
-}
-
-void mdir_patch_reset(struct mdir *mdir)
-{
-	mdir->last_listed_sync = mdir->last_listed_unsync = 0;
 }
 
 void mdir_folder_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *, struct mdir *, bool, char const *, void *), void *data)

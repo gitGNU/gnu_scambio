@@ -54,14 +54,14 @@ static struct persist putdir_seq;
  * Init
  */
 
-void chn_end(void)
+static void chn_deinit(void)
 {
 	stream_end();
 	persist_dtor(&putdir_seq);
 	mdir_syntax_dtor(&syntax);
 }
 
-void chn_begin(bool server_)
+void chn_init(bool server_)
 {
 	server = server_;
 	if_fail (stream_begin()) return;
@@ -116,6 +116,7 @@ void chn_begin(bool server_)
 	} else for (unsigned d=0; d<sizeof_array(def_client); d++) {
 		if_fail (mdir_syntax_register(&syntax, def_client+d)) goto q1;
 	}
+	atexit(chn_deinit);
 	return;
 q1:
 	mdir_syntax_dtor(&syntax);
@@ -320,7 +321,7 @@ static void command_ctor(struct chn_cnx *cnx, struct command *command, char cons
 	pth_cond_init(&command->cond);
 	pth_mutex_init(&command->condmut);
 	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
-	mdir_cnx_query(&cnx->cnx, kw, &command->sq, kw == kw_creat ? (rt ? "*":NULL) : resource, NULL);
+	mdir_cnx_query(&cnx->cnx, kw, NULL, &command->sq, kw == kw_creat ? (rt ? "*":NULL) : resource, NULL);
 }
 
 // The command is returned with the lock taken, so that the condition cannot be signaled
@@ -389,7 +390,7 @@ static size_t send_chunk(struct chn_tx *tx, struct fragment *f, off_t offset)
 	char params[256];
 	(void)snprintf(params, sizeof(params), "%lld %u %zu%s",
 		tx->id, (unsigned)offset, sent, eof ? " *":"");
-	if_fail (mdir_cnx_query(&tx->cnx->cnx, f->box ? kw_copy:kw_skip, NULL, params, NULL)) return 0;
+	if_fail (mdir_cnx_query(&tx->cnx->cnx, f->box ? kw_copy:kw_skip, NULL, NULL, params, NULL)) return 0;
 	if (f->box) Write(tx->cnx->cnx.fd, f->box->data+(offset - f->start), sent);
 	return sent;
 }
@@ -745,10 +746,10 @@ static void serve_copy(struct mdir_cmd *cmd, void *cnx_)
 	struct fragment *first, *last;
 	first = TAILQ_FIRST(&tx->in_frags);
 	last = TAILQ_LAST(&tx->in_frags, fragments_queue);
-	debug("fragments : first=%p (offset=%u), last=%p (offset=%u, eof=%c)", first, first->start, last, last->start, last->eof ? 'y':'n');
+	debug("fragments : first=%p (offset=%u), last=%p (offset=%u, eof=%c)", first, (unsigned)first->start, last, (unsigned)last->start, last->eof ? 'y':'n');
 	if (first == last && last->eof && first->start == 0) {
 		// Send the thanx message back to sender
-		if_fail (mdir_cnx_query(&cnx->cnx, kw_thx, &tx->sent_thx, tx_id_str(tx), NULL)) return;
+		if_fail (mdir_cnx_query(&cnx->cnx, kw_thx, NULL, &tx->sent_thx, tx_id_str(tx), NULL)) return;
 	}
 }
 

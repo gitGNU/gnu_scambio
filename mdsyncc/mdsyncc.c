@@ -85,24 +85,21 @@ static void client_end(void)
 	writer_end();
 	reader_end();
 	connecter_end();
-	auth_end();
-	mdir_end();
 }
 
 static void client_begin(void)
 {
 	debug("init client lib");
-	mdir_begin();
-	on_error return;
+	if_fail (mdir_init()) return;
 	mdir_alloc = mdirc_alloc;
 	mdir_free = mdirc_free;
-	conf_set_default_str("MDIRD_HOST", "127.0.0.1");
-	conf_set_default_str("MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
-	on_error goto q0;
-	if_fail (writer_begin()) goto q0;
+	conf_set_default_str("SC_MDIRD_HOST", "127.0.0.1");
+	conf_set_default_str("SC_MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
+	on_error return;
+	if_fail (writer_begin()) return;
 	if_fail (reader_begin()) goto q1;
 	if_fail (connecter_begin()) goto q2;
-	if_fail (auth_begin()) goto q3;
+	if_fail (auth_init()) goto q3;
 	return;
 q3:
 	connecter_end();
@@ -110,8 +107,6 @@ q2:
 	reader_end();
 q1:
 	writer_end();
-q0:
-	mdir_end();
 }
 static void init_conf(void)
 {

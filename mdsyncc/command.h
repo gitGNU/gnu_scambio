@@ -26,12 +26,12 @@ struct command {
 	struct mdirc *mdirc;	// backlink
 	char const *kw;
 	char filename[PATH_MAX];	// associated file (for put/rem)
-	time_t creation;	// FIXME: should be handled by mdir_cnx
 	struct mdir_sent_query sq;
 };
 
-// give relative folder (ie mdir name for PUT/REM, id for SUB/UNSUB) and absolute filename
-struct command *command_new(char const *kw, struct mdirc *mdirc, char const *folder, char const *filename);
+// give relative folder (ie mdir name for PUT/REM, id for SUB/UNSUB) and absolute filename.
+// Will also write the given header if not NULL.
+struct command *command_new(char const *kw, struct mdirc *mdirc, char const *folder, char const *filename, struct header *h);
 void command_del(struct command *command);
 struct command *command_get_by_path(struct mdirc *mdirc, char const *kw, char const *path);
 bool command_timeouted(struct command *command);

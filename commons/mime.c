@@ -476,7 +476,8 @@ char const *ext2mime_type(char const *ext)
 {
 	for (unsigned i = 0; i < sizeof_array(type2exts); i++) {
 		for (unsigned e = 0; e < sizeof_array(type2exts[0].exts); e++) {
-			if (0 == strcasecmp(type2exts[i].exts[e], ext)) {
+			char const *const type_ext = type2exts[i].exts[e];
+			if (type_ext && 0 == strcasecmp(type_ext, ext)) {
 				return type2exts[i].type;
 			}
 		}

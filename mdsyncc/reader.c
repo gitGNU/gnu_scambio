@@ -66,12 +66,15 @@ void finalize_unsub(struct mdir_cmd *cmd, void *user_data)
 	command_del(command);
 }
 
-static void remember_version_map(struct mdirc *mdirc, char const *central_str, char const *local_file)
+static void remove_local_file(char const *local_file)
 {
-	// Removes the local file
 	debug("Removing local file '%s'", local_file);
 	if (0 != unlink(local_file)) with_error(errno, "unlink(%s)", local_file) return;
-	// Then stores the mapping between central and local version
+}
+
+static void remember_version_map(struct mdirc *mdirc, char const *central_str, char const *local_file)
+{
+	// Stores the mapping between central and local version
 	mdir_version central, local;
 	if_fail (central = mdir_str2version(central_str)) return;
 	char const *c = local_file + strlen(local_file);
@@ -79,6 +82,11 @@ static void remember_version_map(struct mdirc *mdirc, char const *central_str, c
 	if (c == local_file) with_error(0, "Bad filename : %s", local_file) return;
 	if_fail (local = mdir_str2version(c+1)) return;
 	(void)c2l_new(&mdirc->c2l_maps, central, local);
+}
+
+static bool retry_later(int status)
+{
+	return status >= 300 && status < 400;
 }
 
 void finalize_put(struct mdir_cmd *cmd, void *user_data)
@@ -95,8 +103,9 @@ void finalize_put(struct mdir_cmd *cmd, void *user_data)
 	assert(command->filename[0] != '\0');
 	if (status == 200) {
 		remember_version_map(command->mdirc, compl, command->filename);
-		error_clear();
 	}
+	if (! retry_later(status)) remove_local_file(command->filename);
+	error_clear();
 	command_del(command);
 }
 
@@ -114,8 +123,9 @@ void finalize_rem(struct mdir_cmd *cmd, void *user_data)
 	assert(command->filename[0] != '\0');
 	if (status == 200) {
 		remember_version_map(command->mdirc, compl, command->filename);
-		error_clear();
 	}
+	if (! retry_later(status)) remove_local_file(command->filename);
+	error_clear();
 	command_del(command);
 }
 

@@ -70,8 +70,7 @@ static void new_cb(GtkToolButton *button, gpointer user_data)
 	(void)user_data;
 	GtkWidget *new_win = make_compose_window(NULL, NULL, NULL);
 	on_error {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
+		alert_error();
 	} else {
 		gtk_widget_show_all(new_win);
 	}
@@ -105,8 +104,7 @@ static void enter_cb(GtkToolButton *button, gpointer user_data)
 	debug("Enter list view in '%s'", path);
 	GtkWidget *new_win = make_list_window(path);
 	on_error {
-		alert(GTK_MESSAGE_ERROR, error_str());
-		error_clear();
+		alert_error();
 	} else {
 		gtk_widget_show_all(new_win);
 	}
@@ -150,10 +148,9 @@ static void refresh_cb(GtkToolButton *button, gpointer user_data)
 
 GtkWidget *make_folder_window(char const *parent)
 {
-	root_mdir = mdir_lookup(parent);
-	on_error return NULL;
+	if_fail (root_mdir = mdir_lookup(parent)) return NULL;
 
-	GtkWidget *window = make_window(destroy_cb, NULL);
+	GtkWidget *window = make_window(WC_FOLDERS, destroy_cb, NULL);
 
 	// The list of messages
 	folder_store = gtk_tree_store_new(NB_FOLDER_STORES, G_TYPE_STRING, G_TYPE_UINT);
@@ -161,7 +158,9 @@ GtkWidget *make_folder_window(char const *parent)
 	if_fail (fill_folder_store_rec(root_mdir, NULL)) return NULL;
 	
 	GtkWidget *folder_tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(folder_store));
+#	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
 	gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(folder_tree), TRUE);
+#	endif
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(folder_tree), FALSE);
 	gtk_tree_view_expand_all(GTK_TREE_VIEW(folder_tree));
 

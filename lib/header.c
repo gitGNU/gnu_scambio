@@ -251,7 +251,6 @@ static ssize_t parse(char const *msg, char **ptr, bool (*is_delimiter)(char cons
 	if (! is_error()) {
 		// Trim the tail of the value
 		while (vb.used && isspace(vb.buf[vb.used-1])) varbuf_chop(&vb, 1);
-		varbuf_stringify(&vb);
 	}
 	on_error {
 		error_save();
@@ -343,8 +342,7 @@ void header_read(struct header *h, int fd)
 		if (line_match(line, "")) {
 			debug("end of headers");
 			// forget this line
-			vb.used = line - vb.buf + 1;
-			vb.buf[vb.used-1] = '\0';
+			varbuf_cut(&vb, line);
 			eoh_reached = true;
 			break;
 		}
@@ -395,11 +393,11 @@ static void field_dump(struct header_field const *hf, struct varbuf *vb)
 
 void header_dump(struct header const *h, struct varbuf *vb)
 {
-	varbuf_clean(vb);
 	struct header_field *hf;
 	LIST_FOREACH(hf, &h->fields, entry) {
 		field_dump(hf, vb);
 	}
+	varbuf_append(vb, 1, "\n");
 }
 
 void header_debug(struct header *h)
@@ -410,7 +408,6 @@ void header_debug(struct header *h)
 		return;
 	}
 	header_dump(h, &vb);
-	varbuf_stringify(&vb);
 	if (! is_error()) debug("header :\n%s", vb.buf);
 	varbuf_dtor(&vb);
 	error_clear();

@@ -37,7 +37,7 @@ void *connecter_thread(void *arg)
 {
 	debug("Starting connecter");
 	char *username = arg;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("MDIRD_HOST"), conf_get_str("MDIRD_PORT"), username)) {
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("SC_MDIRD_HOST"), conf_get_str("SC_MDIRD_PORT"), username)) {
 		error_clear();
 		return NULL;
 	}

@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include "scambio.h"
 #include "scambio/cnx.h"
+#include "scambio/header.h"
 #include "varbuf.h"
 #include "misc.h"
 #include "auth.h"
@@ -58,19 +59,25 @@ extern inline void mdir_sent_query_dtor(struct mdir_sent_query *sq);
 
 struct mdir_sent_query *mdir_cnx_query_retrieve(struct mdir_cnx *cnx, struct mdir_cmd *cmd)
 {
+	time_t now = time(NULL);
 	// look for the mdir_sent_query
-	struct mdir_sent_query *sq;
-	LIST_FOREACH(sq, &cnx->sent_queries, cnx_entry) {
+	struct mdir_sent_query *sq, *tmp;
+	LIST_FOREACH_SAFE(sq, &cnx->sent_queries, cnx_entry, tmp) {
 		if (sq->seq == cmd->seq) {
 			// FIXME : call the user provided del function (for instance, chn commands include a send_query and should be freed now)
 			mdir_sent_query_dtor(sq);
 			return sq;
 		}
+#		define SQ_TIMEOUT 20
+		if (sq->creation + SQ_TIMEOUT < now) {
+			warning("Timeouting query which seqnum=%lld (created at TS=%lu)", sq->seq, sq->creation);
+			mdir_sent_query_dtor(sq);	// FIXME : same as above
+		}
 	}
 	with_error(0, "Unexpected answer for seq# %lld", cmd->seq) return NULL;
 }
 
-void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query *sq, ...)
+void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct header *h, struct mdir_sent_query *sq, ...)
 {
 	struct varbuf vb;
 	varbuf_ctor(&vb, 1024, true);
@@ -90,10 +97,12 @@ void mdir_cnx_query(struct mdir_cnx *cnx, char const *kw, struct mdir_sent_query
 		va_end(ap);
 		on_error break;
 		if_fail (varbuf_append_strs(&vb, "\n", NULL)) break;
+		if (h) if_fail (header_dump(h, &vb)) break;
 		debug("Will write '%s'", vb.buf);
-		if_fail (Write(cnx->fd, vb.buf, vb.used-1)) break;	// do not output the final '\0'
+		if_fail (Write(cnx->fd, vb.buf, vb.used)) break;
 		if (sq) {
 			sq->seq = seq;
+			sq->creation = time(NULL);
 			LIST_INSERT_HEAD(&cnx->sent_queries, sq, cnx_entry);
 		}
 	} while (0);
@@ -137,7 +146,7 @@ void mdir_cnx_ctor_outbound(struct mdir_cnx *cnx, struct mdir_syntax *syntax, ch
 		struct mdir_cmd_def auth_def = MDIR_CNX_ANSW_REGISTER(kw_auth, auth_answ);
 		if_fail (mdir_syntax_register(cnx->syntax, &auth_def)) break;
 		struct auth_sent_query my_sq = { .done = false, };
-		if_fail (mdir_cnx_query(cnx, kw_auth, &my_sq.sq, username, NULL)) break;
+		if_fail (mdir_cnx_query(cnx, kw_auth, NULL, &my_sq.sq, username, NULL)) break;
 		if_fail (mdir_cnx_read(cnx)) break;
 		if_fail (mdir_syntax_unregister(cnx->syntax, &auth_def)) break;
 		if (! my_sq.done) with_error (0, "no answer to auth") break;

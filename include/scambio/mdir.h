@@ -50,10 +50,28 @@ struct mdir {
 	STAILQ_HEAD(jnls, jnl) jnls;	// list all jnl in this directory (refreshed from time to time), ordered by first_version
 	pth_rwlock_t rwlock;
 	char path[PATH_MAX];	// absolute path to the dir (actual one, not one of the symlinks)
-	// used only by client (yes bad design, too late)
+};
+
+// Used by mdir_patch_list()
+struct mdir_cursor {
 	mdir_version last_listed_sync;
 	mdir_version last_listed_unsync;
 };
+
+#define MDIR_CURSOR_INITIALIZER { 0, 0 }
+
+static inline void mdir_cursor_ctor(struct mdir_cursor *cursor)
+{
+	cursor->last_listed_sync = 0;
+	cursor->last_listed_unsync = 0;
+}
+
+static inline void mdir_cursor_dtor(struct mdir_cursor *cursor) { (void)cursor; }
+
+static inline void mdir_cursor_reset(struct mdir_cursor *cursor)
+{
+	cursor->last_listed_sync = cursor->last_listed_unsync = 0;
+}
 
 // provides these allocators for previous structures (default ones being malloc/free)
 extern struct jnl *(*jnl_alloc)(void);
@@ -62,8 +80,7 @@ extern struct mdir *(*mdir_alloc)(void);
 extern void (*mdir_free)(struct mdir *);
 
 struct header;
-void mdir_begin(void);
-void mdir_end(void);
+void mdir_init(void);
 
 // add/remove a header into a mdir
 // do not use this in plugins : only the server decides how and when to apply a patch
@@ -123,7 +140,11 @@ struct mdir *mdir_lookup_by_id(char const *id, bool create);
 // (will also list unconfirmed patches, once, with a unique version < 0)
 // (will also list directory patches - otherwise you'd never know when a
 // dir is removed)
-void mdir_patch_list(struct mdir *, bool unsync_only, void (*put_cb)(struct mdir *, struct header *, mdir_version, void *data), void (*rem_cb)(struct mdir *, mdir_version, void *), void *data);
+void mdir_patch_list(
+	struct mdir *, struct mdir_cursor *, bool unsync_only,
+	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *data),
+	void (*rem_cb)(struct mdir *, mdir_version, void *),
+	void *data);
 
 // Forget about previous lists to restart listing all available patches.
 void mdir_patch_reset(struct mdir *);
