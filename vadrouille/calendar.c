@@ -184,6 +184,15 @@ static void day2event_del_all(struct cal_dir_view *view)
 	}
 }
 
+static char const *folder_name(struct cal_dir_view *view, struct mdirb *mdirb)
+{
+	for (unsigned d = 0; d < view->nb_dirs; d++) {
+		if (view->dirs[d].mdirb == mdirb) return view->dirs[d].name;
+	}
+	assert(0);
+	return "";
+}
+
 static void display_event(struct cal_msg *cmsg, struct cal_dir_view *view)
 {
 	char hour[5+3+5+1];
@@ -200,7 +209,7 @@ static void display_event(struct cal_msg *cmsg, struct cal_dir_view *view)
 	gtk_list_store_insert_with_values(view->event_store, &iter, G_MAXINT,
 		FIELD_HOUR, hour,
 		FIELD_TEXT, cmsg->descr,
-		FIELD_FOLDER, mdirb_name(cmsg->msg.mdirb),
+		FIELD_FOLDER, folder_name(view, cmsg->msg.mdirb),
 		FIELD_EVENT, cmsg,
 		-1);
 }
@@ -428,10 +437,12 @@ static void dir_listener_cb(struct mdirb_listener *listener, struct mdirb *mdirb
 	reset_month(view);
 }
 
-static void cal_dir_ctor(struct cal_dir *dir, struct cal_dir_view *view, struct mdirb *mdirb)
+static void cal_dir_ctor(struct cal_dir *dir, struct cal_dir_view *view, struct mdirb *mdirb, char const *name)
 {
+	debug("new calendar dir with name '%s'", name);
 	dir->mdirb = mdirb;
 	dir->view = view;
+	snprintf(dir->name, sizeof(dir->name), "%s", name);
 	mdirb_listener_ctor(&dir->listener, mdirb, dir_listener_cb);
 }
 
@@ -440,12 +451,12 @@ static void cal_dir_dtor(struct cal_dir *dir)
 	mdirb_listener_dtor(&dir->listener);
 }
 
-static void cal_dir_view_add(struct cal_dir_view *view, struct mdirb *mdirb)
+static void cal_dir_view_add(struct cal_dir_view *view, struct mdirb *mdirb, char const *name)
 {
 	if (view->nb_dirs >= sizeof_array(view->dirs)) {
 		with_error(0, "Too many dirs in this calendar") return;
 	}
-	cal_dir_ctor(view->dirs+view->nb_dirs++, view, mdirb);
+	cal_dir_ctor(view->dirs+view->nb_dirs++, view, mdirb, name);
 	reset_month(view);
 }
 
@@ -502,7 +513,6 @@ static void cal_dir_view_ctor(struct cal_dir_view *view, struct mdirb *mdirb)
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 
 	sc_dir_view_ctor(&view->view, &plugin, mdirb, window);
-	cal_dir_view_add(view, mdirb);
 	assert(!is_error());
 }
 
@@ -536,24 +546,26 @@ static void cal_dir_view_del(struct sc_view *view_)
  * Init
  */
 
-static void function_add_to_cal(struct mdirb *mdirb)
+static void function_add_to_cal(struct mdirb *mdirb, char const *name)
 {
-	if (global_view) {	// add this mdir to the global view
-		debug("Add mdirb '%s' to global calendar", mdirb_name(mdirb));
+	if (global_view) {
+		// add this mdir to the global view
+		debug("Add mdirb '%s' to global calendar", name);
 		if (view_this_dir(global_view, mdirb)) {
 			alert(GTK_MESSAGE_WARNING, "This directory is already shown");
 			return;
 		}
-		cal_dir_view_add(global_view, mdirb);
 	} else {
 		struct sc_dir_view *view_;
 		if_fail (view_ = cal_dir_view_new(mdirb)) {
 			alert(GTK_MESSAGE_ERROR, error_str());
 			error_clear();
+			return;
 		} else {
 			global_view = DOWNCAST(view_, view, cal_dir_view);
 		}
 	}
+	cal_dir_view_add(global_view, mdirb, name);
 }
 
 static struct sc_plugin_ops const ops = {

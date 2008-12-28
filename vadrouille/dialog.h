@@ -15,17 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Scambio.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CONTACT_H_081226
-#define CONTACT_H_081226
+#ifndef DIALOG_H_081226
+#define DIALOG_H_081226
 
-void contact_init(void);
-
-struct field_dialog {
+struct sc_dialog {
 	GtkWidget *dialog;
-	GtkWidget *cat_combo, *field_combo, *value_entry;
 };
 
-struct field_dialog *field_dialog_new(GtkWindow *parent, char const *cat_name, char const *field_name, char const *value);
-void field_dialog_del(struct field_dialog *fd);
+struct sc_dialog *sc_dialog_new(char const *title, GtkWindow *parent, GtkWidget *content);
+void sc_dialog_del(struct sc_dialog *);
+bool sc_dialog_accept(struct sc_dialog *);
 
 #endif

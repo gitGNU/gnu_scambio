@@ -21,6 +21,7 @@
 #include "merelib.h"
 #include "vadrouille.h"
 #include "browser.h"
+#include "dialog.h"
 
 enum {
 	FIELD_NAME,
@@ -43,6 +44,28 @@ static void unref_win(GtkWidget *widget, gpointer data)
 	browser_del(browser);
 }
 
+static struct mdirb *get_selected_mdirb(struct browser *browser, size_t name_size, char *name)
+{
+	GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(browser->tree));
+	GtkTreeIter iter;
+	if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
+		debug("No selection");
+		return NULL;
+	}
+	GValue gptr, gname;
+	memset(&gptr, 0, sizeof(gptr));
+	memset(&gname, 0, sizeof(gname));
+	gtk_tree_model_get_value(GTK_TREE_MODEL(browser->store), &iter, FIELD_MDIR, &gptr);
+	gtk_tree_model_get_value(GTK_TREE_MODEL(browser->store), &iter, FIELD_NAME, &gname);
+	assert(G_VALUE_HOLDS_POINTER(&gptr));
+	assert(G_VALUE_HOLDS_STRING(&gname));
+	struct mdirb *mdirb = g_value_get_pointer(&gptr);
+	if (name) snprintf(name, name_size, "%s", g_value_get_string(&gname));
+	g_value_unset(&gptr);
+	g_value_unset(&gname);
+	return mdirb;
+}
+
 static void dir_function_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
@@ -50,24 +73,18 @@ static void dir_function_cb(GtkToolButton *button, gpointer user_data)
 	struct browser *browser = d2m->myself;
 	
 	// Retrieve select row, check there is something in there, and change the view
-	GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(browser->tree));
-	GtkTreeIter iter;
-	if (TRUE != gtk_tree_selection_get_selected(selection, NULL, &iter)) {
-		error("No selection");
+	char name[PATH_MAX];
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name);
+	if (! mdirb) {
+		alert(GTK_MESSAGE_ERROR, "Select a folder first");
 		return;
 	}
-	GValue gptr;
-	memset(&gptr, 0, sizeof(gptr));
-	gtk_tree_model_get_value(GTK_TREE_MODEL(browser->store), &iter, FIELD_MDIR, &gptr);
-	assert(G_VALUE_HOLDS_POINTER(&gptr));
-	struct mdirb *mdirb = g_value_get_pointer(&gptr);
-	g_value_unset(&gptr);
 	if (mdirb_size(mdirb) == 0) {
 		alert(GTK_MESSAGE_INFO, "No messages in this folder");
 		return;
 	}
 	debug("Execute dir function for '%s'", mdirb->mdir.path);
-	if_fail (d2m->function->cb(mdirb)) alert_error();
+	if_fail (d2m->function->cb(mdirb, name)) alert_error();
 }
 
 static void global_function_cb(GtkToolButton *button, gpointer user_data)
@@ -83,6 +100,51 @@ static void refresh_cb(GtkToolButton *button, gpointer user_data)
 	(void)button;
 	struct browser *browser = (struct browser *)user_data;
 	browser_refresh(browser);
+}
+
+static void deldir_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	char name[PATH_MAX];
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name);
+	if (! mdirb) {
+		alert(GTK_MESSAGE_ERROR, "Select first a folder as parent");
+		return;
+	}
+	if (confirm("Aren't you afraid to remove this folder ?")) {
+		// To unmount a folder, one must delete the patch that mounted it
+	}
+}
+
+static void newdir_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	struct mdirb *mdirb = get_selected_mdirb(browser, 0, NULL);
+	if (! mdirb) {
+		alert(GTK_MESSAGE_ERROR, "Select first a folder as parent");
+		return;
+	}
+	GtkWidget *name_entry = gtk_entry_new();
+	struct sc_dialog *dialog = sc_dialog_new("New folder",
+		GTK_WINDOW(browser->window),
+		make_labeled_hbox("Name", name_entry));
+	if (sc_dialog_accept(dialog)) {
+		debug("New folder with name : '%s'", gtk_entry_get_text(GTK_ENTRY(name_entry)));
+		// Build the patch
+		struct header *h = header_new();
+		(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
+		(void)header_field_new(h, SC_NAME_FIELD, gtk_entry_get_text(GTK_ENTRY(name_entry)));
+		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h);
+		header_unref(h);
+		on_error {
+			alert_error();
+		} else {
+			browser_refresh(browser);
+		}
+	}
+	sc_dialog_del(dialog);
 }
 
 static void browser_ctor(struct browser *browser, char const *root)
@@ -119,10 +181,11 @@ static void browser_ctor(struct browser *browser, char const *root)
 
 	browser->window = make_window(WC_FOLDERS, unref_win, browser);
 
-	GtkWidget *toolbar = make_toolbar(3,
-		GTK_STOCK_DELETE,  NULL, NULL,
+	GtkWidget *toolbar = make_toolbar(4,
+		GTK_STOCK_DELETE,  deldir_cb,  browser,
 		GTK_STOCK_REFRESH, refresh_cb, browser,
-		GTK_STOCK_QUIT,    close_cb, browser->window);
+		GTK_STOCK_NEW,     newdir_cb,  browser,
+		GTK_STOCK_QUIT,    close_cb,   browser->window);
 	// Add per plugin global functions
 	struct sc_plugin *plugin;
 	LIST_FOREACH(plugin, &sc_plugins, entry) {
@@ -209,7 +272,6 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 {
 	// Add this name as a child of the given iterator
 	mdirb_refresh(browser->mdirb);
-	mdirb_set_name(browser->mdirb, name);
 	debug("mdir '%s' (%s) has size %u", name, browser->mdirb->mdir.path, mdirb_size(browser->mdirb));
 	GtkTreeIter iter;
 	gtk_tree_store_append(browser->store, &iter, browser->iter);

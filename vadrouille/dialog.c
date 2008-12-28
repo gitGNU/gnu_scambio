@@ -20,42 +20,43 @@
 #include "scambio.h"
 #include "merelib.h"
 #include "vadrouille.h"
-#include "contact.h"
+#include "dialog.h"
 
 // Throw no error.
-static void name_dialog_ctor(struct name_dialog *nd, GtkWindow *parent, char const *name)
+static void sc_dialog_ctor(struct sc_dialog *view, char const *title, GtkWindow *parent, GtkWidget *content)
 {
-	nd->dialog = gtk_dialog_new_with_buttons("Rename Contact", parent,
+	view->dialog = gtk_dialog_new_with_buttons(title, parent,
 		GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
 		GTK_STOCK_OK, GTK_RESPONSE_ACCEPT,
 		GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
 		NULL);
 
-	nd->name_entry = gtk_entry_new();
-	if (name) gtk_entry_set_text(GTK_ENTRY(nd->name_entry), name);
+	GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(view->dialog));
+	gtk_container_add(GTK_CONTAINER(content_area), content);
 
-	GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(nd->dialog));
-	gtk_container_add(GTK_CONTAINER(content_area), make_labeled_hboxes(1,
-		"Name", nd->name_entry));
-
-	gtk_widget_show_all(nd->dialog);
+	gtk_widget_show_all(view->dialog);
 }
 
-struct name_dialog *name_dialog_new(GtkWindow *parent, char const *name)
+struct sc_dialog *sc_dialog_new(char const *title, GtkWindow *parent, GtkWidget *content)
 {
-	struct name_dialog *nd = Malloc(sizeof(*nd));
-	name_dialog_ctor(nd, parent, name);
-	return nd;
+	struct sc_dialog *view = Malloc(sizeof(*view));
+	sc_dialog_ctor(view, title, parent, content);
+	return view;
 }
 
-static void name_dialog_dtor(struct name_dialog *nd)
+static void sc_dialog_dtor(struct sc_dialog *view)
 {
-	gtk_widget_destroy(nd->dialog);
+	gtk_widget_destroy(view->dialog);
 }
 
-void name_dialog_del(struct name_dialog *nd)
+void sc_dialog_del(struct sc_dialog *dialog)
 {
-	name_dialog_dtor(nd);
-	free(nd);
+	sc_dialog_dtor(dialog);
+	free(dialog);
+}
+
+bool sc_dialog_accept(struct sc_dialog *view)
+{
+	return gtk_dialog_run(GTK_DIALOG(view->dialog)) == GTK_RESPONSE_ACCEPT;
 }
 

@@ -34,7 +34,6 @@ struct mdirb {
 	struct mdir_cursor cursor;
 	unsigned nb_msgs;
 	LIST_HEAD(msgs, sc_msg) msgs;
-	char name[PATH_MAX];
 	/* We keep track of all the dir_views that uses this, so that they all get noticed when
 	 * the mdir content changes. msg_views are not noticed because they hold a ref on their
 	 * message anyway (if the message is deleted everything in it remains valid).
@@ -66,11 +65,5 @@ static inline void mdirb_listener_dtor(struct mdirb_listener *listener)
 }
 
 void mdirb_refresh(struct mdirb *);
-
-static inline char const *mdirb_name(struct mdirb *mdirb)
-{
-	return mdirb->name;
-}
-void mdirb_set_name(struct mdirb *, char const *);
 
 #endif

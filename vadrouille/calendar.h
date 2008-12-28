@@ -46,6 +46,7 @@ struct cal_dir_view {
 		struct mdirb *mdirb;
 		struct mdirb_listener listener;
 		struct cal_dir_view *view;	// back link for ease
+		char name[PATH_MAX];
 	} dirs[32];
 };
 

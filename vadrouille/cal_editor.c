@@ -143,7 +143,7 @@ struct sc_view *cal_editor_view_new(struct cal_dir_view *cal_dir_view, struct md
 	// First the combo to choose the folder from
 	editor->folder_combo = gtk_combo_box_new_text();
 	for (unsigned i = 0; i < cal_dir_view->nb_dirs; i++) {
-		gtk_combo_box_append_text(GTK_COMBO_BOX(editor->folder_combo), mdirb_name(cal_dir_view->dirs[i].mdirb));
+		gtk_combo_box_append_text(GTK_COMBO_BOX(editor->folder_combo), cal_dir_view->dirs[i].name);
 		if (cal_dir_view->dirs[i].mdirb == replaced_dir) gtk_combo_box_set_active(GTK_COMBO_BOX(editor->folder_combo), i);
 	}
 	

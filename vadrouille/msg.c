@@ -261,9 +261,9 @@ static void dir_view_refresh(struct sc_dir_view *view)
  * Init
  */
 
-static void function_list(struct mdirb *mdirb)
+static void function_list(struct mdirb *mdirb, char const *name)
 {
-	debug("listing message in mdirb@%p (%s)", mdirb, mdirb->mdir.path);
+	debug("listing message in mdirb@%p (%s)", mdirb, name);
 	if_fail (dir_view_new(mdirb)) {
 		alert(GTK_MESSAGE_ERROR, error_str());
 		error_clear();

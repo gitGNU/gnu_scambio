@@ -22,6 +22,7 @@
 #include "vadrouille.h"
 #include "merelib.h"
 #include "contact.h"
+#include "dialog.h"
 
 /*
  * Contact Message
@@ -345,20 +346,21 @@ static void rename_cb(GtkWidget *widget, gpointer data)
 		alert(GTK_MESSAGE_ERROR, "Cannot edit a transient contact");
 		return;
 	}
-	struct name_dialog *nd = name_dialog_new(GTK_WINDOW(ctv->view.view.window), ct->name);
-	on_error goto err;
+	GtkWidget *name_entry = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(name_entry), ct->name);
+	struct sc_dialog *dialog = sc_dialog_new("Rename Contact",
+		GTK_WINDOW(ctv->view.view.window),
+		make_labeled_hbox("Name", name_entry));
+	
 	// Run the dialog untill the user either cancels or saves
-	if (gtk_dialog_run(GTK_DIALOG(nd->dialog)) == GTK_RESPONSE_ACCEPT) {
+	if (sc_dialog_accept(dialog)) {
 		// Edit the header within the contact struct
 		// (do not request a patch untill the user saves this page)
-		contact_rename(ct, gtk_entry_get_text(GTK_ENTRY(nd->name_entry)));
+		contact_rename(ct, gtk_entry_get_text(GTK_ENTRY(name_entry)));
 		// Rebuild our view in order to show the change
 		contact_view_reload(ctv);
 	}
-	name_dialog_del(nd);
-	return;
-err:
-	alert_error();
+	sc_dialog_del(dialog);
 }
 
 static void contact_view_fill(struct contact_view *ctv)
@@ -462,9 +464,9 @@ static void contact_view_reload(struct contact_view *ctv)
 	contact_view_fill(ctv);
 }
 
-static void contact_new_cb(struct mdirb *mdirb)
+static void contact_new_cb(struct mdirb *mdirb, char const *name)
 {
-	debug("Add a contact in dir %s", mdirb_name(mdirb));
+	debug("Add a contact in dir %s", name);
 
 	// Create the contact
 	struct header *h = header_new();

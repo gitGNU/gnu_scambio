@@ -56,7 +56,7 @@ struct sc_plugin {
 	struct sc_plugin_dir_function {
 		GtkWidget *icon;
 		char const *label;
-		void (*cb)(struct mdirb *);
+		void (*cb)(struct mdirb *, char const *name);
 	} dir_functions[8];
 };
 

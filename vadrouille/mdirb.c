@@ -35,24 +35,25 @@ static struct mdir *mdirb_alloc(void)
 {
 	struct mdirb *mdirb = Malloc(sizeof(*mdirb));
 	LIST_INIT(&mdirb->msgs);
-	LIST_INIT(&mdirb->listeners);
 	mdirb->nb_msgs = 0;
 	mdir_cursor_ctor(&mdirb->cursor);
-	mdirb->name[0] = '\0';
 	return &mdirb->mdir;
 }
 
 static void mdirb_free(struct mdir *mdir)
 {
 	struct mdirb *mdirb = mdir2mdirb(mdir);
+	
 	struct sc_msg *msg;
 	while (NULL != (msg = LIST_FIRST(&mdirb->msgs))) {
 		sc_msg_unref(msg);
 	}
+	
 	struct mdirb_listener *listener;
 	while (NULL != (listener = LIST_FIRST(&mdirb->listeners))) {
 		LIST_REMOVE(listener, entry);
 	}
+	
 	mdir_cursor_dtor(&mdirb->cursor);
 	free(mdirb);
 }
@@ -70,11 +71,12 @@ extern inline void mdirb_listener_dtor(struct mdirb_listener *);
 static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 {
 	bool *changed = (bool *)data;
-	struct sc_msg *msg;
 	struct mdirb *mdirb = mdir2mdirb(mdir);
-	debug("searching version %"PRIversion, version);
+	struct sc_msg *msg;
+	debug("searching version %"PRIversion" amongst messages", version);
 	LIST_FOREACH(msg, &mdirb->msgs, entry) {	// TODO: hash me using version please
 		if (msg->version == version) {
+			debug("...found!");
 			sc_msg_unref(msg);
 			*changed = true;
 			break;
@@ -85,12 +87,13 @@ static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 
 static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
+	struct mdirb *mdirb = mdir2mdirb(mdir);
+	bool *changed = (bool *)data;
+
 	if (header_is_directory(h)) return;
 
 	debug("try to add msg version %"PRIversion, version);
-	bool *changed = (bool *)data;
 	*changed = true;
-	struct mdirb *mdirb = mdir2mdirb(mdir);
 	struct sc_msg *msg;
 	struct sc_plugin *plugin;
 	struct header_field *type = header_find(h, SC_TYPE_FIELD, NULL);
@@ -127,13 +130,6 @@ void mdirb_refresh(struct mdirb *mdirb)
 			listener->refresh(listener, mdirb);
 		}
 	}
-}
-
-extern inline char const *mdirb_name(struct mdirb *mdirb);
-
-void mdirb_set_name(struct mdirb *mdirb, char const *name)
-{
-	snprintf(mdirb->name, sizeof(mdirb->name), "%s", name);
 }
 
 /*
