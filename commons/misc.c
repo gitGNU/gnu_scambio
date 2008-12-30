@@ -112,6 +112,8 @@ void WriteTo(int fd, off_t offset, void const *buf, size_t len)
 void Copy(int dst, int src)
 {
 	debug("Copy from %d to %d", src, dst);
+	// Rewind source
+	if ((off_t)-1 == lseek(src, 0, SEEK_SET)) with_error(errno, "Cannot rewind source filedescr %d", src) return;
 #	define BUFFER_SIZE 65536
 	char *buffer = malloc(BUFFER_SIZE);
 	if (! buffer) with_error(ENOMEM, "Cannot alloc buffer for copy") return;
