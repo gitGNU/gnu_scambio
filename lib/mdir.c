@@ -283,31 +283,34 @@ struct header *mdir_read(struct mdir *mdir, mdir_version version, enum mdir_acti
  */
 
 // FIXME : on error, will left the directory in unusable state
+// version is 0 for transient dirs
 static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 {
-	debug("add link to mdir %s", mdir_id(parent));
+	debug("Add link to mdir %s", mdir_id(parent));
 	assert(h);
-	// check that the given header does _not_ already have a dirId,
-	// and add fields name and type if necessary
+	char path[PATH_MAX];
+	struct mdir *child;
+	
+	// Retrieve name for the mount point, create it if necessary
 	struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
 	if (! name_field) {
 		if_fail (name_field = header_field_new(h, SC_NAME_FIELD, "Unnamed")) return;
 	}
-	char path[PATH_MAX];
+
+	// Build the name of the symlink
 	snprintf(path, sizeof(path), "%s/%s", parent->path, name_field->value);
-	struct mdir *child;
+
+	// Do we have a dirId yet ?
 	struct header_field *dirid_field = header_find(h, SC_DIRID_FIELD, NULL);
-	if (dirid_field) {
+	if (dirid_field) {	// Yes, we get it from the central server
 		assert(! transient);
 		// A symlink to a transient dirId may already exist. If so, rename it.
-		// Otherwise, create a new one.
 		char prev_link[PATH_MAX];
 		ssize_t len = readlink(path, prev_link, sizeof(prev_link));
 		if (len == -1) {
 			if (errno != ENOENT) with_error(errno, "readlink(%s)", path) return;
-			// does not exist : then create a new one
-			child = mdir_lookup_by_id(dirid_field->value, true);
-		} else {	// the symlink exist
+			// does not exist : then all is good
+		} else {	// the symlink exist already
 			assert(len < (int)sizeof(prev_link) && len > 0);	// PATH_MAX is supposed to be able to store a path + the nul byte
 			prev_link[len] = '\0';
 			// check it points toward a temporary dirId
@@ -322,15 +325,12 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 			if (0 != rename(prev_link, new_path)) with_error(errno, "Cannot rename transient dirId %s to %s", prev_link, new_path) return;
 			debug("Removing previous symlink '%s'", path);
 			if (0 != unlink(path)) with_error(errno, "Cannot remove previous symlink %s", path) return;
-			child = mdir_lookup_by_id(dirid_field->value, false);	// must exists by now
-			on_error return;
-			// new symlink is created below
 		}
-		on_error return;
-	} else {
+		if_fail (child = mdir_lookup_by_id(dirid_field->value, true)) return;
+		// new symlink is created below
+	} else {	// No dirId yet, we are the central server in charge of them
 		debug("no dirId in header (yet)");
-		child = mdir_create(transient);
-		on_error return;
+		if_fail (child = mdir_create(transient)) return;
 		if (! transient) {
 			if_fail ((void)header_field_new(h, SC_DIRID_FIELD, mdir_id(child))) return;
 		}
@@ -341,13 +341,19 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 
 static void mdir_unlink(struct mdir *parent, struct header *h)
 {
-	debug("remove a link from mdir %s", mdir_id(parent));
 	assert(h);
 	struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
 	if (! name_field) with_error(0, "folder name ommited") return;
+	debug("remove a link named '%s' from mdir %s", name_field->value, mdir_id(parent));
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/%s", parent->path, name_field->value);
-	if (0 != unlink(path)) error_push(errno, "unlink %s", path);
+	// The link may already be gone if the deletion patch originates from this host
+	if (0 != unlink(path) && errno != ENOENT) with_error(errno, "unlink %s", path) return;
+
+	// Also remove the version file
+	debug("remove version file as well");
+	snprintf(path, sizeof(path), "%s/.versionOf_%s", parent->path, name_field->value);
+	if (0 != unlink(path) && errno != ENOENT) with_error(errno, "unlink(%s)", path) return;
 }
 
 /*
@@ -385,7 +391,7 @@ static void insert_blank_patches(struct mdir *mdir, unsigned nb)
 	}
 }
 
-static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
+static void mdir_prepare_rem(struct mdir *mdir, struct header *header, bool transient)
 {
 	mdir_version to_del = header_target(header);
 	on_error return;
@@ -401,16 +407,32 @@ static void mdir_prepare_rem(struct mdir *mdir, struct header *header)
 		if (header_is_directory(target)) {
 			if_fail (mdir_unlink(mdir, target)) break;
 		}
-		if_fail (jnl_mark_del(old_jnl, to_del)) break;
+		if (! transient) if_fail (jnl_mark_del(old_jnl, to_del)) break;
 	} while (0);
 	header_unref(target);
 }
 
-static void mdir_prepare_add(struct mdir *mdir, struct header *header)
+static void mdir_prepare_add(struct mdir *mdir, struct header *header, bool transient)
 {
-	if (header_is_directory(header)) {
-		mdir_link(mdir, header, false);
-	}
+	if (! header_is_directory(header)) return;
+	mdir_link(mdir, header, transient);
+}
+	
+static void mdir_confirm_add(struct mdir *mdir, struct header *header, mdir_version version)
+{
+	if (! header_is_directory(header)) return;
+	// Store the relation from name to version so that we can know what patch created what mount point
+	// Note : we must do that after patching (to have version number), but we must mdir_link
+	// _before_ patching, to rename transient dir instead of having jnl_patch create new dirs.
+	char path[PATH_MAX];
+	struct header_field *name_field = header_find(header, SC_NAME_FIELD, NULL);
+	assert(name_field);	// added by mdir_link is missing
+	debug("Add version info for mountpoint '%s' of '%s'", name_field->value, mdir->path);
+	snprintf(path, sizeof(path), "%s/.versionOf_%s", mdir->path, name_field->value);
+	int fd = creat(path, 0444);
+	if (fd < 0) with_error(errno, "creat(%s)", path) return;
+	Write_strs(fd, mdir_version2str(version), NULL);
+	(void)close(fd);
 }
 
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
@@ -424,49 +446,47 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		if (nb_deleted) if_fail (insert_blank_patches(mdir, nb_deleted)) break;
 		// If it's a removal, check the header and the deleted version
 		if (action == MDIR_REM) {
-			mdir_prepare_rem(mdir, header);
+			mdir_prepare_rem(mdir, header, false);
 		} else {
-			mdir_prepare_add(mdir, header);
+			mdir_prepare_add(mdir, header, false);
 		}
 		on_error break;
 		// Either use the last journal, or create a new one
 		struct jnl *jnl = last_jnl(mdir);
 		on_error break;
-		version = jnl_patch(jnl, action, header);
+		if_fail (version = jnl_patch(jnl, action, header)) break;
+		// FIXME: if these fails we end up with an incomplete patch in the journal
+		if (action == MDIR_ADD) {
+			mdir_confirm_add(mdir, header, version);
+		}
 	} while (0);
 	(void)pth_rwlock_release(&mdir->rwlock);
 	return version;
 }
 
-void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *h)
+void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *header)
 {
-	bool is_dir = header_is_directory(h);
-	struct header_field *dirId_field = is_dir ? header_find(h, SC_DIRID_FIELD, NULL) : NULL;
+	bool is_dir = header_is_directory(header);
+	struct header_field *dirId_field = is_dir ? header_find(header, SC_DIRID_FIELD, NULL) : NULL;
 	if (dirId_field && dirId_field->value[0] == '_') {
 		with_error(0, "Cannot refer to a temporary dirId") return;
 	}
+	if (action == MDIR_REM) {
+		mdir_prepare_rem(mdir, header, true);
+	} else {
+		mdir_prepare_add(mdir, header, true);
+	}
+	on_error return;
 	char temp[PATH_MAX];
 	int len = snprintf(temp, sizeof(temp), "%s/.tmp/", mdir->path);
-	Mkdir(temp);
-	on_error {	// this is not an error if the dir already exists
-		if (error_code() == EEXIST) error_clear();
-		else return;
-	}
+	if_fail (Mkdir(temp)) return;
 	mdir_version tver;
 	if_fail (tver = persist_read_inc_sequence(&transient_version)) return;
 	snprintf(temp+len, sizeof(temp)-len, "%c%"PRIversion, action == MDIR_ADD ? '+':'-', tver);
 	int fd = open(temp, O_WRONLY|O_CREAT|O_EXCL, 0440);
 	if (fd < 0) with_error(errno, "Cannot create transient patch in %s", temp) return;
-	header_write(h, fd);
+	header_write(header, fd);
 	(void)close(fd);
-	on_error return;
-	if (is_dir) {
-		if (action == MDIR_ADD) {
-			mdir_link(mdir, h, true);
-		} else {
-			mdir_unlink(mdir, h);
-		}
-	}
 }
 
 void mdir_del_request(struct mdir *mdir, mdir_version to_del)
@@ -477,6 +497,18 @@ void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(to_del));
 	unless_error mdir_patch_request(mdir, MDIR_REM, h);
 	header_unref(h);
+}
+
+mdir_version mdir_get_folder_version(struct mdir *mdir, char const *name)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/.versionOf_%s", mdir->path, name);
+	debug("Retrieving version that created mountpoint '%s' on folder %s", name, mdir->path);
+	struct varbuf vb;
+	if_fail (varbuf_ctor_from_file(&vb, path)) return 0;
+	mdir_version version = mdir_str2version(vb.buf);
+	varbuf_dtor(&vb);
+	return version;
 }
 
 /*

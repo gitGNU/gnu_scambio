@@ -128,6 +128,10 @@ void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
 // with this version
 void mdir_del_request(struct mdir *mdir, mdir_version to_del);
 
+// Returns the version of the patch that created this mountpoint on mdir.
+// (usefull to delete it).
+mdir_version mdir_get_folder_version(struct mdir *mdir, char const *folder);
+
 // abort a patch request if its not already aborted.
 // If the patch found is of type: dir, unlink also the dir from its parent.
 void mdir_patch_request_abort(struct mdir *, enum mdir_action, mdir_version version);

@@ -44,7 +44,7 @@ static void unref_win(GtkWidget *widget, gpointer data)
 	browser_del(browser);
 }
 
-static struct mdirb *get_selected_mdirb(struct browser *browser, size_t name_size, char *name)
+static struct mdirb *get_selected_mdirb(struct browser *browser, size_t name_size, char *name, struct mdirb **parent)
 {
 	GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(browser->tree));
 	GtkTreeIter iter;
@@ -63,6 +63,18 @@ static struct mdirb *get_selected_mdirb(struct browser *browser, size_t name_siz
 	if (name) snprintf(name, name_size, "%s", g_value_get_string(&gname));
 	g_value_unset(&gptr);
 	g_value_unset(&gname);
+	if (parent) {	// we want the node before this one on the tree
+		GtkTreeIter parent_iter;
+		if (TRUE == gtk_tree_model_iter_parent(GTK_TREE_MODEL(browser->store), &parent_iter, &iter)) {
+			memset(&gptr, 0, sizeof(gptr));
+			gtk_tree_model_get_value(GTK_TREE_MODEL(browser->store), &parent_iter, FIELD_MDIR, &gptr);
+			assert(G_VALUE_HOLDS_POINTER(&gptr));
+			*parent = g_value_get_pointer(&gptr);
+			g_value_unset(&gptr);
+		} else {
+			*parent = NULL;
+		}
+	}
 	return mdirb;
 }
 
@@ -74,7 +86,7 @@ static void dir_function_cb(GtkToolButton *button, gpointer user_data)
 	
 	// Retrieve select row, check there is something in there, and change the view
 	char name[PATH_MAX];
-	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name);
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name, NULL);
 	if (! mdirb) {
 		alert(GTK_MESSAGE_ERROR, "Select a folder first");
 		return;
@@ -107,13 +119,26 @@ static void deldir_cb(GtkToolButton *button, gpointer user_data)
 	(void)button;
 	struct browser *browser = (struct browser *)user_data;
 	char name[PATH_MAX];
-	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name);
+	struct mdirb *parent;
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name, &parent);
 	if (! mdirb) {
 		alert(GTK_MESSAGE_ERROR, "Select first a folder as parent");
 		return;
 	}
+	if (! parent) {
+		alert(GTK_MESSAGE_ERROR, "You must not delete the root folder");
+		return;
+	}
+	mdir_version to_del = mdir_get_folder_version(&parent->mdir, name);
+	on_error {
+		alert_error();
+		return;
+	}
+	debug("Asked to delete folder named '%s' in parent dir '%s', version was %"PRIversion, name, parent->mdir.path, to_del);
 	if (confirm("Aren't you afraid to remove this folder ?")) {
 		// To unmount a folder, one must delete the patch that mounted it
+		mdir_del_request(&parent->mdir, to_del);
+		browser_refresh(browser);
 	}
 }
 
@@ -121,7 +146,7 @@ static void newdir_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	struct browser *browser = (struct browser *)user_data;
-	struct mdirb *mdirb = get_selected_mdirb(browser, 0, NULL);
+	struct mdirb *mdirb = get_selected_mdirb(browser, 0, NULL, NULL);
 	if (! mdirb) {
 		alert(GTK_MESSAGE_ERROR, "Select first a folder as parent");
 		return;
