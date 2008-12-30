@@ -858,9 +858,12 @@ static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 		tx = chn_tx_new_receiver(ccnx, cmd->seq, stream);
 	}
 	on_error {
-		error_clear();
+		char const *err_str = error_str();
+		error_save();
 		stream_unref(stream);
-		mdir_cnx_answer(cnx, cmd, 500, error_str());
+		mdir_cnx_answer(cnx, cmd, 500, err_str);
+		error_restore();
+		error_clear();
 		return;
 	}
 	mdir_cnx_answer(cnx, cmd, 200, "Ok");
