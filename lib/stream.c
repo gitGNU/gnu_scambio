@@ -124,6 +124,7 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt, bool c
 			with_error(0, "pth_spawn(stream_push)") return;
 		}
 	}
+	debug("stream will use fd = %d, of size %lu", stream->fd, (unsigned long)filesize(stream->fd));
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
 

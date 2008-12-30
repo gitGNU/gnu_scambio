@@ -972,9 +972,9 @@ static void add_ref_path_to_putdir(char const *ref_path)
 
 void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char *ref_)
 {
-	debug("filename = '%s'", filename);
 	int source_fd = open(filename, O_RDONLY);
 	if (source_fd < 0) with_error(errno, "open(%s)", filename) return;
+	debug("filename = '%s', fd = %d", filename, source_fd);
 	char ref_path[chn_files_root_len+1+CHN_REF_LEN];
 	char *ref = ref_path + snprintf(ref_path, sizeof(ref_path), "%s/", chn_files_root);
 	do {
