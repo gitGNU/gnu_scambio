@@ -309,3 +309,14 @@ void *Calloc(size_t size)
 	if (! ret) fatal("Calloc %zu bytes", size);
 	return ret;
 }
+
+void RunAsShell(char const *cmd)
+{
+	pid_t pid = fork();
+	if (pid == -1) with_error(errno, "fork") return;
+	if (pid > 0) return;
+	execlp("sh", "sh", "-c", cmd, (char *)NULL);
+	fprintf(stderr, "Cannot execlp(sh -c %s) : %s", cmd, strerror(errno));
+	exit(-1);
+}
+

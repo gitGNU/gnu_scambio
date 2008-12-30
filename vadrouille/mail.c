@@ -249,8 +249,9 @@ static void mail_msg_view_del(struct sc_view *view)
  * Additional Functions
  */
 
-static void compose_cb(void)
+static void compose_cb(GtkWindow *parent)
 {
+	(void)parent;
 	if_fail ((void)mail_composer_new(NULL, NULL, NULL)) alert_error();
 }
 

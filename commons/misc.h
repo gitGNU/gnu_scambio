@@ -56,4 +56,6 @@ int Connect(char const *host, char const *service);
 void *Malloc(size_t size);
 void *Calloc(size_t size);
 
+void RunAsShell(char const *cmd);
+
 #endif

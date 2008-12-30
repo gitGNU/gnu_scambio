@@ -91,20 +91,18 @@ static void dir_function_cb(GtkToolButton *button, gpointer user_data)
 		alert(GTK_MESSAGE_ERROR, "Select a folder first");
 		return;
 	}
-	if (mdirb_size(mdirb) == 0) {
-		alert(GTK_MESSAGE_INFO, "No messages in this folder");
-		return;
-	}
 	debug("Execute dir function for '%s'", mdirb->mdir.path);
-	if_fail (d2m->function->cb(mdirb, name)) alert_error();
+	if_fail (d2m->function->cb(mdirb, name, GTK_WINDOW(browser->window))) alert_error();
 }
 
 static void global_function_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
+	struct globfunc2myself *g2m = (struct globfunc2myself *)user_data;
+	struct browser *browser = g2m->myself;
+
 	debug("Execute global function");
-	struct sc_plugin_global_function *function = (struct sc_plugin_global_function *)user_data;
-	if_fail (function->cb()) alert_error();
+	if_fail (g2m->function->cb(GTK_WINDOW(browser->window))) alert_error();
 }
 
 static void refresh_cb(GtkToolButton *button, gpointer user_data)
@@ -181,6 +179,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 	browser->mdirb = mdir2mdirb(mdir);
 	browser->iter = NULL;
 	browser->nb_d2m = 0;
+	browser->nb_g2m = 0;
 
 	browser->store = gtk_tree_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_UINT, G_TYPE_POINTER);
 	browser->tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->store));
@@ -222,7 +221,11 @@ static void browser_ctor(struct browser *browser, char const *root)
 		for (unsigned f = 0; f < plugin->nb_global_functions; f++) {
 			GtkToolItem *button = gtk_tool_button_new(plugin->global_functions[f].icon, plugin->global_functions[f].label);
 			gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
-			if (plugin->global_functions[f].cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(global_function_cb), plugin->global_functions+f);
+			COMPILE_ASSERT(sizeof_array(browser->globfunc2myself) >= sizeof_array(plugin->global_functions));
+			browser->globfunc2myself[browser->nb_g2m].function = plugin->global_functions+f;
+			browser->globfunc2myself[browser->nb_g2m].myself = browser;
+			g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(global_function_cb), browser->globfunc2myself+browser->nb_g2m);
+			browser->nb_g2m++;
 		}
 		for (unsigned f = 0; f < plugin->nb_dir_functions; f++) {
 			GtkToolItem *button = gtk_tool_button_new(plugin->dir_functions[f].icon, plugin->dir_functions[f].label);
@@ -230,7 +233,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 			COMPILE_ASSERT(sizeof_array(browser->dirfunc2myself) >= sizeof_array(plugin->dir_functions));
 			browser->dirfunc2myself[browser->nb_d2m].function = plugin->dir_functions+f;
 			browser->dirfunc2myself[browser->nb_d2m].myself = browser;
-			if (plugin->dir_functions[f].cb) g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(dir_function_cb), browser->dirfunc2myself+browser->nb_d2m);
+			g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(dir_function_cb), browser->dirfunc2myself+browser->nb_d2m);
 			browser->nb_d2m++;
 		}
 	}

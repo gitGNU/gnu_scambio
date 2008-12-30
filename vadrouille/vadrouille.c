@@ -32,6 +32,7 @@
 #include "mail.h"
 #include "calendar.h"
 #include "contact.h"
+#include "bookmark.h"
 
 /*
  * Plugins
@@ -107,6 +108,7 @@ int main(int nb_args, char *args[])
 	if_fail (calendar_init()) return EXIT_FAILURE;
 	if_fail (contact_init()) return EXIT_FAILURE;
 	if_fail (browser_init()) return EXIT_FAILURE;
+	if_fail (bookmark_init()) return EXIT_FAILURE;
 
 	struct browser *browser = browser_new("/");
 	on_error return EXIT_FAILURE;

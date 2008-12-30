@@ -464,8 +464,9 @@ static void contact_view_reload(struct contact_view *ctv)
 	contact_view_fill(ctv);
 }
 
-static void contact_new_cb(struct mdirb *mdirb, char const *name)
+static void contact_new_cb(struct mdirb *mdirb, char const *name, GtkWindow *parent)
 {
+	(void)parent;
 	debug("Add a contact in dir %s", name);
 
 	// Create the contact

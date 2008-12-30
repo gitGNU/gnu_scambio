@@ -546,8 +546,9 @@ static void cal_dir_view_del(struct sc_view *view_)
  * Init
  */
 
-static void function_add_to_cal(struct mdirb *mdirb, char const *name)
+static void function_add_to_cal(struct mdirb *mdirb, char const *name, GtkWindow *parent)
 {
+	(void)parent;
 	if (global_view) {
 		// add this mdir to the global view
 		debug("Add mdirb '%s' to global calendar", name);

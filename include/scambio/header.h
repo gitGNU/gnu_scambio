@@ -174,13 +174,13 @@ void header_digest(struct header *, size_t, char *buffer);
  */
 
 // Common values for type field (SC_TYPE_FIELD)
-#define SC_DIR_TYPE     "dir"
-#define SC_MAIL_TYPE    "mail"
-#define SC_CAL_TYPE     "cal"
-#define SC_IM_TYPE      "im"
-#define SC_DIR_TYPE     "dir"
-#define SC_FILE_TYPE    "file"
-#define SC_CONTACT_TYPE "contact"
+#define SC_DIR_TYPE      "dir"
+#define SC_MAIL_TYPE     "mail"
+#define SC_CAL_TYPE      "cal"
+#define SC_IM_TYPE       "im"
+#define SC_FILE_TYPE     "file"
+#define SC_CONTACT_TYPE  "contact"
+#define SC_BOOKMARK_TYPE "bookmark"
 
 /* Tells wether this header has a specific type.
  */
@@ -216,5 +216,6 @@ mdir_version header_target(struct header *);
 #define SC_PERIOD_FIELD   "sc-period"
 #define SC_LOCALID_FIELD  "sc-localid"
 #define SC_STATUS_FIELD   "sc-status"
+#define SC_URL_FIELD      "sc-url"
 
 #endif

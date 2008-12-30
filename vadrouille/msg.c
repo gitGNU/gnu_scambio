@@ -55,6 +55,7 @@ static struct sc_msg *msg_new(struct mdirb *mdirb, struct header *h, mdir_versio
 void sc_msg_dtor(struct sc_msg *msg)
 {
 	debug("msg@%p", msg);
+	assert(msg->count <= 0);
 	header_unref(msg->header);
 	msg->header = NULL;
 	LIST_REMOVE(msg, entry);
@@ -63,7 +64,6 @@ void sc_msg_dtor(struct sc_msg *msg)
 
 static void msg_del(struct sc_msg *msg)
 {
-	assert(msg->count <= 0);
 	sc_msg_dtor(msg);
 	free(msg);
 }
@@ -108,6 +108,8 @@ static char *msg_descr(struct sc_msg *msg)
 		}
 	} else if (0 == strcmp(type->value, SC_CONTACT_TYPE)) {
 		ret = g_markup_printf_escaped("Contact <i>%s</i>", name ? name->value : "???");
+	} else if (0 == strcmp(type->value, SC_BOOKMARK_TYPE)) {
+		ret = g_markup_printf_escaped("Bookmark <i>%s</i>", name ? name->value : "???");
 	}
 	
 	return ret;
@@ -261,8 +263,9 @@ static void dir_view_refresh(struct sc_dir_view *view)
  * Init
  */
 
-static void function_list(struct mdirb *mdirb, char const *name)
+static void function_list(struct mdirb *mdirb, char const *name, GtkWindow *parent)
 {
+	(void)parent;
 	debug("listing message in mdirb@%p (%s)", mdirb, name);
 	if_fail (dir_view_new(mdirb)) {
 		alert(GTK_MESSAGE_ERROR, error_str());
@@ -285,8 +288,7 @@ static struct sc_plugin default_plugin = {
 	.type = NULL,
 	.ops = &ops,
 	.nb_global_functions = 0,
-	.global_functions = {
-	},
+	.global_functions = {},
 	.nb_dir_functions = 1,
 	.dir_functions = {
 		{ NULL, "List", function_list },
