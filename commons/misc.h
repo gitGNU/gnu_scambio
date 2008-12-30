@@ -47,6 +47,7 @@ void path_pop(char path[]);
  
 #include <sys/types.h>
 off_t filesize(int fd);
+off_t filesize_by_name(char const *filename);
 
 char *Strdup(char const *orig);
 void FreeIfSet(char **ptr);

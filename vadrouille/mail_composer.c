@@ -95,9 +95,9 @@ static void add_files_and_send(struct mail_composer *comp, struct header *header
 	} else debug("Skip text for being too small");
 	// And all attached files
 	unless_error for (unsigned p = 0; p < comp->nb_files && !is_error(); p++) {
-		char const *content_type = filename2mime_type(comp->filenames[p]);
+		char const *content_type = filename2mime_type(comp->files[p].name);
 		debug("guessed content-type : %s", content_type);
-		send_file(comp->filenames[p], Basename(comp->filenames[p]), content_type, header);
+		send_file(comp->files[p].name, Basename(comp->files[p].name), content_type, header);
 		have_content = true;
 	}
 	(void)unlink(editor_fname);
@@ -163,11 +163,26 @@ void send_cb(GtkToolButton *button, gpointer user_data)
 	}
 }
 
+void del_file_cb(GtkButton *button, gpointer user_data)
+{
+	struct mail_composer *comp = (struct mail_composer *)user_data;
+	for (unsigned f = 0; f < comp->nb_files; f++) {
+		if (button == GTK_BUTTON(comp->files[f].del_button)) {
+			debug("Removing file %u (%s) from the list", f, comp->files[f].name);
+			gtk_widget_destroy(comp->files[f].hbox);
+			for (comp->nb_files--; f < comp->nb_files; f++) {
+				comp->files[f] = comp->files[f+1];
+			}
+			break;
+		}
+	}
+}
+
 void add_file(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	struct mail_composer *comp = (struct mail_composer *)user_data;
-	if (comp->nb_files >= sizeof_array(comp->filenames)) {
+	if (comp->nb_files >= sizeof_array(comp->files)) {
 		alert(GTK_MESSAGE_ERROR, "Too many files !");
 		return;
 	}
@@ -176,11 +191,37 @@ void add_file(GtkToolButton *button, gpointer user_data)
 		GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
 		GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
 		NULL);
-	if (gtk_dialog_run(GTK_DIALOG(file_chooser)) == GTK_RESPONSE_ACCEPT) {
+	if (gtk_dialog_run(GTK_DIALOG(file_chooser)) == GTK_RESPONSE_ACCEPT) do {
+		struct attached_file *const file = comp->files + comp->nb_files;
+
+		// Save the filename
 		char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(file_chooser));
-		snprintf(comp->filenames[comp->nb_files++], sizeof(comp->filenames[0]), "%s", filename);
+		snprintf(file->name, sizeof(file->name), "%s", filename);
 		g_free(filename);
-	}
+
+		// Add a mention of it on the files_box
+		off_t size = filesize_by_name(file->name);
+		on_error {
+			alert_error();
+			break;
+		}
+		char *file_markup = g_markup_printf_escaped("<b>%s</b> (%lu bytes)", file->name, (unsigned long)size);
+		GtkWidget *label = gtk_label_new(NULL);
+		gtk_label_set_markup(GTK_LABEL(label), file_markup);
+		g_free(file_markup);
+
+		// As well as a delete button
+		file->del_button = gtk_button_new_from_stock(GTK_STOCK_DELETE);
+		g_signal_connect(G_OBJECT(file->del_button), "clicked", G_CALLBACK(del_file_cb), comp);
+		file->hbox = gtk_hbox_new(FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(file->hbox), label, TRUE, TRUE, 0);
+		gtk_box_pack_end(GTK_BOX(file->hbox), file->del_button, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(comp->files_box), file->hbox, FALSE, FALSE, 0);
+
+		gtk_widget_show_all(file->hbox);
+
+		comp->nb_files++;
+	} while (0);
 	gtk_widget_destroy(file_chooser);
 }
 
@@ -221,26 +262,24 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 	//   (later : add text button that launches an external text editor)
 	comp->editor = gtk_text_view_new();
 
-	// Pack all this into the window
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
-	gtk_container_add(GTK_CONTAINER(window), vbox);
-	GtkWidget *formH = make_labeled_hboxes(3,
-		"From :", comp->from_combo,
-	  	"To :", comp->to_entry,
-	  	"Subject :", comp->subject_entry, NULL);
+	// Then the list of attached files
+	comp->files_box = gtk_vbox_new(TRUE, 0);
 
-	gtk_box_pack_start(GTK_BOX(vbox), formH, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(vbox), comp->editor, TRUE, TRUE, 0);
-	// Then some buttons :
-	// - add file (later an editable list of joined files)
-	GtkWidget *add_button = gtk_button_new_with_label("Attach file");
-	g_signal_connect(G_OBJECT(add_button), "clicked", G_CALLBACK(add_file), comp);
-	gtk_box_pack_start(GTK_BOX(vbox), add_button, FALSE, FALSE, 0);
-	// - cancel, send
-	GtkWidget *toolbar = make_toolbar(2,
+	// The toolbar
+	GtkWidget *toolbar = make_toolbar(3,
+		GTK_STOCK_ADD,     add_file, comp,
 		GTK_STOCK_JUMP_TO, send_cb, comp,
 		GTK_STOCK_CANCEL,  cancel_cb, comp);
 
+	// Pack all this into the window
+	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+	gtk_container_add(GTK_CONTAINER(window), vbox);
+	gtk_box_pack_start(GTK_BOX(vbox), make_labeled_hboxes(3,
+		"From :", comp->from_combo,
+	  	"To :", comp->to_entry,
+	  	"Subject :", comp->subject_entry, NULL), FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), comp->editor, TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(vbox), make_frame("Attached files", comp->files_box), FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 
 	sc_view_ctor(&comp->view, mail_composer_del, window);

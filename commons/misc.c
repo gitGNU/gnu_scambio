@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <netdb.h>
@@ -226,6 +227,14 @@ off_t filesize(int fd)
 	if ((off_t)-1 == lseek(fd, 0, SEEK_SET)) error_push(errno, "lseek(start)");
 	debug("filesize of fd %d is %u", fd, (unsigned)size);
 	return size;
+}
+off_t filesize_by_name(char const *filename)
+{
+	int fd = open(filename, O_RDONLY);
+	if (fd < 0) with_error(errno, "open(%s)", filename) return 0;
+	off_t ret = filesize(fd);
+	(void)close(fd);
+	return ret;
 }
 
 char *Strdup(char const *orig)
