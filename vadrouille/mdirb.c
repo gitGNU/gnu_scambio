@@ -35,6 +35,7 @@ static struct mdir *mdirb_alloc(void)
 {
 	struct mdirb *mdirb = Malloc(sizeof(*mdirb));
 	LIST_INIT(&mdirb->msgs);
+	LIST_INIT(&mdirb->listeners);
 	mdirb->nb_msgs = 0;
 	mdir_cursor_ctor(&mdirb->cursor);
 	return &mdirb->mdir;
