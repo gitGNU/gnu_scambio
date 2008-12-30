@@ -957,12 +957,10 @@ struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *na
  * Send a local file to a channel (and copy it into cache while we are at it)
  */
 
-// FIXME: sending a local file = copying it to the cache (under its ref name, without resource),
+// Sending a local file = copying it to the cache (under its ref name, without resource),
 // with a tag in the ".put" special directory for the uploader to deal with it (ie create a resource
 // whenever possible, then create the symlink to this ref, then upload the content, then remove
 // the tag from the ".put" directory).
-// There is then no need for the backstore monstruosity.
-// This cnx parameter is then useless.
 
 static void add_ref_path_to_putdir(char const *ref_path)
 {
@@ -1006,15 +1004,22 @@ struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name)
 	assert(cnx && name);
 	assert(! server);
 	debug("sending file %s", name);
+
+	// First ask for a resource name (we do not want to upload a reference)
+	char resource[PATH_MAX];
+	if_fail (chn_create(cnx, resource, false)) return NULL;
+
+	// Then write to it
 	struct stream *stream;
-	if_fail (stream = stream_new(name, false, true)) return NULL;
+	if_fail (stream = stream_new(resource, false, true)) return NULL;
 	struct command *command;
-	if_fail (command = command_new(cnx, kw_write, (char *)name, stream, false)) return NULL;
+	if_fail (command = command_new(cnx, kw_write, resource, stream, false)) return NULL;
 	stream_unref(stream);
 	command_wait(command);
-	if (command->status != 200) error_push(0, "Cannot send file '%s'", name);
+	if (command->status != 200) error_push(0, "Cannot write resource '%s'", resource);
 	struct chn_tx *tx = command->tx;
 	command_del(command);
+
 	// Remember that the transfert is still in progress !
 	return tx;
 }
