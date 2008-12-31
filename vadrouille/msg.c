@@ -24,6 +24,7 @@
 enum {
 	FIELD_DESCR,
 	FIELD_DATE,
+	FIELD_NEW,
 	FIELD_MSGPTR,
 	NB_FIELDS
 };
@@ -35,6 +36,7 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir
 	msg->version = version;
 	msg->mdirb = mdirb;
 	msg->plugin = plugin;
+	msg->was_read = false;	// untill proven otherwise
 	msg->count = 1;
 }
 
@@ -189,6 +191,7 @@ static void reload_store(struct gen_dir_view *view)
 		gtk_list_store_insert_with_values(view->store, &iter, G_MAXINT,
 			FIELD_DESCR, descr,
 			FIELD_DATE, date,
+			FIELD_NEW, msg->was_read ? "":"New",
 			FIELD_MSGPTR, msg,
 			-1);
 		g_free(descr);
@@ -200,21 +203,25 @@ static void dir_view_ctor(struct gen_dir_view *view, struct mdirb *mdirb)
 	GtkWidget *window = make_window(WC_MSGLIST, NULL, NULL);
 	GtkWidget *page = gtk_vbox_new(FALSE, 0);
 	
-	view->store = gtk_list_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
+	view->store = gtk_list_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	view->list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(view->store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view->list), FALSE);
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 
-	GtkTreeViewColumn *column;
-	column = gtk_tree_view_column_new_with_attributes("Date", renderer,
-		"text", FIELD_DATE,
-		NULL);
-	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list), column);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list),
+		gtk_tree_view_column_new_with_attributes("New", renderer,
+			"text", FIELD_NEW,
+			NULL));
 
-	column = gtk_tree_view_column_new_with_attributes("Description", renderer,
-		"markup", FIELD_DESCR,
-		NULL);
-	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list), column);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list),
+		gtk_tree_view_column_new_with_attributes("Date", renderer,
+			"text", FIELD_DATE,
+			NULL));
+
+	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list),
+		gtk_tree_view_column_new_with_attributes("Description", renderer,
+			"markup", FIELD_DESCR,
+			NULL));
 	
 	gtk_box_pack_start(GTK_BOX(page), make_scrollable(view->list), TRUE, TRUE, 0);
 	GtkWidget *toolbar = make_toolbar(3,

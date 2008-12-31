@@ -181,6 +181,7 @@ void header_digest(struct header *, size_t, char *buffer);
 #define SC_FILE_TYPE     "file"
 #define SC_CONTACT_TYPE  "contact"
 #define SC_BOOKMARK_TYPE "bookmark"
+#define SC_MARK_TYPE     "mark"
 
 /* Tells wether this header has a specific type.
  */
@@ -192,7 +193,8 @@ bool header_is_directory(struct header *);
 
 /* Some headers are used by Scambio to reference other headers (notably, to delete
  * a header we add a new header which targets the header to be deleted).
- * This function returns the header targeted (referenced) by the given one.
+ * This function returns the header targeted (referenced) by the given one,
+ * or throws an error.
  */
 #include "scambio/mdir.h"
 mdir_version header_target(struct header *);
@@ -201,21 +203,22 @@ mdir_version header_target(struct header *);
  * Some "well known" header field names used by Scambio.
  */
 
-#define SC_TYPE_FIELD     "sc-type"
-#define SC_TARGET_FIELD   "sc-target"
-#define SC_DIGEST_FIELD   "sc-digest"
-#define SC_DIRID_FIELD    "sc-dirId"
-#define SC_NAME_FIELD     "sc-name"
-#define SC_FROM_FIELD     "sc-from"
-#define SC_TO_FIELD       "sc-to"
-#define SC_DESCR_FIELD    "sc-descr"
-#define SC_EXTID_FIELD    "sc-extid"
-#define SC_RESOURCE_FIELD "sc-resource"
-#define SC_START_FIELD    "sc-start"
-#define SC_STOP_FIELD     "sc-stop"
-#define SC_PERIOD_FIELD   "sc-period"
-#define SC_LOCALID_FIELD  "sc-localid"
-#define SC_STATUS_FIELD   "sc-status"
-#define SC_URL_FIELD      "sc-url"
+#define SC_TYPE_FIELD      "sc-type"
+#define SC_TARGET_FIELD    "sc-target"
+#define SC_DIGEST_FIELD    "sc-digest"
+#define SC_DIRID_FIELD     "sc-dirId"
+#define SC_NAME_FIELD      "sc-name"
+#define SC_FROM_FIELD      "sc-from"
+#define SC_TO_FIELD        "sc-to"
+#define SC_DESCR_FIELD     "sc-descr"
+#define SC_EXTID_FIELD     "sc-extid"
+#define SC_RESOURCE_FIELD  "sc-resource"
+#define SC_START_FIELD     "sc-start"
+#define SC_STOP_FIELD      "sc-stop"
+#define SC_PERIOD_FIELD    "sc-period"
+#define SC_LOCALID_FIELD   "sc-localid"
+#define SC_STATUS_FIELD    "sc-status"
+#define SC_URL_FIELD       "sc-url"
+#define SC_HAVE_READ_FIELD "sc-read"
 
 #endif

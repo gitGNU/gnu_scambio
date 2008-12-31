@@ -706,3 +706,13 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
+void mdir_mark_read(struct mdir *mdir, char const *username, mdir_version version)
+{
+	struct header *h = header_new();
+	(void)header_field_new(h, SC_TYPE_FIELD, SC_MARK_TYPE);
+	(void)header_field_new(h, SC_HAVE_READ_FIELD, username);
+	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(version));
+	mdir_patch_request(mdir, MDIR_ADD, h);
+	header_unref(h);
+}
+

@@ -72,22 +72,33 @@ extern inline void mdirb_listener_dtor(struct mdirb_listener *);
  * Note: Cannot do that while in mdir_alloc because the mdir is not usable yet.
  */
 
+static struct sc_msg *find_msg_by_version(struct mdirb *mdirb, mdir_version version)
+{
+	debug("searching version %"PRIversion" amongst messages", version);
+	struct sc_msg *msg;
+	LIST_FOREACH(msg, &mdirb->msgs, entry) {	// TODO: hash me using version please
+		if (msg->version == version) {
+			debug("...found!");
+			return msg;
+		}
+	}
+	return NULL;
+}
+
 static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 {
 	bool *changed = (bool *)data;
 	struct mdirb *mdirb = mdir2mdirb(mdir);
-	struct sc_msg *msg;
-	debug("searching version %"PRIversion" amongst messages", version);
-	LIST_FOREACH(msg, &mdirb->msgs, entry) {	// TODO: hash me using version please
-		if (msg->version == version) {
-			debug("...found!");
-			LIST_REMOVE(msg, entry);
-			msg->mdirb->nb_msgs --;
-			sc_msg_unref(msg);
-			*changed = true;
-			break;
-		}
-	}
+
+	struct sc_msg *msg = find_msg_by_version(mdirb, version);
+	if (! msg) return;
+
+	// Remove it
+	LIST_REMOVE(msg, entry);
+	msg->mdirb->nb_msgs --;
+	sc_msg_unref(msg);
+	*changed = true;
+	
 	debug("nb_msgs in %s is now %u", mdirb->mdir.path, mdirb->nb_msgs);
 }
 
@@ -102,8 +113,28 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	*changed = true;
 	struct sc_msg *msg = NULL;
 	struct sc_plugin *plugin;
-	struct header_field *type = header_find(h, SC_TYPE_FIELD, NULL);
 
+	// We handle internally the have_read mark
+	if (header_has_type(h, SC_MARK_TYPE)) {
+		struct header_field *hf = NULL;
+		char const *username = conf_get_str("SC_USERNAME");
+		if (! username) return;	// should not happen
+		while (NULL != (hf = header_find(h, SC_HAVE_READ_FIELD, hf))) {
+			if (0 == strcmp(username, hf->value)) {
+				mdir_version target = header_target(h);
+				on_error {
+					error_clear();
+					return;
+				}
+				debug("Mark message %"PRIversion" as read", target);
+				msg = find_msg_by_version(mdirb, target);
+				if (msg) msg->was_read = true;
+				return;
+			}
+		}
+	}
+
+	struct header_field *type = header_find(h, SC_TYPE_FIELD, NULL);
 	// look for an exact match first
 	if (type) {
 		debug("  try for type '%s'", type->value);

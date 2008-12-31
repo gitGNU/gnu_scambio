@@ -255,6 +255,11 @@ static struct sc_msg_view *mail_msg_view_new(struct sc_msg *msg)
 	if_fail (mail_msg_view_ctor(view, msg)) {
 		free(view);
 		return NULL;
+	} else {	// The mail is now considered read : write a notice
+		if_succeed (mdir_mark_read(&msg->mdirb->mdir, conf_get_str("SC_USERNAME"), msg->version)) {
+			mdirb_refresh(msg->mdirb);
+		}
+		error_clear();
 	}
 	return &view->view;
 }

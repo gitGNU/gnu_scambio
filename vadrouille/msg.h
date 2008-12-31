@@ -29,6 +29,7 @@ struct sc_msg {
 	mdir_version version;
 	struct mdirb *mdirb;	// backlink for easy manipulation of mdirb->msg_count
 	struct sc_plugin *plugin;	// plugin responsible for this, or NULL if none
+	bool was_read;
 	int count;
 };
 
