@@ -268,6 +268,9 @@ static int send_forward(int fd, struct forward *fwd)
 	}
 	if_fail (send_smtp_strs(fd, "Subject: ", header_find(fwd->header, SC_DESCR_FIELD, NULL)->value, NULL)) return 0;
 	if_fail (send_smtp_strs(fd, "Message-Id: <", mdir_version2str(fwd->version), "@", my_hostname, ">", NULL)) return 0;
+	if (NULL != (hf = header_find(fwd->header, SC_EXTID_FIELD, NULL))) {
+		if_fail (send_smtp_strs(fd, "In-Reply-To: ", hf->value, NULL)) return 0;
+	}
 	if_fail (send_smtp_strs(fd, "Mime-Version: 1.0", NULL)) return 0;
 	char const *boundary = "Do-Noy-Cross-Criminal-Scene";
 	if_fail (send_smtp_strs(fd, "Content-Type: multipart/mixed; boundary=", boundary, NULL)) return 0;

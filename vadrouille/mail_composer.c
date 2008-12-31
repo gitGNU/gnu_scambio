@@ -37,6 +37,7 @@
 
 static void mail_composer_dtor(struct mail_composer *comp)
 {
+	FreeIfSet(&comp->reference);
 	contact_picker_dtor(&comp->picker);
 	sc_view_dtor(&comp->view);
 }
@@ -141,6 +142,7 @@ static struct header *header_new_from_compose(struct mail_composer *comp)
 	(void)header_field_new(header, SC_DESCR_FIELD, gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)));
 	add_dests(header, gtk_entry_get_text(GTK_ENTRY(comp->to_entry)));
 	(void)header_field_new(header, SC_FROM_FIELD, gtk_combo_box_get_active_text(GTK_COMBO_BOX(comp->from_combo)));
+	if (comp->reference) (void)header_field_new(header, SC_EXTID_FIELD, comp->reference);
 	return header;
 }
 
@@ -297,7 +299,7 @@ void contact_picked_cb(struct contact_picker *picker, struct contact *ct)
  * Construction
  */
 
-static void mail_composer_ctor(struct mail_composer *comp, char const *from, char const *to, char const *subject)
+static void mail_composer_ctor(struct mail_composer *comp, char const *from, char const *to, char const *subject, char const *reference)
 {
 	if (! mail_outbox) {
 		with_error(0, "Cannot compose message when no outbox is configured") return;
@@ -305,7 +307,7 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 	comp->nb_files = 0;
 
 	GtkWidget *window = make_window(WC_EDITOR, NULL, NULL);
-	
+
 	// From : combobox with all accepted from addresses (with from param preselected)
 	comp->from_combo = gtk_combo_box_new_text();
 	int selected = 0;
@@ -356,14 +358,17 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 	gtk_box_pack_start(GTK_BOX(vbox), make_frame("Attached files", comp->files_box), FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 
+	// Save the reference for the case the mail will be sent
+	comp->reference = reference ? Strdup(reference):NULL;	// I really need a better string object
+
 	sc_view_ctor(&comp->view, mail_composer_del, window);
 }
 
-struct sc_view *mail_composer_new(char const *from, char const *to, char const *subject)
+struct sc_view *mail_composer_new(char const *from, char const *to, char const *subject, char const *reference)
 {
 	debug("from=%s, to=%s, subject=%s", from, to, subject);
 	struct mail_composer *comp = Malloc(sizeof(*comp));
-	if_fail (mail_composer_ctor(comp, from, to, subject)) {
+	if_fail (mail_composer_ctor(comp, from, to, subject, reference)) {
 		free(comp);
 		return NULL;
 	}

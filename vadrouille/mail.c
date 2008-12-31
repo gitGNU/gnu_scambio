@@ -164,6 +164,17 @@ static char const *ts2staticstr(time_t ts)
 	return date_str;
 }
 
+static void reply_cb(GtkToolButton *button, gpointer *user_data)
+{
+	(void)button;
+	struct mail_msg_view *view = (struct mail_msg_view *)user_data;
+	debug("msg version = %"PRIversion, view->view.msg->version);
+	struct mail_msg *msg = msg2mmsg(view->view.msg);
+
+	struct header_field *hf = header_find(msg->msg.header, SC_EXTID_FIELD, NULL);
+	(void)mail_composer_new(NULL, msg->from, msg->descr, hf ? hf->value:NULL);
+}
+
 static void delete_cb(GtkToolButton *button, gpointer *user_data)
 {
 	(void)button;
@@ -229,9 +240,9 @@ static void mail_msg_view_ctor(struct mail_msg_view *view, struct sc_msg *msg)
 	gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
 	GtkWidget *toolbar = make_toolbar(3,
-		GTK_STOCK_JUMP_TO, NULL,      NULL,	// Forward
-		GTK_STOCK_DELETE,  delete_cb, view,	// Delete
-		GTK_STOCK_QUIT,    close_cb,  window);
+		GTK_STOCK_JUMP_TO, reply_cb, view,	// Reply
+		GTK_STOCK_DELETE,  delete_cb,  view,	// Delete
+		GTK_STOCK_QUIT,    close_cb,   window);
 
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 	
@@ -267,7 +278,7 @@ static void mail_msg_view_del(struct sc_view *view)
 static void compose_cb(GtkWindow *parent)
 {
 	(void)parent;
-	if_fail ((void)mail_composer_new(NULL, NULL, NULL)) alert_error();
+	if_fail ((void)mail_composer_new(NULL, NULL, NULL, NULL)) alert_error();
 }
 
 /*

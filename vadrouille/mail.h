@@ -29,6 +29,7 @@ struct mail_composer {
 	struct sc_view view;
 	GtkWidget *from_combo, *to_entry, *subject_entry, *editor, *files_box, *contact_picker;
 	struct contact_picker picker;
+	char *reference;
 	unsigned nb_files;
 	struct attached_file {
 		char name[PATH_MAX];
@@ -37,6 +38,6 @@ struct mail_composer {
 	} files[32];
 };
 
-struct sc_view *mail_composer_new(char const *from, char const *to, char const *subject);
+struct sc_view *mail_composer_new(char const *from, char const *to, char const *subject, char const *reference);
 
 #endif
