@@ -20,13 +20,15 @@
 #include <time.h>
 #include "merelib.h"
 #include "vadrouille.h"
+#include "contact.h"
 
 extern struct mdir *mail_outbox;
 void mail_init(void);
 
 struct mail_composer {
 	struct sc_view view;
-	GtkWidget *from_combo, *to_entry, *subject_entry, *editor, *files_box;
+	GtkWidget *from_combo, *to_entry, *subject_entry, *editor, *files_box, *contact_picker;
+	struct contact_picker picker;
 	unsigned nb_files;
 	struct attached_file {
 		char name[PATH_MAX];

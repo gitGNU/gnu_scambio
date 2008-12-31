@@ -18,6 +18,12 @@
 #ifndef CONTACT_H_081226
 #define CONTACT_H_081226
 
+struct contact {
+	struct sc_msg msg;
+	char const *name;	// points onto header field
+	LIST_ENTRY(contact) entry;	// All contacts are chained together
+};
+
 void contact_init(void);
 
 struct field_dialog {
@@ -27,5 +33,21 @@ struct field_dialog {
 
 struct field_dialog *field_dialog_new(GtkWindow *parent, char const *cat_name, char const *field_name, char const *value);
 void field_dialog_del(struct field_dialog *fd);
+
+/*
+ * Contact Picker
+ */
+
+struct contact_picker;
+typedef void contact_picker_cb(struct contact_picker *, struct contact *);
+
+struct contact_picker {
+	GtkWidget *button;
+	contact_picker_cb *cb;
+	GtkWindow *parent;
+};
+
+void contact_picker_ctor(struct contact_picker *picker, contact_picker_cb *cb, GtkWindow *parent);
+void contact_picker_dtor(struct contact_picker *picker);
 
 #endif

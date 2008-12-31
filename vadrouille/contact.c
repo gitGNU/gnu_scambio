@@ -25,13 +25,14 @@
 #include "dialog.h"
 
 /*
- * Contact Message
+ * All contacts are chained together to be used by the contact picker
  */
 
-struct contact {
-	struct sc_msg msg;
-	char const *name;	// points onto header field
-};
+static LIST_HEAD(contacts, contact) contacts = LIST_HEAD_INITIALIZER(&contacts);
+
+/*
+ * Contact Message
+ */
 
 static inline struct contact *msg2contact(struct sc_msg *msg)
 {
@@ -49,6 +50,7 @@ static void contact_ctor(struct contact *ct, struct mdirb *mdirb, struct header 
 	ct->name = name->value;
 
 	sc_msg_ctor(&ct->msg, mdirb, h, version, &plugin);
+	LIST_INSERT_HEAD(&contacts, ct, entry);
 }
 
 static struct sc_msg *contact_new(struct mdirb *mdirb, struct header *h, mdir_version version)
@@ -61,10 +63,11 @@ static struct sc_msg *contact_new(struct mdirb *mdirb, struct header *h, mdir_ve
 	return &ct->msg;
 }
 
-static void contact_dtor(struct contact *contact)
+static void contact_dtor(struct contact *ct)
 {
-	debug("contact '%s'", contact->name);
-	sc_msg_dtor(&contact->msg);
+	debug("contact '%s'", ct->name);
+	LIST_REMOVE(ct, entry);
+	sc_msg_dtor(&ct->msg);
 }
 
 static void contact_del(struct sc_msg *msg)
@@ -481,6 +484,68 @@ static void contact_new_cb(struct mdirb *mdirb, char const *name, GtkWindow *par
 	(void)contact_view_new(msg);
 	on_error alert_error();
 	sc_msg_unref(msg);	// make the view the only ref to this message
+}
+
+/*
+ * Contact Picker
+ */
+
+static void picker_button_cb(GtkButton *button, gpointer *user_data)
+{
+	(void)button;
+	struct contact_picker *picker = (struct contact_picker *)user_data;
+
+	// The list of contacts
+	enum {
+		PICKER_FIELD_NAME,
+		PICKER_FIELD_CONTACT,
+		NB_PICKER_FIELDS,
+	};
+	GtkTreeStore *store = gtk_tree_store_new(NB_PICKER_FIELDS, G_TYPE_STRING, G_TYPE_POINTER);
+	GtkWidget *tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
+	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(tree), FALSE);
+	GtkCellRenderer *text_renderer = gtk_cell_renderer_text_new();
+	gtk_tree_view_append_column(GTK_TREE_VIEW(tree),
+		gtk_tree_view_column_new_with_attributes("Name", text_renderer, "text", PICKER_FIELD_NAME, NULL));
+	struct contact *ct;
+	GtkTreeIter iter;
+	LIST_FOREACH(ct, &contacts, entry) {
+		gtk_tree_store_append(store, &iter, NULL);
+		gtk_tree_store_set(store, &iter, PICKER_FIELD_NAME, ct->name, PICKER_FIELD_CONTACT, ct, -1);
+	}
+	
+	// The dialog
+	struct sc_dialog *dialog = sc_dialog_new("Choose a Contact", picker->parent, make_scrollable(tree));
+	if (sc_dialog_accept(dialog)) {
+		GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(tree));
+		if (TRUE == gtk_tree_selection_get_selected(selection, NULL, &iter)) {
+			GValue gptr;
+			memset(&gptr, 0, sizeof(gptr));
+			gtk_tree_model_get_value(GTK_TREE_MODEL(store), &iter, PICKER_FIELD_CONTACT, &gptr);
+			assert(G_VALUE_HOLDS_POINTER(&gptr));
+			ct = g_value_get_pointer(&gptr);
+			g_value_unset(&gptr);
+			picker->cb(picker, ct);
+		}
+	}
+
+	sc_dialog_del(dialog);
+}
+
+void contact_picker_ctor(struct contact_picker *picker, contact_picker_cb *cb, GtkWindow *parent)
+{
+	picker->button = gtk_button_new_from_stock(GTK_STOCK_ORIENTATION_PORTRAIT);
+	picker->cb = cb;
+	picker->parent = parent,
+	g_signal_connect(picker->button, "clicked", G_CALLBACK(picker_button_cb), picker);
+}
+
+void contact_picker_dtor(struct contact_picker *picker)
+{
+	if (picker->button) {
+		gtk_widget_destroy(picker->button);
+		picker->button = NULL;
+	}
 }
 
 /*

@@ -26,7 +26,10 @@
 #include "mime.h"
 #include "merelib.h"
 #include "vadrouille.h"
+#include "dialog.h"
 #include "mail.h"
+// FIXME: plugin
+#include "contact.h"
 
 /*
  * Destruction
@@ -34,6 +37,7 @@
 
 static void mail_composer_dtor(struct mail_composer *comp)
 {
+	contact_picker_dtor(&comp->picker);
 	sc_view_dtor(&comp->view);
 }
 
@@ -178,7 +182,7 @@ void del_file_cb(GtkButton *button, gpointer user_data)
 	}
 }
 
-void add_file(GtkToolButton *button, gpointer user_data)
+void add_file_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	struct mail_composer *comp = (struct mail_composer *)user_data;
@@ -225,6 +229,70 @@ void add_file(GtkToolButton *button, gpointer user_data)
 	gtk_widget_destroy(file_chooser);
 }
 
+void contact_picked_cb(struct contact_picker *picker, struct contact *ct)
+{
+	struct mail_composer *comp = DOWNCAST(picker, picker, mail_composer);
+	struct header_field *hf = header_find(ct->msg.header, "email", NULL);
+	if (! hf) {
+		alert(GTK_MESSAGE_ERROR, "This contact does not have an email");
+		return;
+	}
+	char *email = NULL;
+	if (NULL == header_find(ct->msg.header, "email", hf)) {
+		// There is only one email, use it
+		email = parameter_suppress(hf->value);
+	} else {
+		// Choose between several emails
+		GtkWidget *combo = gtk_combo_box_new_text();
+		do {
+			char text[1024];	// FIXME
+			char *category = parameter_extract(hf->value, "category");
+			char *mail = parameter_suppress(hf->value);
+			if (mail) {
+				if (category) {
+					// Is that more ugly than a GtkTreeModel ?
+					for (char *c = category; *c; c++) if (*c == ':' && c[1] == ' ') *c = ' ';
+				}
+				snprintf(text, sizeof(text), "%s: %s", category ? category : "unknown", mail);
+				gtk_combo_box_append_text(GTK_COMBO_BOX(combo), text);
+			}
+			FreeIfSet(&mail);
+			FreeIfSet(&category);
+		} while (NULL != (hf = header_find(ct->msg.header, "email", hf)));
+
+		struct sc_dialog *dialog = sc_dialog_new("Choose an email", GTK_WINDOW(comp->view.window), combo);
+
+		if (sc_dialog_accept(dialog)) {
+			char *entry = gtk_combo_box_get_active_text(GTK_COMBO_BOX(combo));
+			if (entry) {
+				for (char *c = entry; *c; c++) {
+					if (*c == ':' && c[1] == ' ') {
+						email = Strdup(c+2);
+						break;
+					}
+				}
+			}
+		}
+
+		sc_dialog_del(dialog);
+	}
+
+	if (! email) return;
+
+#	if TRUE == GTK_CHECK_VERSION(2, 14, 0)
+	gint len = gtk_entry_get_text_length(GTK_ENTRY(comp->to_entry));
+#	else
+	gint len = strlen(gtk_entry_get_text(GTK_ENTRY(comp->to_entry)));
+#	endif
+	if (len > 0) {
+		gtk_editable_insert_text(GTK_EDITABLE(comp->to_entry), ", ", 2, &len);
+		len += 2;
+	}
+	gtk_editable_insert_text(GTK_EDITABLE(comp->to_entry), email, strlen(email), &len);
+
+	free(email);
+}
+
 /*
  * Construction
  */
@@ -251,9 +319,15 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 	if (nb_froms == 0) with_error(0, "You must configure a from address") return;
 	gtk_combo_box_set_active(GTK_COMBO_BOX(comp->from_combo), selected);
 
-	// To : input text (with latter a button to pick a contact (contact_msg are chained together))
+	// To : input text
 	comp->to_entry = gtk_entry_new();
 	if (to) gtk_entry_set_text(GTK_ENTRY(comp->to_entry), to);
+	// And a contact picker (if available - check contact_picker symbol presence)
+	contact_picker_ctor(&comp->picker, contact_picked_cb, GTK_WINDOW(window));
+	GtkWidget *to_box = gtk_hbox_new(FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(to_box), comp->to_entry, TRUE, TRUE, 0);
+	gtk_box_pack_end(GTK_BOX(to_box), comp->picker.button, FALSE, FALSE, 0);
+
 	// Subject : input text
 	comp->subject_entry = gtk_entry_new();
 	if (subject) gtk_entry_set_text(GTK_ENTRY(comp->subject_entry), subject);
@@ -267,7 +341,7 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 
 	// The toolbar
 	GtkWidget *toolbar = make_toolbar(3,
-		GTK_STOCK_ADD,     add_file, comp,
+		GTK_STOCK_ADD,     add_file_cb, comp,
 		GTK_STOCK_JUMP_TO, send_cb, comp,
 		GTK_STOCK_CANCEL,  cancel_cb, comp);
 
@@ -276,8 +350,8 @@ static void mail_composer_ctor(struct mail_composer *comp, char const *from, cha
 	gtk_container_add(GTK_CONTAINER(window), vbox);
 	gtk_box_pack_start(GTK_BOX(vbox), make_labeled_hboxes(3,
 		"From :", comp->from_combo,
-	  	"To :", comp->to_entry,
-	  	"Subject :", comp->subject_entry, NULL), FALSE, FALSE, 0);
+		"To :", to_box,
+		"Subject :", comp->subject_entry, NULL), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), comp->editor, TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), make_frame("Attached files", comp->files_box), FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
