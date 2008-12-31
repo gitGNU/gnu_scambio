@@ -16,7 +16,10 @@ AM_PROG_LIBTOOL
 AC_CHECK_PTH(2.0.0)
 AC_CHECK_LIB(ssl, SHA1)
 AC_CHECK_LIB(gnutls, gnutls_fingerprint)
-PKG_CHECK_MODULES(UUID, uuid, [], [AC_MSG_ERROR(Cannot find libuuid)])
+PKG_CHECK_MODULES(UUID, uuid, [
+	LDFLAGS="$LDFLAGS $UUID_LIBS"
+], [
+	AC_MSG_ERROR(Cannot find libuuid)])
 
 # Configuration alternatives : configure for no GTK, GTK or GTK+Maemo ?
 DO_GTKAPPS="no"

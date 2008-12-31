@@ -14,5 +14,5 @@ libscambio_la_SOURCES = \
 	stream.c \
 	timetools.c
 
-libscambio_la_LIBADD = ../commons/libcommons.la $(UUID_LIBS)
+libscambio_la_LIBADD = ../commons/libcommons.la
 
