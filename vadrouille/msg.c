@@ -35,8 +35,6 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir
 	msg->version = version;
 	msg->mdirb = mdirb;
 	msg->plugin = plugin;
-	LIST_INSERT_HEAD(&mdirb->msgs, msg, entry);
-	mdirb->nb_msgs ++;
 	msg->count = 1;
 }
 
@@ -58,8 +56,6 @@ void sc_msg_dtor(struct sc_msg *msg)
 	assert(msg->count <= 0);
 	header_unref(msg->header);
 	msg->header = NULL;
-	LIST_REMOVE(msg, entry);
-	msg->mdirb->nb_msgs --;
 }
 
 static void msg_del(struct sc_msg *msg)

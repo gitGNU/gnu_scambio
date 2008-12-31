@@ -490,7 +490,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 
 void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 {
-	assert(to_del > 0);
+	if (to_del <= 0) with_error(0, "Cannot delete transient patch") return;
 	struct header *h = header_new();
 	on_error return;
 	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(to_del));
