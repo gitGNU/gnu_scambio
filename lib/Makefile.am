@@ -1,5 +1,5 @@
 AM_CFLAGS = -std=c99 -Wall -W
-AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/commons -D_GNU_SOURCE $(UUID_CFLAGS)
 
 lib_LTLIBRARIES = libscambio.la
 
@@ -14,5 +14,5 @@ libscambio_la_SOURCES = \
 	stream.c \
 	timetools.c
 
-libscambio_la_LIBADD = ../commons/libcommons.la
+libscambio_la_LIBADD = ../commons/libcommons.la $(UUID_LIBS)
 

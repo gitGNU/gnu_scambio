@@ -38,7 +38,6 @@ struct stream {
 	LIST_ENTRY(stream) entry;	// in the list of all loaded streams
 	LIST_HEAD(readers, chn_tx) readers;
 	bool has_writer;
-	bool was_created;	// if the underlying file (if not RT) was created at stream creation (allowed only for refs)
 	int count;	// each reader/writer count as 1
 	int fd;	// may be -1 if not mapped to a file
 	time_t last_used;	// usefull for RT streams
@@ -48,8 +47,8 @@ struct stream {
 
 void stream_begin(void);
 void stream_end(void);
-struct stream *stream_lookup(char const *name, bool can_create);	// will find an existing stream or load a new file backed stream.
-struct stream *stream_new(char const *name, bool rt, bool can_create);	// create a new stream for reading the given resource or ref
+struct stream *stream_lookup(char const *name, bool rt);	// will find an existing stream or load a new file backed stream.
+struct stream *stream_new(char const *name, bool rt);	// create a new stream for the given resource
 void stream_del(struct stream *stream);
 static inline struct stream *stream_ref(struct stream *stream)
 {
@@ -63,14 +62,12 @@ static inline void stream_unref(struct stream *stream)
 	}
 }
 
-/* Will fail if there is already one writer or if the stream was opened with a SHA ref */
+/* Will fail if there is already one writer */
 void stream_add_writer(struct stream *stream);
 void stream_remove_writer(struct stream *stream);
 void stream_write(struct stream *stream, off_t offset, size_t size, struct chn_box *box, bool eof);
 
 void stream_add_reader(struct stream *stream, struct chn_tx *tx);
 void stream_remove_reader(struct stream *stream, struct chn_tx *tx);
-
-bool resource_is_ref(char const *name);
 
 #endif

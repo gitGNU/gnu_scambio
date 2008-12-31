@@ -28,19 +28,12 @@
 #include "options.h"
 #include "scambio/channel.h"
 
-static enum action { CREAT, SEND, GET, NONE } action = NONE;
+static enum action { SEND, GET, NONE } action = NONE;
 static char const *resource;
 static char const *filename;
 static char const *host = "localhost";
 static char const *port = DEFAULT_FILED_PORT;
 static struct chn_cnx *cnx;
-
-static void do_creat(void)
-{
-	char name[PATH_MAX];
-	chn_create(cnx, name, false);
-	unless_error puts(name);
-}
 
 static void do_send(void)
 {
@@ -73,13 +66,12 @@ int main(int nb_args, char const**args)
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 	log_level = conf_get_int("SC_LOG_LEVEL");
 
-	if (0 == strcmp(args[0], "sc_creatfile")) action = CREAT;
-	else if (0 == strcmp(args[0], "sc_sendfile")) action = SEND;
+	if (0 == strcmp(args[0], "sc_sendfile")) action = SEND;
 	else if (0 == strcmp(args[0], "sc_getfile")) action = GET;
 	struct option options[] = {
 		{
 			'a', "action",   OPT_ENUM,   &action,
-			"what to do", { .opt_enum = (char const *const[]){ "creat", "send", "get", NULL } }
+			"what to do", { .opt_enum = (char const *const[]){ "send", "get", NULL } }
 		},	{
 			'r', "resource", OPT_STRING, &resource,
 			"resource name", {},
@@ -103,7 +95,6 @@ int main(int nb_args, char const**args)
 
 	switch (action) {
 		case NONE:  break;
-		case CREAT: do_creat(); break;
 		case SEND:  do_send();  break;
 		case GET:   do_get();   break;
 	}

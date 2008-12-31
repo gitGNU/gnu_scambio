@@ -42,8 +42,8 @@
 static struct mdir_syntax syntax;
 static bool server;
 static mdir_cmd_cb serve_copy, serve_skip, serve_miss, serve_thx, finalize_thx;	// used by client & server
-static mdir_cmd_cb finalize_creat, finalize_txstart;	// used by client
-static mdir_cmd_cb serve_creat, serve_read, serve_write, serve_quit, serve_auth;	// used by server
+static mdir_cmd_cb finalize_txstart;	// used by client
+static mdir_cmd_cb serve_read, serve_write, serve_quit, serve_auth;	// used by server
 static struct persist putdir_seq;
 
 #define RETRANSM_TIMEOUT 2000000//400000	// .4s
@@ -71,11 +71,8 @@ void chn_init(bool server_)
 	if_fail (mdir_syntax_ctor(&syntax, true)) return;
 	static struct mdir_cmd_def def_server[] = {
 		{
-			.keyword = kw_creat, .cb = serve_creat, .nb_arg_min = 0, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
-		}, {
-			.keyword = kw_write, .cb = serve_write, .nb_arg_min = 1, .nb_arg_max = 1,
-			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
+			.keyword = kw_write, .cb = serve_write, .nb_arg_min = 1, .nb_arg_max = 2,
+			.nb_types = 2, .types = { CMD_STRING, CMD_STRING }, .negseq = false,
 		}, {
 			.keyword = kw_read,  .cb = serve_read,  .nb_arg_min = 1, .nb_arg_max = 1,
 			.nb_types = 1, .types = { CMD_STRING }, .negseq = false,
@@ -88,7 +85,6 @@ void chn_init(bool server_)
 		}
 	};
 	static struct mdir_cmd_def def_client[] = {
-		MDIR_CNX_ANSW_REGISTER(kw_creat, finalize_creat),
 		MDIR_CNX_ANSW_REGISTER(kw_write, finalize_txstart),
 		MDIR_CNX_ANSW_REGISTER(kw_read,  finalize_txstart),
 	};
@@ -295,19 +291,19 @@ static void fragment_del(struct fragment *f, struct fragments_queue *q)
 // Commands
 
 struct command {
-	char const *keyword;	// create, read or write
-	char *resource;	// read or write depending on keyword;
+	char const *keyword;	// read or write
+	char const *resource;	// read or write depending on keyword;
 	struct mdir_sent_query sq;
 	time_t sent;
 	int status;
-	struct stream *stream;	// NULL for creat
+	struct stream *stream;	// NULL
 	struct chn_tx *tx;
 	pth_cond_t cond;
 	pth_mutex_t condmut;
 };
 
 // FIXME: if we never have a response, the sent_query within the command will be destructed but the command will not be freed. Make command inherit from sent_query
-static void command_ctor(struct chn_cnx *cnx, struct command *command, char const *kw, char *resource, struct stream *stream, bool rt)
+static void command_ctor(struct chn_cnx *cnx, struct command *command, char const *kw, char const *resource, struct stream *stream, bool rt)
 {
 	command->keyword = kw;
 	command->resource = resource;
@@ -321,12 +317,12 @@ static void command_ctor(struct chn_cnx *cnx, struct command *command, char cons
 	pth_cond_init(&command->cond);
 	pth_mutex_init(&command->condmut);
 	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
-	mdir_cnx_query(&cnx->cnx, kw, NULL, &command->sq, kw == kw_creat ? (rt ? "*":NULL) : resource, NULL);
+	mdir_cnx_query(&cnx->cnx, kw, NULL, &command->sq, resource, kw == kw_write && rt ? "*":NULL, NULL);
 }
 
 // The command is returned with the lock taken, so that the condition cannot be signaled
 // before the caller wait for it. It's thus the caller that must release it (by waiting).
-static struct command *command_new(struct chn_cnx *cnx, char const *kw, char *resource, struct stream *stream, bool rt)
+static struct command *command_new(struct chn_cnx *cnx, char const *kw, char const *resource, struct stream *stream, bool rt)
 {
 	struct command *command = malloc(sizeof(*command));
 	if (! command) with_error(ENOMEM, "malloc(command)") return NULL;
@@ -795,51 +791,12 @@ static void serve_thx(struct mdir_cmd *cmd, void *cnx_)
 	mdir_cnx_answer(&cnx->cnx, cmd, 200, "Ok");
 }
 
-void serve_creat(struct mdir_cmd *cmd, void *user_data)
-{
-	struct mdir_cnx *cnx = user_data;
-	// Parameter
-	bool rt = cmd->nb_args == 1 && 0 == strcmp("*", cmd->args[0].string);
-	if (! rt && cmd->nb_args != 0) {
-		mdir_cnx_answer(cnx, cmd, 500 /* SYNTAX ERROR */, "Bad syntax");
-		return;
-	}
-	// Just create a unique file (if it's a file), or create the RT stream,
-	char path[PATH_MAX];
-	char *name;
-	if (rt) {
-		static unsigned rtseq = 0;
-		snprintf(path, sizeof(path), "%u_%u", (unsigned)time(NULL), rtseq++);
-		name = path;
-		(void)stream_new(name, true, true);	// we drop the ref, the RT timeouter will unref if
-	} else {
-		time_t now = time(NULL);
-		struct tm *tm = localtime(&now);
-		int len = snprintf(path, sizeof(path), "%s/%04d/%02d/%02d", chn_files_root, tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday);
-		if_fail (Mkdir(path)) {
-			error_clear();
-			mdir_cnx_answer(cnx, cmd, 501 /* INTERNAL ERROR */, "Cannot mkstemp");
-			return;
-		}
-		snprintf(path+len, sizeof(path)-len, "/XXXXXX");
-		int fd = mkstemp(path);
-		if (fd < 0) {
-			error("Cannot mkstemp(%s) : %s", path, strerror(errno));
-			mdir_cnx_answer(cnx, cmd, 501 /* INTERNAL ERROR */, "Cannot mkstemp");
-			return;
-		}
-		(void)close(fd);
-		name = path + chn_files_root_len;
-	}
-	// and answer at once.
-	mdir_cnx_answer(cnx, cmd, 200, name);
-}
-
 static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)	// reader = serve a read
 {
 	struct mdir_cnx *cnx = user_data;
 	struct chn_cnx *ccnx = DOWNCAST(cnx, cnx, chn_cnx);
 	char const *name = cmd->args[0].string;
+	bool rt = cmd->nb_args > 1;
 	struct stream *stream;
 	struct chn_tx *tx;
 	
@@ -847,7 +804,7 @@ static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 		mdir_cnx_answer(cnx, cmd, 500, "Missing seqnum");
 		return;
 	}
-	if_fail (stream = stream_lookup(name, resource_is_ref(name))) {
+	if_fail (stream = stream_lookup(name, rt)) {
 		error_clear();
 		mdir_cnx_answer(cnx, cmd, 500, "Cannot lookup this name");
 		return;
@@ -858,12 +815,8 @@ static void serve_read_write(struct mdir_cmd *cmd, void *user_data, bool reader)
 		tx = chn_tx_new_receiver(ccnx, cmd->seq, stream);
 	}
 	on_error {
-		char const *err_str = error_str();
-		error_save();
-		stream_unref(stream);
-		mdir_cnx_answer(cnx, cmd, 500, err_str);
-		error_restore();
 		error_clear();
+		mdir_cnx_answer(cnx, cmd, 500, "Cannot start transfert");
 		return;
 	}
 	mdir_cnx_answer(cnx, cmd, 200, "Ok");
@@ -962,7 +915,7 @@ struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *na
 // whenever possible, then create the symlink to this ref, then upload the content, then remove
 // the tag from the ".put" directory).
 
-static void add_ref_path_to_putdir(char const *ref_path)
+static void add_resource_to_putdir(char const *ref_path)
 {
 	char filename[PATH_MAX];
 	snprintf(filename, sizeof(filename), "%s/%"PRIu64, chn_putdir, persist_read_inc_sequence(&putdir_seq));
@@ -970,53 +923,61 @@ static void add_ref_path_to_putdir(char const *ref_path)
 	if (0 != symlink(ref_path, filename)) with_error(errno, "symlink(%s, %s)", ref_path, filename) return;
 }
 
-void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char *ref_)
+#include <uuid/uuid.h>
+#define CHN_RESOURCE_LEN (36+1)
+static void chn_resource_name_new(char str[CHN_RESOURCE_LEN])
 {
+	uuid_t uuid;	// Beware : this is a typedefed array
+	uuid_generate(uuid);
+	uuid_unparse(uuid, str);
+	for (unsigned nb_subdirs = 2; *str && nb_subdirs > 0; str++) {
+		if (*str == '-') {
+			*str = '/';
+			nb_subdirs--;
+		}
+	}
+}
+
+void chn_send_file_request(struct chn_cnx *cnx, char const *filename, char *resource_)
+{
+	debug("filename = '%s'", filename);
+	char path[chn_files_root_len+1+CHN_RESOURCE_LEN];
+	char *resource = path + snprintf(path, sizeof(path), "%s/", chn_files_root);
+	chn_resource_name_new(resource);
+	if_fail (Mkdir_for_file(path)) return;
 	int source_fd = open(filename, O_RDONLY);
 	if (source_fd < 0) with_error(errno, "open(%s)", filename) return;
-	debug("filename = '%s', fd = %d", filename, source_fd);
-	char ref_path[chn_files_root_len+1+CHN_REF_LEN];
-	char *ref = ref_path + snprintf(ref_path, sizeof(ref_path), "%s/", chn_files_root);
-	do {
-		// Build it's ref
-		if_fail (chn_ref_from_file(filename, ref)) break;
-		if_fail (Mkdir_for_file(ref_path)) break;
-		int ref_fd = creat(ref_path, 0644);
-		if (ref_fd < 0) with_error(errno, "creat(%s)", ref_path) break;
-		do {
-			if_fail (Copy(ref_fd, source_fd)) break;	// We must save the file from further modifications
-		} while (0);
-		(void)close(ref_fd);
-	} while (0);
+	int resource_fd = creat(path, 0644);
+	if (resource_fd < 0) with_error(errno, "creat(%s)", path) {
+		(void)close(source_fd);
+		return;
+	}
+	Copy(resource_fd, source_fd);	// We must save the file from further modifications
+	(void)close(resource_fd);
 	(void)close(source_fd);
 	on_error return;
-	if (ref_) snprintf(ref_, PATH_MAX, "%s", ref);
+	if (resource_) snprintf(resource_, PATH_MAX, "%s", resource);
 	if (! cnx) {	// we have no connection : store it for later
-		add_ref_path_to_putdir(ref_path);
+		add_resource_to_putdir(path);
 		return;
 	}
 	// We have a connection : send at once !
-	(void)chn_send_file(cnx, ref);
+	(void)chn_send_file(cnx, resource);
 }
 
-struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name)
+struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *resource)
 {
-	assert(cnx && name);
+	assert(cnx && resource);
 	assert(! server);
-	debug("sending file %s", name);
+	debug("sending file %s", resource);
 
-	// First ask for a resource name (we do not want to upload a reference)
-	char resource[PATH_MAX];
-	if_fail (chn_create(cnx, resource, false)) return NULL;
-
-	// Then write to it
 	struct stream *stream;
-	if_fail (stream = stream_new(resource, false, true)) return NULL;
+	if_fail (stream = stream_new(resource, false)) return NULL;
 	struct command *command;
 	if_fail (command = command_new(cnx, kw_write, resource, stream, false)) return NULL;
 	stream_unref(stream);
 	command_wait(command);
-	if (command->status != 200) error_push(0, "Cannot write resource '%s'", resource);
+	if (command->status != 200) error_push(0, "Cannot write to resource '%s'", resource);
 	struct chn_tx *tx = command->tx;
 	command_del(command);
 
@@ -1057,33 +1018,6 @@ unsigned chn_send_all(struct chn_cnx *cnx)
 	return ret;
 }
 
-/*
- * Request a new file name
- */
-
-static void finalize_creat(struct mdir_cmd *cmd, void *user_data)
-{
-	struct mdir_cnx *cnx = user_data;
-	struct mdir_sent_query *sq = mdir_cnx_query_retrieve(cnx, cmd);
-	on_error return;
-	struct command *command = DOWNCAST(sq, sq, command);
-	command->status = cmd->args[0].integer;
-	if (200 == command->status) {
-		snprintf(command->resource, PATH_MAX, "%s", cmd->args[1].string);
-	}
-	(void)pth_cond_notify(&command->cond, TRUE);
-}
-
-void chn_create(struct chn_cnx *cnx, char *name, bool rt)
-{
-	assert(! server);
-	struct command *command;
-	if_fail (command = command_new(cnx, kw_creat, name, NULL, rt)) return;
-	command_wait(command);
-	if (command->status != 200) error_push(0, "No answer to create request");
-	command_del(command);
-}
-
 bool chn_cnx_all_tx_done(struct chn_cnx *cnx)
 {
 	pth_yield(NULL);
@@ -1096,23 +1030,3 @@ bool chn_cnx_all_tx_done(struct chn_cnx *cnx)
 	return true;
 }
 
-/*
- * SHA1 Refs
- */
-#include "digest.h"
-
-size_t chn_ref_from_file(char const *filename, char digest[CHN_REF_LEN])
-{
-	assert(CHN_REF_LEN >= 5 + 2 + MAX_DIGEST_STRLEN + 1);
-	memcpy(digest, "refs/", 5);
-	size_t digest_len;
-	if_fail (digest_len = digest_file(digest+5+2, filename)) return 0;
-	digest[5+0] = digest[5+2];
-	digest[5+1] = digest[5+3];
-	digest[5+2] = '/';
-	digest[5+3] = digest[5+4];
-	digest[5+4] = digest[5+5];
-	digest[5+5] = '/';
-	digest[5+2+digest_len] = '\0';
-	return digest_len + 5+2+1;
-}

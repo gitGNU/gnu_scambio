@@ -31,7 +31,6 @@
 #include "scambio/mdir.h"
 #include "varbuf.h"
 #include "misc.h"
-#include "digest.h"
 #include "persist.h"
 #include "jnl.h"
 #include "channel.h"

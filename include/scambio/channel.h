@@ -75,25 +75,16 @@ void chn_cnx_del(struct chn_cnx *cnx);
  */
 struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name);
 
-/* Request a new channel, optionnaly for realtime.
- * Will wait untill creation or timeout.
- * Note : realtime channels are handled the same by both sides, except that
- * a file is kept if the channel is not realtime.
- * Thus it is not advisable to chn_get_file() a RT channel.
- * name must be PATH_MAX chars length.
- */
-void chn_create(struct chn_cnx *cnx, char *name, bool rt);
-
 /* Write a local file to the cache and to a channel if cnx is !NULL.
  * Will fill ref with the reference (up to PATH_MAX chars) to the file (relative to files root)
  */
 void chn_send_file_request(struct chn_cnx *cnx, char const *fname, char *ref);
 
-/* Send a file to a cnx (which must be outbound connected.
+/* Send a file to a cnx (which must be outbound connected).
  * The file must be in the cache already. Use chn_send_file_request if it's not
  * the case.
  */
-struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *name);
+struct chn_tx *chn_send_file(struct chn_cnx *cnx, char const *resource);
 
 /* Send all local files (in the cache) that were not already sent to the file server.
  * Returns the number of files uploaded.
@@ -194,11 +185,5 @@ int chn_tx_status(struct chn_tx *tx);
 /* Once you are done with the transfert, free it
  */
 void chn_tx_dtor(struct chn_tx *tx);
-
-/* Files (not RT) are accessible both from their resource names and a content hash ref
- * (some are available only via their hash ref).
- */
-#define CHN_REF_LEN (64+5+2+1)
-size_t chn_ref_from_file(char const *filename, char digest[CHN_REF_LEN]);
 
 #endif

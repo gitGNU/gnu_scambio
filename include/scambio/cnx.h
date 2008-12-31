@@ -30,7 +30,6 @@ extern char const kw_sub[];
 extern char const kw_unsub[];
 extern char const kw_quit[];
 extern char const kw_patch[];
-extern char const kw_creat[];
 extern char const kw_write[];
 extern char const kw_read[];
 extern char const kw_copy[];

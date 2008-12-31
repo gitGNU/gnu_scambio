@@ -40,26 +40,6 @@ char chn_putdir[PATH_MAX];
 unsigned chn_putdir_len;
 
 /*
- * Helpers
- */
-
-bool resource_is_ref(char const *name)
-{
-	debug("Is name '%s' a ref ?", name);
-	return 0 == strncmp("refs/", name, 5);
-}
-
-static bool path_is_ref(char const *path)
-{
-	return resource_is_ref(path + chn_files_root_len+1);
-}
-
-static bool stream_is_ref(struct stream const *stream)
-{
-	return stream->fd != -1 && path_is_ref(stream->path);
-}
-
-/*
  * Create/Delete
  */
 
@@ -93,7 +73,7 @@ static void *stream_push(void *arg)
 	return NULL;
 }
 
-static void stream_ctor(struct stream *stream, char const *name, bool rt, bool can_create)
+static void stream_ctor(struct stream *stream, char const *name, bool rt)
 {
 	debug("stream @%p with name=%s, rt=%c", stream, name, rt ? 'y':'n');
 	LIST_INIT(&stream->readers);
@@ -101,20 +81,16 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt, bool c
 	stream->count = 1;	// the one who asks
 	snprintf(stream->path, sizeof(stream->path), "%s/%s", chn_files_root, name);
 	stream->last_used = time(NULL);
-	bool is_ref = resource_is_ref(name);
-	stream->was_created = false;	// useless for RT, BTW
 	if (rt) {
-		if (is_ref) with_error(0, "RT streams cannot use references") return;
 		stream->fd = -1;
 		stream->pth = NULL;
 	} else {
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", chn_files_root, name);
 		stream->fd = open(path, O_RDWR);
-		if (stream->fd < 0 && errno == ENOENT && can_create) {
+		if (stream->fd < 0 && errno == ENOENT) {
 			if_fail (Mkdir_for_file(path)) return;
-			stream->fd = open(path, O_RDWR | O_CREAT, 0644);	// we can write straight into refs
-			stream->was_created = true;
+			stream->fd = open(path, O_RDWR | O_CREAT, 0644);
 		}
 		if (stream->fd < 0) with_error(errno, "open(%s)", path) return;
 		// FIXME: in stream_add_reader if stream->fd != -1 ?
@@ -128,11 +104,11 @@ static void stream_ctor(struct stream *stream, char const *name, bool rt, bool c
 	LIST_INSERT_HEAD(&streams, stream, entry);
 }
 
-struct stream *stream_new(char const *name, bool rt, bool can_create)
+struct stream *stream_new(char const *name, bool rt)
 {
 	struct stream *stream = malloc(sizeof(*stream));
 	if (! stream) with_error(ENOMEM, "malloc(stream)") return NULL;
-	if_fail (stream_ctor(stream, name, rt, can_create)) {
+	if_fail (stream_ctor(stream, name, rt)) {
 		free(stream);
 		stream = NULL;
 	}
@@ -191,15 +167,18 @@ void stream_end(void)
  * Lookup
  */
 
-struct stream *stream_lookup(char const *name, bool can_create)
+struct stream *stream_lookup(char const *name, bool rt)
 {
-	debug("name=%s", name);
-	if (name[0] == '.') with_error(0, "Resource not allowed to start with '.'") return NULL;
+	debug("name=%s, rt=%c", name, rt ? 'y':'n');
+	if (strchr(name, '.')) with_error(0, "Resource not allowed to use '.'") return NULL;
 	struct stream *stream;
 	LIST_FOREACH(stream, &streams, entry) {
-		if (0 == strcmp(stream->path + chn_files_root_len + 1, name)) return stream_ref(stream);
+		if (0 == strcmp(stream->path + chn_files_root_len + 1, name)) {
+			// FIXME: Check also that the RT flag is the same ?
+			return stream_ref(stream);
+		}
 	}
-	return stream_new(name, false, can_create);
+	return stream_new(name, rt);
 }
 
 /*
@@ -228,7 +207,6 @@ void stream_add_writer(struct stream *stream)
 {
 	debug("stream@%p", stream);
 	if (stream->has_writer) with_error(0, "a stream cannot have more than one writer") return;
-	if (!stream->was_created && stream_is_ref(stream)) with_error(0, "Cannot write to a stream opened by ref") return;
 	stream->last_used = time(NULL);
 	stream->has_writer = true;
 	stream_ref(stream);
@@ -240,34 +218,6 @@ void stream_remove_writer(struct stream *stream)
 	assert(stream->has_writer);
 	stream->has_writer = false;
 	stream_unref(stream);
-	if (stream->fd != -1 && !stream_is_ref(stream)) {	// Make/Renew the SHA ref
-		char digest[CHN_REF_LEN];
-		if_fail (chn_ref_from_file(stream->path, digest)) return;
-		char ref[PATH_MAX]; 
-		snprintf(ref, sizeof(ref), "%s/%s", chn_files_root, digest);
-		if (0 != unlink(ref)) {	// for the case where this ref already pointed to another file
-			if (errno != ENOENT) with_error(errno, "unlink(%s)", ref) return;
-		}
-		if_fail (Mkdir_for_file(ref)) return;
-		/* Now two cases : the resource may be a new one, in which case the file is a regular file,
-		 * and we have to create a ref, remove the file and make it a symlink to this ref, or
-		 * the file is already a symlink, and we then have to remove the former ref and relink to the
-		 * new one.
-		 */
-		char old_link[PATH_MAX];
-		ssize_t old_link_len  = readlink(stream->path, old_link, sizeof(old_link));
-		if (old_link_len > 0) {	// already a symlink : rename the previous ref (content is already updated)
-			old_link[old_link_len] = '\0';
-			if (0 != rename(old_link, ref)) with_error(errno, "rename(%s, %s)", old_link, ref) return;
-			if (0 != unlink(stream->path)) with_error(errno, "unlink(%s)", stream->path) return;
-		} else {
-			if (errno != EINVAL) with_error(errno, "readlink(%s)", stream->path) return;
-			// not a symlink : rename the path to the ref file
-			if (0 != rename(stream->path, ref)) with_error(errno, "rename(%s, %s)", stream->path, ref) return;
-		}
-		// Make the resource name a symlink to the ref
-		if (0 != symlink(ref, stream->path)) with_error(errno, "symlink(%s, %s)", ref, stream->path) return;
-	}
 }
 
 /*
