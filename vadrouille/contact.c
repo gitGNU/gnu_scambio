@@ -313,7 +313,7 @@ static void cancel_cb(GtkToolButton *button, gpointer data)
 	(void)button;
 	struct contact_view *const ctv = (struct contact_view *)data;
 	debug("cancel");
-	if (confirm("Cancel adding this contact ?")) {
+	if (confirm("Forget all about him ?")) {
 		gtk_widget_destroy(ctv->view.view.window);
 	}
 }
@@ -435,7 +435,7 @@ static void contact_view_fill(struct contact_view *ctv)
 		toolbar = make_toolbar(3,
 			GTK_STOCK_ADD,  add_cb, ctv,
 			GTK_STOCK_SAVE, save_cb, ctv,
-			GTK_STOCK_CANCEL, cancel_cb, ctv->view.view.window);
+			GTK_STOCK_CANCEL, cancel_cb, ctv);
 	}
 	gtk_box_pack_end(GTK_BOX(page), toolbar, FALSE, FALSE, 0);
 	gtk_container_add(GTK_CONTAINER(ctv->view.view.window), page);
