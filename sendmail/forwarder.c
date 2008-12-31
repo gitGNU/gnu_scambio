@@ -263,7 +263,7 @@ static int send_forward(int fd, struct forward *fwd)
 	if_fail (send_smtp_strs(fd, "From: ", header_find(fwd->header, SC_FROM_FIELD, NULL)->value, NULL)) return 0;
 	bool first = true;
 	while (NULL != (hf = header_find(fwd->header, SC_TO_FIELD, hf))) {
-		if_fail (send_smtp_strs(fd, first ? "To: ":", ", hf->value, NULL)) return 0;
+		if_fail (send_smtp_strs(fd, first ? "To: ":" , ", hf->value, NULL)) return 0;
 		first = false;
 	}
 	if_fail (send_smtp_strs(fd, "Subject: ", header_find(fwd->header, SC_DESCR_FIELD, NULL)->value, NULL)) return 0;
