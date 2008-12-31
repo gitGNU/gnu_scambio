@@ -47,8 +47,11 @@ static void mdirb_free(struct mdir *mdir)
 	
 	struct sc_msg *msg;
 	while (NULL != (msg = LIST_FIRST(&mdirb->msgs))) {
+		LIST_REMOVE(msg, entry);
+		mdirb->nb_msgs --;
 		sc_msg_unref(msg);
 	}
+	assert(mdirb->nb_msgs == 0);
 	
 	struct mdirb_listener *listener;
 	while (NULL != (listener = LIST_FIRST(&mdirb->listeners))) {
@@ -78,6 +81,8 @@ static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 	LIST_FOREACH(msg, &mdirb->msgs, entry) {	// TODO: hash me using version please
 		if (msg->version == version) {
 			debug("...found!");
+			LIST_REMOVE(msg, entry);
+			msg->mdirb->nb_msgs --;
 			sc_msg_unref(msg);
 			*changed = true;
 			break;
@@ -95,28 +100,36 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 
 	debug("try to add msg version %"PRIversion, version);
 	*changed = true;
-	struct sc_msg *msg;
+	struct sc_msg *msg = NULL;
 	struct sc_plugin *plugin;
 	struct header_field *type = header_find(h, SC_TYPE_FIELD, NULL);
-	if (type) {	// look for an exact match first
+
+	// look for an exact match first
+	if (type) {
 		debug("  try for type '%s'", type->value);
 		LIST_FOREACH(plugin, &sc_plugins, entry) {
 			debug("    plugin '%s' ?", plugin->name);
 			if (! plugin->ops->msg_new) continue;
 			if (plugin->type && 0 != strcmp(plugin->type, type->value)) continue;
-			if_succeed (msg = plugin->ops->msg_new(mdirb, h, version)) return;
+			if_succeed (msg = plugin->ops->msg_new(mdirb, h, version)) break;
 			error_clear();
 		}
 	}
+
 	// Then try duck-typing
-	debug("  try duck typing");
-	LIST_FOREACH(plugin, &sc_plugins, entry) {
-		debug("    plugin '%s' ?", plugin->name);
-		if (! plugin->ops->msg_new) continue;
-		if_succeed (msg = plugin->ops->msg_new(mdirb, h, version)) return;
-		error_clear();
+	if (! msg) {
+		debug("  try duck typing");
+		LIST_FOREACH(plugin, &sc_plugins, entry) {
+			debug("    plugin '%s' ?", plugin->name);
+			if (! plugin->ops->msg_new) continue;
+			if_succeed (msg = plugin->ops->msg_new(mdirb, h, version)) break;
+			error_clear();
+		}
 	}
-	assert(0);	// the default plugin should accept it
+
+	assert(msg);	// default plugin should have accepted it
+	LIST_INSERT_HEAD(&mdirb->msgs, msg, entry);
+	mdirb->nb_msgs ++;
 }
 
 void mdirb_refresh(struct mdirb *mdirb)

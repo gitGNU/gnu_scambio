@@ -37,7 +37,7 @@ static struct sc_msg *bmark_msg_new(struct mdirb *mdirb, struct header *h, mdir_
 		free(msg);
 		msg = NULL;
 	}
-	return NULL;
+	return msg;
 }
 
 static void bmark_msg_del(struct sc_msg *msg)

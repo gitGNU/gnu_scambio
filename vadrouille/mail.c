@@ -164,6 +164,21 @@ static char const *ts2staticstr(time_t ts)
 	return date_str;
 }
 
+static void delete_cb(GtkToolButton *button, gpointer *user_data)
+{
+	(void)button;
+	struct mail_msg_view *view = (struct mail_msg_view *)user_data;
+	debug("msg version = %"PRIversion, view->view.msg->version);
+	if (confirm("Are you sure, etc...?")) {
+		if_succeed (mdir_del_request(&view->view.msg->mdirb->mdir, view->view.msg->version)) {
+			mdirb_refresh(view->view.msg->mdirb);
+			gtk_widget_destroy(view->view.view.window);
+		} else {
+			alert_error();
+		}
+	}
+}
+
 static void mail_msg_view_ctor(struct mail_msg_view *view, struct sc_msg *msg)
 {
 	/* The mail view is merely a succession of all the attached files,
@@ -214,9 +229,9 @@ static void mail_msg_view_ctor(struct mail_msg_view *view, struct sc_msg *msg)
 	gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
 	GtkWidget *toolbar = make_toolbar(3,
-		GTK_STOCK_JUMP_TO, NULL,     NULL,	// Forward
-		GTK_STOCK_DELETE,  NULL,     NULL,	// Delete
-		GTK_STOCK_QUIT,    close_cb, window);
+		GTK_STOCK_JUMP_TO, NULL,      NULL,	// Forward
+		GTK_STOCK_DELETE,  delete_cb, view,	// Delete
+		GTK_STOCK_QUIT,    close_cb,  window);
 
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 	
