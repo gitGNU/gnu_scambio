@@ -894,7 +894,7 @@ struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *na
 	// So lets fetch it
 	debug("not in cache, need to fetch it");
 	if (! cnx) with_error(0, "Cannot fetch and not local") return NULL;
-	struct stream *stream = stream_lookup(name, true);
+	struct stream *stream = stream_lookup(name, false);
 	on_error return NULL;
 	struct chn_tx *tx = fetch_file_with_cnx(cnx, (char *)name, stream);
 	stream_unref(stream);
