@@ -61,4 +61,13 @@ static inline void mdirb_listener_dtor(struct mdirb_listener *listener)
 
 void mdirb_refresh(struct mdirb *);
 
+// To be notified whenever a message is created anywhere
+struct sc_msg_listener {
+	LIST_ENTRY(sc_msg_listener) entry;
+	void (*cb)(struct sc_msg_listener *, struct mdirb *, enum mdir_action, struct sc_msg *);
+};
+
+void sc_msg_listener_ctor(struct sc_msg_listener *, void (*cb)(struct sc_msg_listener *, struct mdirb *, enum mdir_action, struct sc_msg *));
+void sc_msg_listener_dtor(struct sc_msg_listener *);
+
 #endif

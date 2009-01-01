@@ -33,7 +33,6 @@ struct browser {
 	// For the news list
 	GtkWidget *news;
 	GtkListStore *news_list;
-	unsigned news_size;	// ListStores don't seam to know their own size
 	struct sc_msg_listener msg_listener;
 	// This is a little odd but for the dir_function to be called we need these little structs
 	unsigned nb_d2m;

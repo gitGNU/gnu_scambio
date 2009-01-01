@@ -49,15 +49,6 @@ static inline void sc_msg_unref(struct sc_msg *msg)
 
 void sc_msg_mark_read(struct sc_msg *);
 
-// To be notified whenever a message is created
-struct sc_msg_listener {
-	LIST_ENTRY(sc_msg_listener) entry;
-	void (*cb)(struct sc_msg_listener *, struct mdirb *, struct sc_msg *);
-};
-
-void sc_msg_listener_ctor(struct sc_msg_listener *, void (*cb)(struct sc_msg_listener *, struct mdirb *, struct sc_msg *));
-void sc_msg_listener_dtor(struct sc_msg_listener *);
-
 void sc_msg_init(void);
 
 #endif

@@ -68,6 +68,31 @@ extern inline void mdirb_listener_ctor(struct mdirb_listener *, struct mdirb *, 
 extern inline void mdirb_listener_dtor(struct mdirb_listener *);
 
 /*
+ * Global Notifications
+ */
+
+static LIST_HEAD(listeners, sc_msg_listener) listeners = LIST_HEAD_INITIALIZER(&listeners);
+
+void sc_msg_listener_ctor(struct sc_msg_listener *listener, void (*cb)(struct sc_msg_listener *, struct mdirb *, enum mdir_action, struct sc_msg *))
+{
+	listener->cb = cb;
+	LIST_INSERT_HEAD(&listeners, listener, entry);
+}
+
+void sc_msg_listener_dtor(struct sc_msg_listener *listener)
+{
+	LIST_REMOVE(listener, entry);
+}
+
+static void notify(struct mdirb *mdirb, enum mdir_action action, struct sc_msg *msg)
+{
+	struct sc_msg_listener *listener, *tmp;
+	LIST_FOREACH_SAFE(listener, &listeners, entry, tmp) {
+		listener->cb(listener, mdirb, action, msg);
+	}
+}
+
+/*
  * Refresh an mdir msg list & count.
  * Note: Cannot do that while in mdir_alloc because the mdir is not usable yet.
  */
@@ -97,6 +122,7 @@ static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 	LIST_REMOVE(msg, entry);
 	msg->mdirb->nb_msgs --;
 	if (! msg->was_read) msg->mdirb->nb_unread --;
+	notify(mdirb, MDIR_REM, msg);
 	sc_msg_unref(msg);
 	*changed = true;
 	
@@ -132,6 +158,7 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 				if (msg && ! msg->was_read) {
 					msg->was_read = true;
 					mdirb->nb_unread --;
+					notify(mdirb, MDIR_REM, msg);
 				}
 				return;
 			}
@@ -166,6 +193,7 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	LIST_INSERT_HEAD(&mdirb->msgs, msg, entry);
 	mdirb->nb_msgs ++;
 	if (! msg->was_read) mdirb->nb_unread ++;
+	notify(mdirb, MDIR_ADD, msg);
 }
 
 void mdirb_refresh(struct mdirb *mdirb)

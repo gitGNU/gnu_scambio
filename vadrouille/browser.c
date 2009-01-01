@@ -177,28 +177,60 @@ static void newdir_cb(GtkToolButton *button, gpointer user_data)
 	sc_dialog_del(dialog);
 }
 
-static void new_message_notif(struct sc_msg_listener *listener, struct mdirb *mdirb, struct sc_msg *msg)
+struct look4notif_param {
+	struct sc_msg *msg;
+	GtkTreeIter iter;
+	bool found;
+};
+
+static gboolean look4notif(GtkTreeModel *model, GtkTreePath *path, GtkTreeIter *iter, gpointer data)
+{
+	(void)path;
+	struct look4notif_param *param = (struct look4notif_param *)data;
+	GValue gptr;
+	memset(&gptr, 0, sizeof(gptr));
+	gtk_tree_model_get_value(model, iter, NEWS_FIELD_MSG, &gptr);
+	assert(G_VALUE_HOLDS_POINTER(&gptr));
+	struct sc_msg *msg = g_value_get_pointer(&gptr);
+	g_value_unset(&gptr);
+	if (msg == param->msg) {
+		param->iter = *iter;
+		param->found = true;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static void new_message_notif(struct sc_msg_listener *listener, struct mdirb *mdirb, enum mdir_action action, struct sc_msg *msg)
 {
 	(void)mdirb;
 	struct browser *browser = DOWNCAST(listener, msg_listener, browser);
-	char *descr = msg->plugin->ops->msg_descr(msg);
-	char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
 
-	// Prepend the new message
-	GtkTreeIter iter;
-	gtk_list_store_prepend(GTK_LIST_STORE(browser->news_list), &iter);
-	gtk_list_store_set(GTK_LIST_STORE(browser->news_list), &iter,
-		NEWS_FIELD_ICON, icon ? icon : GTK_STOCK_CANCEL,
-		NEWS_FIELD_MSG, msg,
-		NEWS_FIELD_DESCR, descr,
-		-1);
-	g_free(descr);
-	browser->news_size ++;
+	if (action == MDIR_ADD) {
+		char *descr = msg->plugin->ops->msg_descr(msg);
+		char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
 
-	// If the list becomes too big, downsize it (notice how efficient this all iterator thing is)
-	for (unsigned pos = 0; pos < 6 && TRUE == gtk_tree_model_iter_next(GTK_TREE_MODEL(browser->news_list), &iter); pos++) ;
-	if (TRUE == gtk_tree_model_iter_next(GTK_TREE_MODEL(browser->news_list), &iter)) {
-		while (TRUE == gtk_list_store_remove(GTK_LIST_STORE(browser->news_list), &iter)) browser->news_size--;
+		// Prepend the new message
+		GtkTreeIter iter;
+		gtk_list_store_prepend(browser->news_list, &iter);
+		gtk_list_store_set(browser->news_list, &iter,
+			NEWS_FIELD_ICON, icon ? icon : GTK_STOCK_CANCEL,
+			NEWS_FIELD_MSG, msg,
+			NEWS_FIELD_DESCR, descr,
+			-1);
+		g_free(descr);
+
+	} else {
+		assert(action == MDIR_REM);
+
+		struct look4notif_param param = {
+			.found = false,
+			.msg = msg,
+		};
+		gtk_tree_model_foreach(GTK_TREE_MODEL(browser->news_list), look4notif, &param);
+		if (param.found) {
+			gtk_list_store_remove(browser->news_list, &param.iter);
+		}
 	}
 }
 
@@ -271,7 +303,6 @@ static void browser_ctor(struct browser *browser, char const *root)
 	}
 
 	// The news panel
-	browser->news_size = 0;
 	browser->news_list = gtk_list_store_new(NB_NEWS_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	browser->news = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->news_list));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(browser->news), FALSE);

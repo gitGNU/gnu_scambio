@@ -22,31 +22,6 @@
 #include "vadrouille.h"
 
 /*
- * Notifications
- */
-
-static LIST_HEAD(listeners, sc_msg_listener) listeners = LIST_HEAD_INITIALIZER(&listeners);
-
-void sc_msg_listener_ctor(struct sc_msg_listener *listener, void (*cb)(struct sc_msg_listener *, struct mdirb *, struct sc_msg *))
-{
-	listener->cb = cb;
-	LIST_INSERT_HEAD(&listeners, listener, entry);
-}
-
-void sc_msg_listener_dtor(struct sc_msg_listener *listener)
-{
-	LIST_REMOVE(listener, entry);
-}
-
-static void notify(struct mdirb *mdirb, struct sc_msg *msg)
-{
-	struct sc_msg_listener *listener, *tmp;
-	LIST_FOREACH_SAFE(listener, &listeners, entry, tmp) {
-		listener->cb(listener, mdirb, msg);
-	}
-}
-
-/*
  * Messages
  */
 
@@ -68,7 +43,6 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir
 	msg->plugin = plugin;
 	msg->was_read = false;	// untill proven otherwise
 	msg->count = 1;
-	notify(mdirb, msg);
 }
 
 static struct sc_plugin default_plugin;
