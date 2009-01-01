@@ -41,7 +41,9 @@ static void remove_remote_file(mdir_version to_del)
 	struct file *file = file_search_by_version(&unmatched_files, to_del);
 	on_error return;
 	if (file) {
-		file_del(file, &unmatched_files);
+		// We do not delete remote files but kept them in a special list so that we can still use their resource
+		STAILQ_REMOVE(&unmatched_files, file, file, entry);
+		STAILQ_INSERT_HEAD(&removed_files, file, entry);
 	};
 }
 

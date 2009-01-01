@@ -100,13 +100,13 @@ static void loop(void)
 {
 	read_mdir();	// Will read the whole mdir and create an entry (on unmatched list) for each file
 	while (! quit) {
-		time_t current_run_start = time(NULL);
+		time_t current_run_start = time(NULL);	// FIXME: do not use file ctime, but last synchronized version !!
 		unmatch_all();
 		if_fail (read_mdir()) break;	// Will append to unmatched list the new entry
 		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
 		if_fail (create_unmatched_files()) break;	// Will add to local tree the new entries
 		persist_write(&last_time_stamp, &current_run_start);
-		pth_sleep(1);	// will schedule other threads and prevent us from eating the CPU
+		pth_sleep(5);	// will schedule other threads and prevent us from eating the CPU
 	}
 }
 
