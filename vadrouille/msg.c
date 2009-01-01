@@ -58,6 +58,7 @@ enum {
 	NB_FIELDS
 };
 
+// Throws no error.
 void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir_version version, struct sc_plugin *plugin)
 {
 	debug("msg@%p, version %"PRIversion, msg, version);
@@ -75,11 +76,8 @@ static struct sc_plugin default_plugin;
 static struct sc_msg *msg_new(struct mdirb *mdirb, struct header *h, mdir_version version)
 {
 	struct sc_msg *msg = Malloc(sizeof(*msg));
-	if_fail (sc_msg_ctor(msg, mdirb, h, version, &default_plugin)) {
-		free(msg);
-		msg = NULL;
-	}
-	return NULL;
+	sc_msg_ctor(msg, mdirb, h, version, &default_plugin);
+	return msg;
 }
 
 void sc_msg_dtor(struct sc_msg *msg)

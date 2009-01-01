@@ -28,21 +28,49 @@
  * Bookmark Message are just plain sc_msg
  */
 
-static struct sc_plugin plugin;
+static struct sc_plugin bmark_plugin;
+
+struct bmark_msg {
+	struct sc_msg msg;
+	char const *name, *url, *descr;	// points onto msg.header
+};
+
+static inline struct bmark_msg *msg2bmark(struct sc_msg *msg)
+{
+	return DOWNCAST(msg, msg, bmark_msg);
+}
+
+static void bmark_msg_ctor(struct bmark_msg *msg, struct mdirb *mdirb, struct header *h, mdir_version version)
+{
+	struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
+	struct header_field *descr_field = header_find(h, SC_DESCR_FIELD, NULL);
+	struct header_field *url_field = header_find(h, SC_URL_FIELD, NULL);
+	if (!name_field || !url_field) with_error(0, "Not a bookmark") return;
+	msg->name = name_field->value;
+	msg->url = url_field->value;
+	msg->descr = descr_field ? descr_field->value : NULL;
+	sc_msg_ctor(&msg->msg, mdirb, h, version, &bmark_plugin);
+}
 
 static struct sc_msg *bmark_msg_new(struct mdirb *mdirb, struct header *h, mdir_version version)
 {
-	struct sc_msg *msg = Malloc(sizeof(*msg));
-	if_fail (sc_msg_ctor(msg, mdirb, h, version, &plugin)) {
+	struct bmark_msg *msg = Malloc(sizeof(*msg));
+	if_fail (bmark_msg_ctor(msg, mdirb, h, version)) {
 		free(msg);
-		msg = NULL;
+		return NULL;
 	}
-	return msg;
+	return &msg->msg;
 }
 
-static void bmark_msg_del(struct sc_msg *msg)
+static void bmark_msg_dtor(struct bmark_msg *msg)
 {
-	sc_msg_dtor(msg);
+	sc_msg_dtor(&msg->msg);
+}
+
+static void bmark_msg_del(struct sc_msg *msg_)
+{
+	struct bmark_msg *msg = msg2bmark(msg_);
+	bmark_msg_dtor(msg);
 	free(msg);
 }
 
@@ -52,20 +80,18 @@ static void bmark_msg_del(struct sc_msg *msg)
 
 static char const *url_view_cmd_fmt;
 
-static struct sc_msg_view *bookmark_view_new(struct sc_msg *msg)
+static struct sc_msg_view *bookmark_view_new(struct sc_msg *msg_)
 {
+	struct bmark_msg *msg = msg2bmark(msg_);
+
 	if (! url_view_cmd_fmt) {
 		alert(GTK_MESSAGE_ERROR, "No URL viewer defined.");
 		return NULL;
 	}
+	
 	// We do not show the bookmark, but run an external web browser
-	struct header_field *hf = header_find(msg->header, SC_URL_FIELD, NULL);
-	if (! hf) {
-		alert(GTK_MESSAGE_ERROR, "Empty bookmark ?");
-		return NULL;
-	}
 	char cmd[PATH_MAX];	// Should be enough
-	snprintf(cmd, sizeof(cmd), url_view_cmd_fmt, hf->value);
+	snprintf(cmd, sizeof(cmd), url_view_cmd_fmt, msg->url);
 	if_fail (RunAsShell(cmd)) alert_error();
 	return NULL;
 }
@@ -112,20 +138,12 @@ static void function_add_bmark(struct mdirb *mdirb, char const *name, GtkWindow 
  * Message Description
  */
 
-static char *bmark_msg_descr(struct sc_msg *msg)
+static char *bmark_msg_descr(struct sc_msg *msg_)
 {
-	char const *name = "";
-	struct header_field *hf = header_find(msg->header, SC_NAME_FIELD, NULL);
-	if (hf) name = hf->value;
-
-	char const *url = "Not a Bookmark";	// FIXME: we may want to bookmark resources also
-	hf = header_find(msg->header, SC_URL_FIELD, NULL);
-	if (hf) url = hf->value;
-
-	hf = header_find(msg->header, SC_DESCR_FIELD, NULL);
+	struct bmark_msg *msg = msg2bmark(msg_);
 
 	return g_markup_printf_escaped("<b>%s</b> (%s)%s%s",
-		name, url, hf ? "\n":"", hf ? hf->value : "");
+		msg->name, msg->url, msg->descr ? "\n":"", msg->descr ? msg->descr : "");
 }
 
 static char *bmark_msg_icon(struct sc_msg *msg)
@@ -149,7 +167,7 @@ static struct sc_plugin_ops const ops = {
 	.dir_view_del     = NULL,
 	.dir_view_refresh = NULL,
 };
-static struct sc_plugin plugin = {
+static struct sc_plugin bmark_plugin = {
 	.name = "bookmark",
 	.type = SC_BOOKMARK_TYPE,
 	.ops = &ops,
@@ -169,5 +187,5 @@ void bookmark_init(void)
 	} else {
 		warning("No command defined to view URLs");
 	}
-	sc_plugin_register(&plugin);
+	sc_plugin_register(&bmark_plugin);
 }
