@@ -370,6 +370,14 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 		-1);
 	g_free(size_str);
 
+	if (browser->previously_selected == browser->mdirb) {
+		// We cannot merely select the iter her, since addition of new rows will
+		// empty the selection (!)
+		// So we save the iterator for later
+		browser->selected_iter = iter;
+		browser->selected_iter_set = true;
+	}
+
 	// Jump into this new iter
 	GtkTreeIter *prev_iter = browser->iter;
 	browser->iter = &iter;
@@ -380,9 +388,16 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 
 void browser_refresh(struct browser *browser)
 {
+	browser->previously_selected = get_selected_mdirb(browser, 0, NULL, NULL);
+	browser->selected_iter_set = false;
 	gtk_tree_store_clear(browser->store);
 	add_subfolder_rec(browser, "root");
 	gtk_tree_view_expand_all(GTK_TREE_VIEW(browser->tree));
+	if (browser->selected_iter_set) {
+		debug("Setting selection back to previous");
+		GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(browser->tree));
+		gtk_tree_selection_select_iter(selection, &browser->selected_iter);
+	}
 }
 
 /*

@@ -26,8 +26,10 @@ struct browser {
 	GtkWidget *tree;
 	GtkTreeStore *store;
 	// Used while recursively traversing the folders tree
-	struct mdirb *mdirb;
+	struct mdirb *mdirb, *previously_selected;
 	GtkTreeIter *iter;
+	GtkTreeIter selected_iter;
+	bool selected_iter_set;
 	// For the news list
 	GtkWidget *news;
 	GtkListStore *news_list;

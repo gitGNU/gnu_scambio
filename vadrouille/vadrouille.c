@@ -98,6 +98,13 @@ void ccnx_init(void)
  * Main
  */
 
+static gboolean refresh_alarm(gpointer user_data)
+{
+	struct browser *browser = (struct browser *)user_data;
+	browser_refresh(browser);
+	return TRUE;
+}
+
 int main(int nb_args, char *args[])
 {
 	if_fail (init("vadrouille", nb_args, args)) return EXIT_FAILURE;
@@ -113,6 +120,7 @@ int main(int nb_args, char *args[])
 	struct browser *browser = browser_new("/");
 	on_error return EXIT_FAILURE;
 	exit_when_closed(browser->window);
+	g_timeout_add_seconds(1, refresh_alarm, browser);
 
 	gtk_main();
 	return EXIT_SUCCESS;
