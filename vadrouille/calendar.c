@@ -33,6 +33,7 @@ struct cal_msg {	// ie an event
 	LIST_ENTRY(cal_msg) entry;	// cal_events are ordered according to (day, hour)
 	struct cal_date start, stop;
 	char *descr;
+	bool marked;
 };
 
 static inline struct cal_msg *msg2cmsg(struct sc_msg *msg)
@@ -86,6 +87,7 @@ static void cal_msg_ctor(struct cal_msg *cmsg, struct mdirb *mdirb, struct heade
 	}
 	struct header_field *descr = header_find(h, SC_DESCR_FIELD, NULL);
 	cmsg->descr = Strdup(descr ? descr->value : "");
+	cmsg->marked = false;
 	cal_msg_insert(cmsg);
 	sc_msg_ctor(&cmsg->msg, mdirb, h, version, &plugin);
 }
@@ -218,6 +220,15 @@ static void display_event(struct cal_msg *cmsg, struct cal_dir_view *view)
 		FIELD_FOLDER, folder_name(view, cmsg->msg.mdirb),
 		FIELD_EVENT, cmsg,
 		-1);
+
+	// We do not call sc_msg_mark_read() because we do not want the mdir to be refreshed right now
+	if (! cmsg->msg.was_read && ! cmsg->marked) {
+		mdir_mark_read(&cmsg->msg.mdirb->mdir, conf_get_str("SC_USERNAME"), cmsg->msg.version);
+		error_clear();
+		// Avoid to mark the same event several times, but we cannot mess with
+		// mdirb managed was_read flags in msg (otherwise mdirb->nb_unread would be false).
+		cmsg->marked = true;
+	}
 }
 
 static void display_now(struct cal_date *cd, struct cal_dir_view *view)
@@ -227,6 +238,7 @@ static void display_now(struct cal_date *cd, struct cal_dir_view *view)
 	GtkTreeIter iter;
 	gtk_list_store_insert_with_values(view->event_store, &iter, G_MAXINT,
 		FIELD_HOUR, "-- now --",
+		FIELD_HOUR_BG, "green",
 		FIELD_TEXT, "",
 		FIELD_FOLDER, "",
 		FIELD_EVENT, NULL,

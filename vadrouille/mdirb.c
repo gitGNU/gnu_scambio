@@ -37,6 +37,7 @@ static struct mdir *mdirb_alloc(void)
 	LIST_INIT(&mdirb->msgs);
 	LIST_INIT(&mdirb->listeners);
 	mdirb->nb_msgs = 0;
+	mdirb->nb_unread = 0;
 	mdir_cursor_ctor(&mdirb->cursor);
 	return &mdirb->mdir;
 }
@@ -63,7 +64,6 @@ static void mdirb_free(struct mdir *mdir)
 }
 
 extern inline struct mdirb *mdir2mdirb(struct mdir *);
-extern inline unsigned mdirb_size(struct mdirb *);
 extern inline void mdirb_listener_ctor(struct mdirb_listener *, struct mdirb *, void (*)(struct mdirb_listener *, struct mdirb *));
 extern inline void mdirb_listener_dtor(struct mdirb_listener *);
 
@@ -96,10 +96,11 @@ static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 	// Remove it
 	LIST_REMOVE(msg, entry);
 	msg->mdirb->nb_msgs --;
+	if (! msg->was_read) msg->mdirb->nb_unread --;
 	sc_msg_unref(msg);
 	*changed = true;
 	
-	debug("nb_msgs in %s is now %u", mdirb->mdir.path, mdirb->nb_msgs);
+	debug("nb_msgs in %s is now %u (%u unread)", mdirb->mdir.path, mdirb->nb_msgs, mdirb->nb_unread);
 }
 
 static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
@@ -128,7 +129,10 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 				}
 				debug("Mark message %"PRIversion" as read", target);
 				msg = find_msg_by_version(mdirb, target);
-				if (msg) msg->was_read = true;
+				if (msg && ! msg->was_read) {
+					msg->was_read = true;
+					mdirb->nb_unread --;
+				}
 				return;
 			}
 		}
@@ -161,6 +165,7 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	assert(msg);	// default plugin should have accepted it
 	LIST_INSERT_HEAD(&mdirb->msgs, msg, entry);
 	mdirb->nb_msgs ++;
+	if (! msg->was_read) mdirb->nb_unread ++;
 }
 
 void mdirb_refresh(struct mdirb *mdirb)

@@ -100,6 +100,7 @@ static inline void sc_msg_view_ctor(struct sc_msg_view *view, struct sc_plugin *
 {
 	view->msg = sc_msg_ref(msg);
 	sc_view_ctor(&view->view, plugin->ops->msg_view_del, window);
+	sc_msg_mark_read(msg);
 }
 
 #include <assert.h>

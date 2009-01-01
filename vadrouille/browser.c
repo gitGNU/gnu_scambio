@@ -213,7 +213,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 	browser->nb_d2m = 0;
 	browser->nb_g2m = 0;
 
-	browser->store = gtk_tree_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_UINT, G_TYPE_POINTER);
+	browser->store = gtk_tree_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	browser->tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->store));
 #	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
 	gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(browser->tree), TRUE);
@@ -231,7 +231,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 	column = gtk_tree_view_column_new_with_attributes(
 		"Size",
 		text_renderer,
-		"text", FIELD_SIZE,
+		"markup", FIELD_SIZE,
 		NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(browser->tree), column);
 
@@ -352,14 +352,23 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 {
 	// Add this name as a child of the given iterator
 	mdirb_refresh(browser->mdirb);
-	debug("mdir '%s' (%s) has size %u", name, browser->mdirb->mdir.path, mdirb_size(browser->mdirb));
+	debug("mdir '%s' (%s) has size %u", name, browser->mdirb->mdir.path, browser->mdirb->nb_msgs);
 	GtkTreeIter iter;
 	gtk_tree_store_append(browser->store, &iter, browser->iter);
+	char *size_str;
+	if (browser->mdirb->nb_unread > 0) {
+		size_str = g_markup_printf_escaped("<b>%u</b>/%u", browser->mdirb->nb_unread, browser->mdirb->nb_msgs);
+	} else if (browser->mdirb->nb_msgs > 0) {
+		size_str = g_markup_printf_escaped("%u", browser->mdirb->nb_msgs);
+	} else {
+		size_str = g_markup_printf_escaped("<small>-</small>");
+	}
 	gtk_tree_store_set(browser->store, &iter,
 		FIELD_NAME, name,
-		FIELD_SIZE, mdirb_size(browser->mdirb),
+		FIELD_SIZE, size_str,
 		FIELD_MDIR, browser->mdirb,
 		-1);
+	g_free(size_str);
 
 	// Jump into this new iter
 	GtkTreeIter *prev_iter = browser->iter;

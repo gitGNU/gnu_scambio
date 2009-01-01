@@ -144,6 +144,16 @@ static char *msg_descr(struct sc_msg *msg)
 extern inline struct sc_msg *sc_msg_ref(struct sc_msg *msg);
 extern inline void sc_msg_unref(struct sc_msg *msg);
 
+void sc_msg_mark_read(struct sc_msg *msg)
+{
+	if (! msg->was_read) {
+		if_succeed (mdir_mark_read(&msg->mdirb->mdir, conf_get_str("SC_USERNAME"), msg->version)) {
+			mdirb_refresh(msg->mdirb);
+		}
+		error_clear();
+	}
+}
+
 /*
  * Generic Directory View
  */

@@ -47,6 +47,8 @@ static inline void sc_msg_unref(struct sc_msg *msg)
 	if (--msg->count <= 0) msg->plugin->ops->msg_del(msg);
 }
 
+void sc_msg_mark_read(struct sc_msg *);
+
 // To be notified whenever a message is created
 struct sc_msg_listener {
 	LIST_ENTRY(sc_msg_listener) entry;

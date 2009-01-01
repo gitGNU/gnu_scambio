@@ -93,6 +93,10 @@ static struct sc_msg_view *bookmark_view_new(struct sc_msg *msg_)
 	char cmd[PATH_MAX];	// Should be enough
 	snprintf(cmd, sizeof(cmd), url_view_cmd_fmt, msg->url);
 	if_fail (RunAsShell(cmd)) alert_error();
+
+	// Mark the bookmark as visited
+	sc_msg_mark_read(&msg->msg);
+
 	return NULL;
 }
 

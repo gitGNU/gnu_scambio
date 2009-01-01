@@ -32,7 +32,7 @@ struct mdirb_listener {
 struct mdirb {
 	struct mdir mdir;
 	struct mdir_cursor cursor;
-	unsigned nb_msgs;
+	unsigned nb_msgs, nb_unread;
 	LIST_HEAD(msgs, sc_msg) msgs;
 	/* We keep track of all the dir_views that uses this, so that they all get noticed when
 	 * the mdir content changes. msg_views are not noticed because they hold a ref on their
@@ -44,11 +44,6 @@ struct mdirb {
 static inline struct mdirb *mdir2mdirb(struct mdir *mdir)
 {
 	return DOWNCAST(mdir, mdir, mdirb);
-}
-
-static inline unsigned mdirb_size(struct mdirb *mdirb)
-{
-	return mdirb->nb_msgs;
 }
 
 void mdirb_init(void);
