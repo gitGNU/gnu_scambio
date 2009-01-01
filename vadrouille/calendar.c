@@ -149,6 +149,7 @@ static char *cal_msg_icon(struct sc_msg *msg)
 
 enum {
 	FIELD_HOUR,
+	FIELD_HOUR_BG,
 	FIELD_TEXT,
 	FIELD_FOLDER,
 	FIELD_EVENT,
@@ -259,9 +260,9 @@ static void reset_day(struct cal_dir_view *view)
 	gtk_calendar_get_date(GTK_CALENDAR(view->calendar), &year, &month, &day);
 	bool today = year == now.year && month == now.month && day == now.day;
 	debug("new day : %u %u %u %s", year, month+1, day, today ? "(today)":"");
-	struct day2event *d2e;
 	assert(day > 0 && day-1 < sizeof_array(view->day2events));
 	struct cal_date *prev = NULL;
+	struct day2event *d2e;
 	TAILQ_FOREACH(d2e, view->day2events+day-1, entry) {
 		if (today && (!prev || cal_date_compare(&now, prev) > 0) && cal_date_compare(&now, &d2e->cmsg->start) <= 0) {
 			today = false;	// shortcut for next test
@@ -486,15 +487,16 @@ static void cal_dir_view_ctor(struct cal_dir_view *view, struct mdirb *mdirb)
 	}
 	view->nb_dirs = 0;
 
-	view->event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
+	view->event_store = gtk_list_store_new(NB_STORE_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	view->event_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(view->event_store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view->event_list), FALSE);
 	
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes("Hour", renderer,
-		"text", FIELD_HOUR, NULL);
+		"text", FIELD_HOUR, "background", FIELD_HOUR_BG, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(view->event_list), column);
-	renderer = gtk_cell_renderer_text_new();
+
+	renderer = gtk_cell_renderer_text_new();	// we use another renderer because otherwise the background property would be reused
 	column = gtk_tree_view_column_new_with_attributes("Description", renderer,
 		"text", FIELD_TEXT, NULL);
 	gtk_tree_view_column_set_expand(column, TRUE);
