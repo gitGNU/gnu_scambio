@@ -284,7 +284,6 @@ static void browser_ctor(struct browser *browser, char const *root)
 		gtk_tree_view_column_new_with_attributes("Message", text_renderer,
 			"markup", NEWS_FIELD_DESCR,
 			NULL));
-	sc_msg_listener_ctor(&browser->msg_listener, new_message_notif);
 
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
 	GtkWidget *paned = gtk_vpaned_new();
@@ -296,6 +295,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 	gtk_container_add(GTK_CONTAINER(browser->window), vbox);
 
 	browser_refresh(browser);
+	sc_msg_listener_ctor(&browser->msg_listener, new_message_notif);
 
 	gtk_widget_show_all(browser->window);
 }
