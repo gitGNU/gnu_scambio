@@ -22,10 +22,17 @@ struct sc_plugin_dir_function;
 
 struct browser {
 	GtkWidget *window;
+	// For the folder browser
 	GtkWidget *tree;
 	GtkTreeStore *store;
+	// Used while recursively traversing the folders tree
 	struct mdirb *mdirb;
 	GtkTreeIter *iter;
+	// For the news list
+	GtkWidget *news;
+	GtkListStore *news_list;
+	unsigned news_size;	// ListStores don't seam to know their own size
+	struct sc_msg_listener msg_listener;
 	// This is a little odd but for the dir_function to be called we need these little structs
 	unsigned nb_d2m;
 	struct dirfunc2myself {
@@ -42,6 +49,6 @@ struct browser {
 void browser_init(void);
 struct browser *browser_new(char const *folder);
 void browser_del(struct browser *);
-void browser_refresh(struct browser *browser);
+void browser_refresh(struct browser *);
 
 #endif

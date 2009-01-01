@@ -30,6 +30,13 @@ enum {
 	NB_FIELDS
 };
 
+enum {
+	NEWS_FIELD_ICON,
+	NEWS_FIELD_DESCR,
+	NEWS_FIELD_MSG,
+	NB_NEWS_FIELDS
+};
+
 /*
  * Construction
  */
@@ -170,6 +177,31 @@ static void newdir_cb(GtkToolButton *button, gpointer user_data)
 	sc_dialog_del(dialog);
 }
 
+static void new_message_notif(struct sc_msg_listener *listener, struct mdirb *mdirb, struct sc_msg *msg)
+{
+	(void)mdirb;
+	struct browser *browser = DOWNCAST(listener, msg_listener, browser);
+	char *descr = msg->plugin->ops->msg_descr(msg);
+	char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
+
+	// Prepend the new message
+	GtkTreeIter iter;
+	gtk_list_store_prepend(GTK_LIST_STORE(browser->news_list), &iter);
+	gtk_list_store_set(GTK_LIST_STORE(browser->news_list), &iter,
+		NEWS_FIELD_ICON, icon ? icon : GTK_STOCK_CANCEL,
+		NEWS_FIELD_MSG, msg,
+		NEWS_FIELD_DESCR, descr,
+		-1);
+	g_free(descr);
+	browser->news_size ++;
+
+	// If the list becomes too big, downsize it (notice how efficient this all iterator thing is)
+	for (unsigned pos = 0; pos < 6 && TRUE == gtk_tree_model_iter_next(GTK_TREE_MODEL(browser->news_list), &iter); pos++) ;
+	if (TRUE == gtk_tree_model_iter_next(GTK_TREE_MODEL(browser->news_list), &iter)) {
+		while (TRUE == gtk_list_store_remove(GTK_LIST_STORE(browser->news_list), &iter)) browser->news_size--;
+	}
+}
+
 static void browser_ctor(struct browser *browser, char const *root)
 {
 	debug("brower@%p", browser);
@@ -238,8 +270,27 @@ static void browser_ctor(struct browser *browser, char const *root)
 		}
 	}
 
+	// The news panel
+	browser->news_size = 0;
+	browser->news_list = gtk_list_store_new(NB_NEWS_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
+	browser->news = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->news_list));
+	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(browser->news), FALSE);
+	GtkCellRenderer *icon_renderer = gtk_cell_renderer_pixbuf_new();
+	gtk_tree_view_append_column(GTK_TREE_VIEW(browser->news),
+		gtk_tree_view_column_new_with_attributes("Icon", icon_renderer,
+			"stock-id", NEWS_FIELD_ICON,
+			NULL));
+	gtk_tree_view_append_column(GTK_TREE_VIEW(browser->news),
+		gtk_tree_view_column_new_with_attributes("Message", text_renderer,
+			"markup", NEWS_FIELD_DESCR,
+			NULL));
+	sc_msg_listener_ctor(&browser->msg_listener, new_message_notif);
+
 	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(vbox), make_scrollable(browser->tree), TRUE, TRUE, 0);
+	GtkWidget *paned = gtk_vpaned_new();
+	gtk_paned_pack1(GTK_PANED(paned), make_scrollable(browser->tree), TRUE, TRUE);
+	gtk_paned_pack2(GTK_PANED(paned), make_scrollable(browser->news), FALSE, TRUE);
+	gtk_box_pack_start(GTK_BOX(vbox), paned, TRUE, TRUE, 0);
 	gtk_box_pack_end(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
 
 	gtk_container_add(GTK_CONTAINER(browser->window), vbox);
@@ -270,6 +321,7 @@ static void browser_dtor(struct browser *browser)
 		gtk_widget_destroy(browser->window);
 		browser->window = NULL;
 	}
+	sc_msg_listener_dtor(&browser->msg_listener);
 }
 
 void browser_del(struct browser *browser)

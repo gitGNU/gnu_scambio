@@ -90,7 +90,13 @@ static void mail_msg_del(struct sc_msg *msg)
 static char *mail_msg_descr(struct sc_msg *msg)
 {
 	struct mail_msg *mmsg = msg2mmsg(msg);
-	return g_markup_printf_escaped("Mail from <b>%s</b> : %s", mmsg->from, mmsg->descr);
+	return g_markup_printf_escaped("Mail from <b>%s</b>\n%s", mmsg->from, mmsg->descr);
+}
+
+static char *mail_msg_icon(struct sc_msg *msg)
+{
+	(void)msg;
+	return GTK_STOCK_DND;	// TODO: take advantage of msg->was_read ?
 }
 
 /*
@@ -296,6 +302,7 @@ static struct sc_plugin_ops const ops = {
 	.msg_new          = mail_msg_new,
 	.msg_del          = mail_msg_del,
 	.msg_descr        = mail_msg_descr,
+	.msg_icon         = mail_msg_icon,
 	.msg_view_new     = mail_msg_view_new,
 	.msg_view_del     = mail_msg_view_del,
 	.dir_view_new     = NULL,

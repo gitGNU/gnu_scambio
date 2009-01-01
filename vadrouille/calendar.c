@@ -131,6 +131,12 @@ static char *cal_msg_descr(struct sc_msg *msg)
 	return g_markup_printf_escaped("<b>%s</b> : %s", hour, cmsg->descr);
 }
 
+static char *cal_msg_icon(struct sc_msg *msg)
+{
+	(void)msg;
+	return GTK_STOCK_EXECUTE;
+}
+
 /*
  * Directory View
  */
@@ -573,6 +579,7 @@ static struct sc_plugin_ops const ops = {
 	.msg_new          = cal_msg_new,
 	.msg_del          = cal_msg_del,
 	.msg_descr        = cal_msg_descr,
+	.msg_icon         = cal_msg_icon,
 	.msg_view_new     = NULL,
 	.msg_view_del     = NULL,
 	.dir_view_new     = cal_dir_view_new,

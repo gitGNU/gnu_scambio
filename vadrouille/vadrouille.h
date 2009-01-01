@@ -40,6 +40,7 @@ struct sc_plugin {
 		struct sc_msg *(*msg_new)(struct mdirb *, struct header *, mdir_version);
 		void (*msg_del)(struct sc_msg *);
 		char *(*msg_descr)(struct sc_msg *msg);
+		char *(*msg_icon)(struct sc_msg *msg);	// for now just a stock id
 		struct sc_msg_view *(*msg_view_new)(struct sc_msg *);
 		void (*msg_view_del)(struct sc_view *);
 		struct sc_dir_view *(*dir_view_new)(struct mdirb *);

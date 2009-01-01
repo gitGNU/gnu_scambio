@@ -21,6 +21,35 @@
 #include "misc.h"
 #include "vadrouille.h"
 
+/*
+ * Notifications
+ */
+
+static LIST_HEAD(listeners, sc_msg_listener) listeners = LIST_HEAD_INITIALIZER(&listeners);
+
+void sc_msg_listener_ctor(struct sc_msg_listener *listener, void (*cb)(struct sc_msg_listener *, struct mdirb *, struct sc_msg *))
+{
+	listener->cb = cb;
+	LIST_INSERT_HEAD(&listeners, listener, entry);
+}
+
+void sc_msg_listener_dtor(struct sc_msg_listener *listener)
+{
+	LIST_REMOVE(listener, entry);
+}
+
+static void notify(struct mdirb *mdirb, struct sc_msg *msg)
+{
+	struct sc_msg_listener *listener, *tmp;
+	LIST_FOREACH_SAFE(listener, &listeners, entry, tmp) {
+		listener->cb(listener, mdirb, msg);
+	}
+}
+
+/*
+ * Messages
+ */
+
 enum {
 	FIELD_DESCR,
 	FIELD_DATE,
@@ -38,6 +67,7 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir
 	msg->plugin = plugin;
 	msg->was_read = false;	// untill proven otherwise
 	msg->count = 1;
+	notify(mdirb, msg);
 }
 
 static struct sc_plugin default_plugin;
@@ -280,6 +310,7 @@ static struct sc_plugin_ops const ops = {
 	.msg_new          = msg_new,
 	.msg_del          = msg_del,
 	.msg_descr        = msg_descr,
+	.msg_icon         = NULL,
 	.msg_view_new     = NULL,
 	.msg_view_del     = NULL,
 	.dir_view_new     = dir_view_new,
@@ -297,6 +328,10 @@ static struct sc_plugin default_plugin = {
 		{ NULL, "List", function_list },
 	},
 };
+
+/*
+ * Init
+ */
 
 void sc_msg_init(void)
 {

@@ -83,6 +83,12 @@ static char *contact_descr(struct sc_msg *msg)
 	return g_markup_printf_escaped("%s", ct->name);
 }
 
+static char *contact_icon(struct sc_msg *msg)
+{
+	(void)msg;
+	return GTK_STOCK_ORIENTATION_PORTRAIT;
+}
+
 /*
  * Contact View :
  *
@@ -556,6 +562,7 @@ static struct sc_plugin_ops const ops = {
 	.msg_new      = contact_new,
 	.msg_del      = contact_del,
 	.msg_descr    = contact_descr,
+	.msg_icon     = contact_icon,
 	.msg_view_new = contact_view_new,
 	.msg_view_del = contact_view_del,
 	.dir_view_new = NULL,

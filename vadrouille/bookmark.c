@@ -128,6 +128,12 @@ static char *bmark_msg_descr(struct sc_msg *msg)
 		name, url, hf ? "\n":"", hf ? hf->value : "");
 }
 
+static char *bmark_msg_icon(struct sc_msg *msg)
+{
+	(void)msg;
+	return GTK_STOCK_INDEX;
+}
+
 /*
  * Init
  */
@@ -136,6 +142,7 @@ static struct sc_plugin_ops const ops = {
 	.msg_new          = bmark_msg_new,
 	.msg_del          = bmark_msg_del,
 	.msg_descr        = bmark_msg_descr,
+	.msg_icon         = bmark_msg_icon,
 	.msg_view_new     = bookmark_view_new,
 	.msg_view_del     = NULL,
 	.dir_view_new     = NULL,
