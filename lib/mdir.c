@@ -282,7 +282,6 @@ struct header *mdir_read(struct mdir *mdir, mdir_version version, enum mdir_acti
  */
 
 // FIXME : on error, will left the directory in unusable state
-// version is 0 for transient dirs
 static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 {
 	debug("Add link to mdir %s", mdir_id(parent));
@@ -301,8 +300,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 
 	// Do we have a dirId yet ?
 	struct header_field *dirid_field = header_find(h, SC_DIRID_FIELD, NULL);
-	if (dirid_field) {	// Yes, we get it from the central server
-		assert(! transient);
+	if (dirid_field) {
 		// A symlink to a transient dirId may already exist. If so, rename it.
 		char prev_link[PATH_MAX];
 		ssize_t len = readlink(path, prev_link, sizeof(prev_link));
@@ -312,12 +310,18 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		} else {	// the symlink exist already
 			assert(len < (int)sizeof(prev_link) && len > 0);	// PATH_MAX is supposed to be able to store a path + the nul byte
 			prev_link[len] = '\0';
-			// check it points toward a temporary dirId
+			// This is allowed if the former link points toward a transient dirId
+			// _and_ this one is not transient, or if the links points toward the same dirs
 			char *prev_dirid = prev_link + len;
 			while (prev_dirid > prev_link && *(prev_dirid-1) != '/') prev_dirid--;
 			debug("found a previous link to '%s'", prev_dirid);
+			if (0 == strcmp(prev_dirid, dirid_field->value)) {
+				debug("...which is the same, do nothing");
+				return;
+			}
+			if (transient) with_error(0, "Transient dir not allowed to overwrite previous %s", prev_dirid) return;
 			if (*prev_dirid != '_') with_error(0, "Previous link for new dirId %s points toward non transient dirId %s", dirid_field->value, prev_dirid) return;
-			// rename dirId and rebuild symlink
+			// Remove previous link
 			char new_path[PATH_MAX];
 			snprintf(new_path, sizeof(new_path), "%s/%s", mdir_root, dirid_field->value);
 			debug("Renaming previous transient directory from '%s' to '%s'", prev_link, new_path);
@@ -327,7 +331,7 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 		}
 		if_fail (child = mdir_lookup_by_id(dirid_field->value, true)) return;
 		// new symlink is created below
-	} else {	// No dirId yet, we are the central server in charge of them
+	} else {	// No dirId yet, we are in charge of adding one
 		debug("no dirId in header (yet)");
 		if_fail (child = mdir_create(transient)) return;
 		if (! transient) {

@@ -147,6 +147,57 @@ static void deldir_cb(GtkToolButton *button, gpointer user_data)
 	}
 }
 
+static void rename_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	char old_name[PATH_MAX];
+	struct mdirb *parent;
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(old_name), old_name, &parent);
+	if (! mdirb) {
+		alert(GTK_MESSAGE_ERROR, "Rename what folder ?");
+		return;
+	}
+	mdir_version old_version = mdir_get_folder_version(&parent->mdir, old_name);
+	on_error {
+		alert_error();
+		return;
+	}
+	struct header *old_mount_point = mdir_read(&parent->mdir, old_version, NULL);
+	on_error {
+		alert_error();
+		return;
+	}
+	struct header_field *dirId = header_find(old_mount_point, SC_DIRID_FIELD, NULL);
+	if (! dirId) {
+		alert(GTK_MESSAGE_ERROR, "Cannot find dirId of this mount point !");
+		return;
+	}
+	GtkWidget *name_entry = gtk_entry_new();
+	struct sc_dialog *dialog = sc_dialog_new("Rename folder",
+		GTK_WINDOW(browser->window),
+		make_labeled_hbox("New name", name_entry));
+	if (sc_dialog_accept(dialog)) {
+		debug("Rename folder '%s' to name : '%s'", old_name, gtk_entry_get_text(GTK_ENTRY(name_entry)));
+		// Create first the new mount point
+		struct header *h = header_new();
+		(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
+		(void)header_field_new(h, SC_NAME_FIELD, gtk_entry_get_text(GTK_ENTRY(name_entry)));
+		(void)header_field_new(h, SC_DIRID_FIELD, dirId->value);
+		mdir_patch_request(&parent->mdir, MDIR_ADD, h);
+		header_unref(h);
+		on_error {
+			alert_error();
+		} else {
+			// Remove the former one
+			mdir_del_request(&parent->mdir, old_version);
+			browser_refresh(browser);
+		}
+	}
+	sc_dialog_del(dialog);
+	header_unref(old_mount_point);
+}
+
 static void newdir_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
@@ -269,10 +320,11 @@ static void browser_ctor(struct browser *browser, char const *root)
 
 	browser->window = make_window(WC_FOLDERS, unref_win, browser);
 
-	GtkWidget *toolbar = make_toolbar(4,
+	GtkWidget *toolbar = make_toolbar(5,
 		GTK_STOCK_DELETE,  deldir_cb,  browser,
 		GTK_STOCK_REFRESH, refresh_cb, browser,
 		GTK_STOCK_NEW,     newdir_cb,  browser,
+		GTK_STOCK_CONVERT, rename_cb,  browser,
 		GTK_STOCK_QUIT,    close_cb,   browser->window);
 	// Add per plugin global functions
 	struct sc_plugin *plugin;
