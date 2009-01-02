@@ -482,6 +482,7 @@ static void contact_new_cb(struct mdirb *mdirb, char const *name, GtkWindow *par
 	struct header *h = header_new();
 	(void)header_field_new(h, SC_TYPE_FIELD, SC_CONTACT_TYPE);
 	(void)header_field_new(h, SC_NAME_FIELD, "Unnamed");
+	(void)header_field_new(h, SC_HAVE_READ_FIELD, conf_get_str("SC_USERNAME"));
 	struct sc_msg *msg = contact_new(mdirb, h, 0);
 	header_unref(h);
 	assert(msg);

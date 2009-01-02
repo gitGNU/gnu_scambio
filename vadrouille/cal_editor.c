@@ -88,6 +88,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 
 	// build a new header
 	struct header *h = header_new();
+	(void)header_field_new(h, SC_HAVE_READ_FIELD, conf_get_str("SC_USERNAME"));
 	on_error return;
 	do {
 		char date_str[] = "XXXX XX XX XX XX XX";

@@ -33,6 +33,15 @@ enum {
 	NB_FIELDS
 };
 
+static bool was_read(struct header *h, char const *username)
+{
+	struct header_field *hf = NULL;
+	while (NULL != (hf = header_find(h, SC_HAVE_READ_FIELD, hf))) {
+		if (0 == strcmp(hf->value, username)) return true;
+	}
+	return false;
+}
+
 // Throws no error.
 void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir_version version, struct sc_plugin *plugin)
 {
@@ -41,7 +50,7 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir
 	msg->version = version;
 	msg->mdirb = mdirb;
 	msg->plugin = plugin;
-	msg->was_read = false;	// untill proven otherwise
+	msg->was_read = was_read(msg->header, conf_get_str("SC_USERNAME"));	// until proven otherwise
 	msg->count = 1;
 }
 

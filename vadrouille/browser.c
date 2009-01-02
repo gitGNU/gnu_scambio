@@ -258,6 +258,9 @@ static void new_message_notif(struct sc_msg_listener *listener, struct mdirb *md
 	struct browser *browser = DOWNCAST(listener, msg_listener, browser);
 
 	if (action == MDIR_ADD) {
+		// We want new stuff only
+		if (msg->was_read) return;
+
 		char *descr = msg->plugin->ops->msg_descr(msg);
 		char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
 

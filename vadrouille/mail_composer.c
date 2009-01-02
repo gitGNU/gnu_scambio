@@ -136,7 +136,7 @@ static void add_dests(struct header *header, char const *dests)
 static struct header *header_new_from_compose(struct mail_composer *comp)
 {
 	struct header *header = header_new();
-	on_error return NULL;
+	(void)header_field_new(header, SC_HAVE_READ_FIELD, conf_get_str("SC_USERNAME"));
 	(void)header_field_new(header, SC_TYPE_FIELD, SC_MAIL_TYPE);
 	(void)header_field_new(header, SC_START_FIELD, sc_ts2gmfield(time(NULL), true));
 	(void)header_field_new(header, SC_DESCR_FIELD, gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)));
