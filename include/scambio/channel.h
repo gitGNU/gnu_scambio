@@ -76,9 +76,9 @@ void chn_cnx_del(struct chn_cnx *cnx);
 struct chn_tx *chn_get_file(struct chn_cnx *cnx, char *localfile, char const *name);
 
 /* Write a local file to the cache and to a channel if cnx is !NULL.
- * Will fill ref with the reference (up to PATH_MAX chars) to the file (relative to files root)
+ * Will fill resource with the resource used (up to PATH_MAX chars).
  */
-void chn_send_file_request(struct chn_cnx *cnx, char const *fname, char *ref);
+void chn_send_file_request(struct chn_cnx *cnx, char const *fname, char *resource);
 
 /* Send a file to a cnx (which must be outbound connected).
  * The file must be in the cache already. Use chn_send_file_request if it's not

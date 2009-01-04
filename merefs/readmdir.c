@@ -78,7 +78,7 @@ static void add_remote_file(struct mdir *mdir, struct header *header, mdir_versi
 	} else {
 		debug("...this name is new");
 	}
-	if_fail ((void)file_new(&unmatched_files, name, digest, resource, 0, version)) return;
+	if_fail ((void)file_new(&unmatched_files, name, digest, resource, version)) return;
 }
 
 /*
@@ -88,19 +88,6 @@ static void add_remote_file(struct mdir *mdir, struct header *header, mdir_versi
 void read_mdir(void)
 {
 	if_fail (mdir_patch_list(mdir, &mdir_cursor, false, add_remote_file, rem_remote_file, NULL)) return;
-}
-
-// If some remote files are still unmatched, create them
-void create_unmatched_files(void)
-{
-	debug("Create all files still not matched");
-	struct file *file, *tmp;
-	STAILQ_FOREACH_SAFE(file, &unmatched_files, entry, tmp) {
-		if_fail (create_local_file(file)) return;
-		debug("Promote file '%s' to matched list", file->name);
-		STAILQ_REMOVE(&unmatched_files, file, file, entry);
-		STAILQ_INSERT_HEAD(&matched_files, file, entry);
-	}
 }
 
 void unmatch_all(void)

@@ -28,6 +28,7 @@ void Write_strs(int fd, ...)
 	__attribute__ ((sentinel))
 #endif
 ;
+// Throws 0 on end of file.
 void Read(void *buf, int fd, size_t len);
 void ReadFrom(void *buf, int fd, off_t offset, size_t len);
 void WriteTo(int fd, off_t offset, void const *buf, size_t len);

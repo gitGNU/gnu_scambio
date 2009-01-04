@@ -28,6 +28,8 @@
 #include "options.h"
 #include "persist.h"
 #include "merefs.h"
+#include "map.h"
+#include "file.h"
 
 /*
  * Data Definitions
@@ -38,9 +40,10 @@ char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
 struct mdir_cursor mdir_cursor = MDIR_CURSOR_INITIALIZER;
-static struct persist last_time_stamp;
 bool quit = false;
 struct chn_cnx ccnx;
+struct files current_map, next_map;
+static bool background = false;
 
 /*
  * Init
@@ -80,9 +83,9 @@ static void init(void)
 	if (! pth_init()) with_error(0, "Cannot init PTH") return;
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
-	if_fail(init_conf()) return;
-	if_fail(init_log()) return;
-	if_fail(mdir_init()) return;
+	if_fail (init_conf()) return;
+	if_fail (init_log()) return;
+	if_fail (mdir_init()) return;
 	if_fail (files_begin()) return;
 	if_fail (init_chn()) return;
 }
@@ -91,33 +94,27 @@ static void init(void)
  * Go
  */
 
-time_t last_run_start(void)
-{
-	return *(time_t *)persist_read(&last_time_stamp);
-}
-
 static void loop(void)
 {
-	read_mdir();	// Will read the whole mdir and create an entry (on unmatched list) for each file
-	while (! quit) {
-		time_t current_run_start = time(NULL);	// FIXME: do not use file ctime, but last synchronized version !!
-		unmatch_all();
-		if_fail (read_mdir()) break;	// Will append to unmatched list the new entry
-		if_fail (traverse_local_path()) break;	// Will match each local file against its mdir entry
-		if_fail (create_unmatched_files()) break;	// Will add to local tree the new entries
-		persist_write(&last_time_stamp, &current_run_start);
+	if_fail (map_load(&current_map)) return;
+	if_fail (read_mdir()) return;	// Will read the whole mdir and create an entry (on unmatched list) for each file
+	do {
+		unmatch_all();	// all remote files are on unmatched_list
+		if_fail (read_mdir()) return;	// Will append to unmatched list the new entry
+		STAILQ_INIT(&next_map);
+		if_fail (traverse_local_path()) return;	// Will match each local file against its mdir entry
+		if_fail (create_unmatched_files()) return;	// Will add to local tree the new entries
+		free_file_list(&current_map);
+		current_map = next_map;
+		if (! background) break;
 		pth_sleep(5);	// will schedule other threads and prevent us from eating the CPU
-	}
-}
-
-static void last_ts_save(void)
-{
-	persist_dtor(&last_time_stamp);
+	} while (! quit);
+	map_save(&current_map);
 }
 
 int main(int nb_args, char const **args)
 {
-	if_fail(init()) return EXIT_FAILURE;
+	if_fail (init()) return EXIT_FAILURE;
 	mdir_name = conf_get_str("SC_MEREFS_MDIR");
 	local_path = conf_get_str("SC_MEREFS_PATH");
 	struct option const options[] = {
@@ -125,21 +122,21 @@ int main(int nb_args, char const **args)
 			'm', "mdir", OPT_STRING, &mdir_name, "The mdir path to track", {},
 		}, {
 			'p', "path", OPT_STRING, &local_path, "The local path to synch it with", {},
-		},
+		}, {
+			'd', "daemon", OPT_FLAG, &background, "Run merefs as a daemon task", {},
+		}
 	};
 	if_fail (option_parse(nb_args, args, options, sizeof_array(options))) return EXIT_FAILURE;
 	if (! mdir_name) option_missing("mdir");
 	if (! local_path) option_missing("path");
-	if_fail (daemonize("sc_merefs")) return EXIT_FAILURE;
+	if (background) {
+		if_fail (daemonize("sc_merefs")) return EXIT_FAILURE;
+	}
+
 	debug("Keeping mdir '%s' in synch with path '%s'", mdir_name, local_path);
 	local_path_len = strlen(local_path);
+	while (local_path_len>0 && local_path[local_path_len-1] == '/') local_path_len--;
 	if_fail (mdir = mdir_lookup(mdir_name)) return EXIT_FAILURE;
-	// Init time_stamp file
-	char persistant_ts_file[PATH_MAX];
-	snprintf(persistant_ts_file, sizeof(persistant_ts_file), "%s/.sc_merefs_ts", local_path);
-	time_t default_ts = 0;
-	if_fail (persist_ctor(&last_time_stamp, sizeof(default_ts), persistant_ts_file, &default_ts)) return EXIT_FAILURE;
-	atexit(last_ts_save);
 
 	if_fail (loop()) return EXIT_FAILURE;
 	return EXIT_SUCCESS;

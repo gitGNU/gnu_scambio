@@ -88,6 +88,8 @@ void Read(void *buf, int fd, size_t len)
 		if (ret < 0) {
 			if (! retryable(errno)) with_error(errno, "Cannot pth_read") return;
 			continue;
+		} else if (ret == 0) {
+			with_error(0, "EOF") return;
 		}
 		done += ret;
 	}

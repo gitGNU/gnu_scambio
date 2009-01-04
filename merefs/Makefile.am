@@ -12,7 +12,8 @@ sc_merefs_SOURCES = \
 	merefs.c \
 	file.c \
 	readmdir.c \
-	local.c
+	local.c \
+	map.c
 
 sc_merefs_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 

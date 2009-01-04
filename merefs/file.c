@@ -24,23 +24,28 @@
  */
 
 struct files unmatched_files, matched_files, removed_files;
-struct files local_hash[LOCAL_HASH_SIZE];
 
-static void file_ctor(struct file *file, struct files *list, char const *name, char const *digest, char const *resource, time_t mtime, mdir_version version)
+static char const *sanitize(char const *name)
 {
-	snprintf(file->name, sizeof(file->name), "%s", name);
+	// We store the name without the leading slash
+	while (*name == '/') name++;
+	return name;
+}
+
+static void file_ctor(struct file *file, struct files *list, char const *name, char const *digest, char const *resource, mdir_version version)
+{
+	snprintf(file->name, sizeof(file->name), "%s", sanitize(name));
 	snprintf(file->digest, sizeof(file->digest), "%s", digest);
-	snprintf(file->resource, sizeof(file->resource), "%s", resource);
-	file->mtime = mtime;
+	snprintf(file->resource, sizeof(file->resource), "%s", resource ? resource : "");
 	file->version = version;
 	STAILQ_INSERT_HEAD(list, file, entry);
 }
 
-struct file *file_new(struct files *list, char const *name, char const *digest, char const *resource, time_t mtime, mdir_version version)
+struct file *file_new(struct files *list, char const *name, char const *digest, char const *resource, mdir_version version)
 {
 	struct file *file = malloc(sizeof(*file));
 	if (! file) with_error(ENOMEM, "malloc(file)") return NULL;
-	if_fail (file_ctor(file, list, name, digest, resource, mtime, version)) {
+	if_fail (file_ctor(file, list, name, digest, resource, version)) {
 		free(file);
 		file = NULL;
 	}
@@ -58,7 +63,7 @@ void file_del(struct file *file, struct files *list)
 	free(file);
 }
 
-static void free_file_list(struct files *list)
+void free_file_list(struct files *list)
 {
 	struct file *file;
 	while (NULL != (file = STAILQ_FIRST(list))) {
@@ -68,6 +73,8 @@ static void free_file_list(struct files *list)
 
 struct file *file_search(struct files *list, char const *name)
 {
+	name = sanitize(name);
+
 	struct file *file;
 	STAILQ_FOREACH(file, list, entry) {
 		if (0 == strcmp(name, file->name)) return file;
@@ -93,20 +100,9 @@ struct file *file_search_by_digest(struct files *list, char const *digest)
 	return NULL;
 }
 
-static unsigned hashstr(char const *str)
+void file_set_digest(struct file *file, char const *digest)
 {
-	// dumb hash func
-	unsigned h = 0;
-	for (char const *c = str; *c; c++) {
-		h += *c;
-	}
-	return h;
-}
-
-unsigned file_hash(char const *name)
-{
-	unsigned h = hashstr(name);
-	return h % LOCAL_HASH_SIZE;
+	snprintf(file->digest, sizeof(file->digest), "%s", digest);
 }
 
 /*
@@ -118,9 +114,6 @@ static void files_end(void)
 	free_file_list(&unmatched_files);
 	free_file_list(&matched_files);
 	free_file_list(&removed_files);
-	for (unsigned h=0; h<sizeof_array(local_hash); h++) {
-		free_file_list(local_hash+h);
-	}
 }
 
 void files_begin(void)
@@ -128,10 +121,6 @@ void files_begin(void)
 	STAILQ_INIT(&unmatched_files);
 	STAILQ_INIT(&matched_files);
 	STAILQ_INIT(&removed_files);
-	for (unsigned h=0; h<sizeof_array(local_hash); h++) {
-		STAILQ_INIT(local_hash+h);
-	}
 	atexit(files_end);
 }
-
 
