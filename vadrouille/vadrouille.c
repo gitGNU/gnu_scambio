@@ -120,7 +120,11 @@ int main(int nb_args, char *args[])
 	struct browser *browser = browser_new("/");
 	on_error return EXIT_FAILURE;
 	exit_when_closed(browser->window);
+#	if TRUE == GTK_CHECK_VERSION(2, 14, 0)
 	g_timeout_add_seconds(1, refresh_alarm, browser);
+#	else
+	g_timeout_add(1000, refresh_alarm, browser);
+#	endif
 
 	gtk_main();
 	return EXIT_SUCCESS;
