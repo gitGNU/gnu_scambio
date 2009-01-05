@@ -26,7 +26,7 @@
 #include <pth.h>
 #include "daemon.h"
 #include "options.h"
-#include "persist.h"
+#include "misc.h"
 #include "merefs.h"
 #include "map.h"
 #include "file.h"
@@ -129,6 +129,7 @@ int main(int nb_args, char const **args)
 	if_fail (option_parse(nb_args, args, options, sizeof_array(options))) return EXIT_FAILURE;
 	if (! mdir_name) option_missing("mdir");
 	if (! local_path) option_missing("path");
+	if_fail (Mkdir(local_path)) return EXIT_FAILURE;
 	if (background) {
 		if_fail (daemonize("sc_merefs")) return EXIT_FAILURE;
 	}
