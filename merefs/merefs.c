@@ -43,7 +43,7 @@ struct mdir_cursor mdir_cursor = MDIR_CURSOR_INITIALIZER;
 bool quit = false;
 struct chn_cnx ccnx;
 struct files current_map, next_map;
-static bool background = false;
+bool background = false;
 
 /*
  * Init

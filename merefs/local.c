@@ -44,6 +44,7 @@ static void keep_map(char const *fname, char const *digest)
 static void remote_is_master(struct file *file, char const *fpath)
 {
 	debug("Creating or Updating local file '%s', resource '%s'", file->name, file->resource);
+	if (! background) printf("New remote file '%s'...\n", file->name);
 	
 	if_fail (Mkdir_for_file(fpath)) return;
 
@@ -80,6 +81,7 @@ static void local_is_master(struct file *remote_file, char const *fpath, char co
 {
 	char resource[PATH_MAX];
 	
+	if (! background) printf("New local file : %s\n", fname);
 	// Send file contents for this resource,
 	// or reuse an existing resource if the content is already up there
 	// (for instance if we renamed the file)
@@ -91,6 +93,7 @@ static void local_is_master(struct file *remote_file, char const *fpath, char co
 		snprintf(resource, sizeof(resource), "%s", remote->resource);
 	} else {
 		debug("New content, upload it");
+		if (! background) printf("   ...uploading\n");
 		if_fail (chn_send_file_request(&ccnx, fpath, resource)) return;
 		wait_complete();
 	}
@@ -136,6 +139,7 @@ static void conflict(char const *fpath)
 
 static void remove_local_file(char const *fpath)
 {
+	if (! background) printf("Removing local file '%s'\n", fpath);
 	if (0 != unlink(fpath)) with_error(errno, "unlink(%s)", fpath) return;
 }
 
