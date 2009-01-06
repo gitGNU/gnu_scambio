@@ -86,7 +86,11 @@ static char *contact_descr(struct sc_msg *msg)
 static char *contact_icon(struct sc_msg *msg)
 {
 	(void)msg;
+#	if TRUE == GTK_CHECK_VERSION(2, 10, 0)
 	return GTK_STOCK_ORIENTATION_PORTRAIT;
+#	else
+	return GTK_STOCK_NEW;
+#	endif
 }
 
 /*
@@ -541,7 +545,13 @@ static void picker_button_cb(GtkButton *button, gpointer *user_data)
 
 void contact_picker_ctor(struct contact_picker *picker, contact_picker_cb *cb, GtkWindow *parent)
 {
-	picker->button = gtk_button_new_from_stock(GTK_STOCK_ORIENTATION_PORTRAIT);
+	picker->button = gtk_button_new_from_stock(
+#		if TRUE == GTK_CHECK_VERSION(2, 10, 0)
+		GTK_STOCK_ORIENTATION_PORTRAIT
+#		else
+		GTK_STOCK_NEW
+#		endif
+	);
 	picker->cb = cb;
 	picker->parent = parent,
 	g_signal_connect(picker->button, "clicked", G_CALLBACK(picker_button_cb), picker);
