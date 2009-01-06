@@ -247,7 +247,7 @@ static void del_field_cb(GtkWidget *widget, gpointer data)
 		return;
 	}
 	if (confirm("Delete this value ?")) {
-		header_field_del(cat_value->hf);
+		header_field_del(cat_value->hf, ctv->view.msg->header);
 		contact_view_reload(ctv);
 	}
 }
@@ -420,7 +420,7 @@ static void contact_view_fill(struct contact_view *ctv)
 	
 	// Category boxes
 	struct header_field *hf;
-	LIST_FOREACH(hf, &ct->msg.header->fields, entry) {
+	TAILQ_FOREACH(hf, &ct->msg.header->fields, entry) {
 		char *cat_name = parameter_extract(hf->value, "category");
 		if (! cat_name) continue;
 		add_categorized_value(ctv, cat_name, hf);

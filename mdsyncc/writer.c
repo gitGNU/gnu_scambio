@@ -83,7 +83,7 @@ static void ls_transients(struct mdirc *mdirc, char *folder)
 		struct header_field *hf;
 		while (NULL != (hf = header_find(h, SC_LOCALID_FIELD, NULL))) {
 			warning("Removing localid field");
-			header_field_del(hf);
+			header_field_del(hf, h);
 		}
 		if_fail ((void)command_new(kw, mdirc, folder, filename, h)) {
 			debug("Skipping this file");

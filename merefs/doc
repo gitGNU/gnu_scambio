@@ -1,0 +1,59 @@
+Merefs est un outil qui ne doit pas fonctionner qu'en démon.
+Il doit donc garder une carte des fichiers synchronisés, par exemple
+une liste Lm de (nom, digest).
+
+Puis on construit la liste Lr des fichiers dans le mdir, et la liste
+Ll des fichiers locaux. On a donc Lr, Lm et Ll.
+
+Pour chaque L de Ll, chercher R de Lr qui a le même nom, et qui n'est
+pas encore "matché", et M de Lm (R et/ou M peuvent etre null) (traverse_local_path()).
+
+Si on trouve R et M
+	Si digest(L) == digest(M)
+		Le fichier n'a pas été modifié
+		Si digest(L) == digest(R)
+			Rien à faire
+		Sinon
+			Le fichier du mdir a été modifié
+			Copier R dans L et M.
+	Sinon
+		Le fichier L a été modifié
+		Si digest(M) == digest(R)
+			Mais pas le fichier sur le mdir
+			Copier L dans R et M
+		Sinon
+			Conflit. Sauver L dans .L.bak
+			Copier R dans L et M.
+Sinon, Si on trouve R mais pas M
+	Conflit. Sauver L dans .L.bak
+	Copier R dans L et M.
+Sinon, Si on trouve M mais pas R
+	Si digest(L) == digest(M)
+		Le fichier a été effacé
+		Effacer L et M.
+	Sinon
+		Conflit. Sauver L dans .L.bak
+		Effacer L et M.
+Sinon, on ne trouve ni R ni M
+	Il s'aggit d'un nouveau fichier local
+	Copier L dans M et R.
+
+Puis pour tous les R qui restent à matcher (create_unmatched_files()) :
+
+Si on n'a pas M
+	R a été ajouté
+	Copier R dans M et L
+Sinon
+	L a été délibérément effacé
+	Effacer R et M
+
+Puis pour tous les M qui n'ont pas été utilisés (taggés) :
+
+Les effacer.
+
+Puis sauver M.
+
+M peut être sauvé sous la forme d'un header dont les champs sont "path: digest".
+Pas très efficace, mais simple. Plutôt que de les tagger, construire un nouveau
+map à chaque run.
+

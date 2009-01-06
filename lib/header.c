@@ -50,7 +50,7 @@ static void header_field_ctor(struct header_field *hf, struct header *h, char co
 	hf->name = Strdup(name);
 	hf->value = Strdup(value);
 	str_tolower(hf->name);
-	LIST_INSERT_HEAD(&h->fields, hf, entry);
+	TAILQ_INSERT_TAIL(&h->fields, hf, entry);
 }
 
 struct header_field *header_field_new(struct header *h, char const *name, char const *value)
@@ -60,16 +60,16 @@ struct header_field *header_field_new(struct header *h, char const *name, char c
 	return hf;
 }
 
-static void header_field_dtor(struct header_field *hf)
+static void header_field_dtor(struct header_field *hf, struct header *h)
 {
 	FreeIfSet(&hf->name);
 	FreeIfSet(&hf->value);
-	LIST_REMOVE(hf, entry);
+	TAILQ_REMOVE(&h->fields, hf, entry);
 }
 
-void header_field_del(struct header_field *hf)
+void header_field_del(struct header_field *hf, struct header *h)
 {
-	header_field_dtor(hf);
+	header_field_dtor(hf, h);
 	free(hf);
 }
 
@@ -170,7 +170,7 @@ char *parameter_suppress(char const *str)
 static void header_ctor(struct header *h)
 {
 	debug("header @%p", h);
-	LIST_INIT(&h->fields);
+	TAILQ_INIT(&h->fields);
 	h->count = 1;
 }
 
@@ -190,8 +190,8 @@ static void header_dtor(struct header *h)
 	debug("header @%p", h);
 	assert(h->count <= 0);
 	struct header_field *hf;
-	while (NULL != (hf = LIST_FIRST(&h->fields))) {
-		header_field_del(hf);
+	while (NULL != (hf = TAILQ_FIRST(&h->fields))) {
+		header_field_del(hf, h);
 	}
 }
 
@@ -208,9 +208,9 @@ struct header_field *header_find(struct header const *h, char const *name, struc
 {
 	debug("looking for %s in header @%p", name, h);
 	for (
-		struct header_field *hf = prev ? LIST_NEXT(prev, entry) : LIST_FIRST(&h->fields);
+		struct header_field *hf = prev ? TAILQ_NEXT(prev, entry) : TAILQ_FIRST(&h->fields);
 		hf != NULL;
-		hf = LIST_NEXT(hf, entry)
+		hf = TAILQ_NEXT(hf, entry)
 	) {
 		if (0 == strcasecmp(hf->name, name)) {
 			debug("  found, value = %s", hf->value);
@@ -321,7 +321,7 @@ void header_write(struct header const *h, int fd)
 {
 	debug("writing to fd %d", fd);
 	struct header_field *hf;
-	LIST_FOREACH(hf, &h->fields, entry) {
+	TAILQ_FOREACH(hf, &h->fields, entry) {
 		field_write(hf, fd);
 	}
 	Write(fd, "\n", 1);
@@ -394,7 +394,7 @@ static void field_dump(struct header_field const *hf, struct varbuf *vb)
 void header_dump(struct header const *h, struct varbuf *vb)
 {
 	struct header_field *hf;
-	LIST_FOREACH(hf, &h->fields, entry) {
+	TAILQ_FOREACH(hf, &h->fields, entry) {
 		field_dump(hf, vb);
 	}
 	varbuf_append(vb, 1, "\n");

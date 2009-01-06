@@ -36,7 +36,7 @@
  * - comments (between parentheses) and new lines are removed.
  */
 struct header_field {
-	LIST_ENTRY(header_field) entry;
+	TAILQ_ENTRY(header_field) entry;
 	char *name, *value;	// strdupped strings
 };
 
@@ -50,7 +50,7 @@ struct header_field *header_field_new(struct header *, char const *name, char co
 /* Deletes a header field (removing it from the header it belongs to first).
  * Throws no error.
  */
-void header_field_del(struct header_field *);
+void header_field_del(struct header_field *, struct header *);
 
 /* Replace the name and/or value of a header_field (if name or value are NULL
  * the previous string is kept).
@@ -86,7 +86,7 @@ char *parameter_suppress(char const *str);
  * Also, headers are ref counted.
  */
 struct header {
-	LIST_HEAD(header_fields, header_field) fields;
+	TAILQ_HEAD(header_fields, header_field) fields;
 	int count;
 };
 
