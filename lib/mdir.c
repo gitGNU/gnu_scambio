@@ -231,6 +231,26 @@ struct mdir *mdir_lookup(char const *name)
 	return lookup_abs(path);
 }
 
+/* The only case when a mdir path change is a transient mdir being synchronized to its
+ * definitive dirId.
+ * FIXME: other programs may still use a mdir with previous path.
+ *        One solution would be to create the dirId as a symlink to the transient dir.
+ *        These should be deleted when we know that no programm use them - at reboot time ?
+ */
+static struct mdir *lookup_rename(char const *old_path, char const *new_path)
+{
+	struct mdir *mdir;
+	debug("Renaming previous mdir from '%s' to '%s'", old_path, new_path);
+	if (0 != rename(old_path, new_path)) with_error(errno, "Cannot rename mdir from %s to %s", old_path, new_path) return NULL;
+	if_fail (mdir = lookup_abs(old_path)) return NULL;
+	if (0 != strcmp(mdir->path, new_path)) {
+		debug("...and mdir");
+		assert(0 == strcmp(mdir->path, old_path));
+		snprintf(mdir->path, sizeof(mdir->path), "%s", new_path);
+	}
+	return mdir;
+}
+
 /*
  * Init
  */
@@ -372,12 +392,8 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient, str
 			// Remove previous link
 			char new_path[PATH_MAX];
 			snprintf(new_path, sizeof(new_path), "%s/%s", mdir_root, dirid_field->value);
-			debug("Renaming previous transient directory from '%s' to '%s'", prev_link, new_path);
-			if (0 != rename(prev_link, new_path)) with_error(errno, "Cannot rename transient dirId %s to %s", prev_link, new_path) return;
-			debug("Renaming previous mdir");
-			if_fail (child = mdir_lookup_by_id(prev_dirid, false)) return;
-			assert(0 == strcmp(child->path, prev_link));
-			snprintf(child->path, sizeof(child->path), "%s", new_path);
+			// And rename transient dir
+			child = lookup_rename(prev_link, new_path);
 			debug("Removing previous symlink '%s'", path);
 			if (0 != unlink(path)) with_error(errno, "Cannot remove previous symlink %s", path) return;
 		}
