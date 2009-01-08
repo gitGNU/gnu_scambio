@@ -105,12 +105,12 @@ static void local_is_master(struct file *remote_file, char const *fpath, char co
 	(void)header_field_new(header, SC_NAME_FIELD, fname);
 	(void)header_field_new(header, SC_DIGEST_FIELD, digest);
 	(void)header_field_new(header, SC_RESOURCE_FIELD, resource);
-	mdir_patch_request(mdir, MDIR_ADD, header);
+	mdir_patch_request(mdir, MDIR_ADD, header, user);
 	header_unref(header);
 	on_error return;
 
 	if (remote_file) {	// Remove old version from the mdir
-		if_fail (mdir_del_request(mdir, remote_file->version)) return;
+		if_fail (mdir_del_request(mdir, remote_file->version, user)) return;
 	}
 	
 	// Now update the file map
@@ -268,7 +268,7 @@ void create_unmatched_files(void)
 			STAILQ_INSERT_HEAD(&matched_files, file, entry);
 		} else {
 			debug("Local file '%s' was deliberately removed", file->name);
-			if_fail (mdir_del_request(mdir, file->version)) return;
+			if_fail (mdir_del_request(mdir, file->version, user)) return;
 		}
 	}
 }

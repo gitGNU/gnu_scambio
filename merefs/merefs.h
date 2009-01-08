@@ -30,6 +30,7 @@ extern char const *local_path;
 extern unsigned local_path_len;
 extern struct mdir *mdir;
 extern struct mdir_cursor mdir_cursor;
+extern struct mdir_user *user;
 extern bool quit, background;
 extern struct chn_cnx ccnx;
 extern struct files current_map, next_map;

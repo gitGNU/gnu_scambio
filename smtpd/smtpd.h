@@ -34,6 +34,7 @@
 
 extern char my_hostname[256];
 extern struct chn_cnx ccnx;
+extern struct mdir_user *user;
 
 struct mdir;
 struct cnx_env {

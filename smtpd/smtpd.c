@@ -40,6 +40,7 @@ static struct mdir_syntax syntax;
 static sig_atomic_t terminate = 0;
 char my_hostname[256];
 struct chn_cnx ccnx;
+struct mdir_user *user;
 
 char const kw_ehlo[] = "ehlo";
 char const kw_helo[] = "helo";
@@ -154,11 +155,12 @@ static void init_filed(void)
 {
 	if_fail (auth_init()) return;
 	if_fail (chn_init(false)) return;
-	char const *host, *serv, *user;
+	char const *host, *serv, *username;
 	if_fail (host = conf_get_str("SC_FILED_HOST")) return;
 	if_fail (serv = conf_get_str("SC_FILED_PORT")) return;
-	if_fail (user = conf_get_str("SC_USERNAME")) return;
-	if_fail (chn_cnx_ctor_outbound(&ccnx, host, serv, user)) return;
+	if_fail (username = conf_get_str("SC_USERNAME")) return;
+	if_fail (user = mdir_user_load(username)) return;
+	if_fail (chn_cnx_ctor_outbound(&ccnx, host, serv, username)) return;
 	if (0 != atexit(deinit_filed)) with_error(0, "atexit") return;
 }
 

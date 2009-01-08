@@ -80,6 +80,8 @@ static void mdirc_free(struct mdir *mdir)
  * and the writer once the connection is ready.
  */
 
+struct mdir_user *user;
+
 static void client_end(void)
 {
 	writer_end();
@@ -128,10 +130,11 @@ static void init(void)
 {
 	error_begin();
 	if (0 != atexit(error_end)) with_error(0, "atexit") return;
-	if_fail(init_conf()) return;
-	if_fail(init_log()) return;
-	if_fail(daemonize("sc_mdirc")) return;
-	if_fail(client_begin()) return;
+	if_fail (init_conf()) return;
+	if_fail (init_log()) return;
+	if_fail (daemonize("sc_mdirc")) return;
+	if_fail (client_begin()) return;
+	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return;
 	if (0 != atexit(client_end)) with_error(0, "atexit") return;
 }
 
@@ -142,8 +145,9 @@ int main(int nb_args, char **args)
 	int ret = EXIT_FAILURE;
 	if (! pth_init()) return EXIT_FAILURE;
 	if_fail(init()) goto q0;
+	
 	while (1) {
-		connecter_thread("Alice");
+		connecter_thread(NULL);
 		pth_sleep(10);
 	}
 	ret = EXIT_SUCCESS;

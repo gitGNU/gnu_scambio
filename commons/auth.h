@@ -30,21 +30,42 @@
  * Also, the same keys should serve to discuss with the file server(s), which then
  * must also know all users keys.
  *
- * Some special users have no key but an alias list : they are equivalent to unix
- * groups.
- * Also every directory have an optional .write and .read files describing who can(not)
- * write or read this directory. This is a list of allow/deny commands followed by a
- * list of users, ended by an implied allow all or deny all depending on the global
- * policy, which is a parameter of mdird (thus when there is no file at all the
- * write/read rights is given by global policy).
- * Beware that the conf must be preparsed but renewed whenever a file change, including
- * a user group file - so the groups must not be expended or the dependancy over the
- * group file will be missed.
+ * Some users may have some alias fields : they are equivalent to these other users.
  */
+
+#include <stdbool.h>
 
 struct mdir_user;
 void auth_init(void);
 struct mdir_user *mdir_user_load(char const *name);
 struct header *mdir_user_header(struct mdir_user *user);
+char const *mdir_user_name(struct mdir_user *user);
+
+/* Permissions are stored in each dirId (as a header file).
+ * This file is updated each time the directory is patched with a header of type
+ * "permissions". Who can sent this patch ? Only one of the "admins" of the dirId.
+ * Who'is the admins ? It's said in the previous permission header (allow-read/write,
+ * deny-read/write are completed with allow-admin/deny-admin). This is thus possible,
+ * with a single simple command, to change perm or ownership of a dirId.
+ * If no perm file exists in the dirId, or if no admin is declared, then it's owned
+ * by special user "admin".
+ */
+
+/* Tells weither the given user is the same as group, or if user is reachable from
+ * group aliases. If the groupname is unknown, return if_unknown.
+ */
+bool mdir_user_is_in_group(struct mdir_user *user, char const *groupname, bool if_unknown);
+
+/* Tells if a given header gives read permission to this user.
+ */
+bool mdir_user_can_read(struct mdir_user *user, struct header *header);
+
+/* Same for write permissions.
+ */
+bool mdir_user_can_write(struct mdir_user *user, struct header *header);
+
+/* Same for admin permissions.
+ */
+bool mdir_user_can_admin(struct mdir_user *user, struct header *header);
 
 #endif

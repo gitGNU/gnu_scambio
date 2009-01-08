@@ -29,7 +29,7 @@ struct cnx_env {
 	struct mdir_cnx cnx;
 	bool quit;
 	LIST_HEAD(subscriptions, subscription) subscriptions;
-	pth_mutex_t wfd;	// protects fd on write (put that on mdir_cnx ?
+	pth_mutex_t wfd;	// protects fd on write (put that on mdir_cnx ?)
 };
 
 struct mdird {

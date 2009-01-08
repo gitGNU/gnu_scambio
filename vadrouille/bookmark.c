@@ -124,11 +124,11 @@ static void function_add_bmark(struct mdirb *mdirb, char const *name, GtkWindow 
 		(void)header_field_new(h, SC_TYPE_FIELD, SC_BOOKMARK_TYPE);
 		(void)header_field_new(h, SC_NAME_FIELD, name);
 		(void)header_field_new(h, SC_URL_FIELD, url);
-		(void)header_field_new(h, SC_HAVE_READ_FIELD, conf_get_str("SC_USERNAME"));
+		(void)header_field_new(h, SC_HAVE_READ_FIELD, mdir_user_name(user));
 		if (strlen(descr) > 0) {
 			(void)header_field_new(h, SC_DESCR_FIELD, descr);
 		}
-		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h);
+		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h, user);
 		header_unref(h);
 		on_error {
 			alert_error();

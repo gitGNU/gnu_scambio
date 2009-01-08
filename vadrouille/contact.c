@@ -307,12 +307,12 @@ static void save_cb(GtkWidget *widget, gpointer data)
 	struct contact *const ct = msg2contact(ctv->view.msg);
 	debug("saving contact '%s'", ct->name);
 	if (ct->msg.version != 0) {
-		if_fail (mdir_del_request(&ct->msg.mdirb->mdir, ct->msg.version)) {
+		if_fail (mdir_del_request(&ct->msg.mdirb->mdir, ct->msg.version, user)) {
 			alert_error();
 			return;
 		}
 	}
-	if_fail (mdir_patch_request(&ct->msg.mdirb->mdir, MDIR_ADD, ct->msg.header)) alert_error();
+	if_fail (mdir_patch_request(&ct->msg.mdirb->mdir, MDIR_ADD, ct->msg.header, user)) alert_error();
 	struct mdirb *mdirb = ctv->view.msg->mdirb;	// save it because we are going to destroy ctv
 	gtk_widget_destroy(ctv->view.view.window);
 	mdirb_refresh(mdirb);
@@ -334,7 +334,7 @@ static void del_cb(GtkWidget *widget, gpointer data)
 	(void)widget;
 	struct contact_view *const ctv = (struct contact_view *)data;
 	if (confirm("Delete this contact ?")) {
-		if_fail (mdir_del_request(&ctv->view.msg->mdirb->mdir, ctv->view.msg->version)) {
+		if_fail (mdir_del_request(&ctv->view.msg->mdirb->mdir, ctv->view.msg->version, user)) {
 			alert_error();
 			return;
 		}
@@ -486,7 +486,7 @@ static void contact_new_cb(struct mdirb *mdirb, char const *name, GtkWindow *par
 	struct header *h = header_new();
 	(void)header_field_new(h, SC_TYPE_FIELD, SC_CONTACT_TYPE);
 	(void)header_field_new(h, SC_NAME_FIELD, "Unnamed");
-	(void)header_field_new(h, SC_HAVE_READ_FIELD, conf_get_str("SC_USERNAME"));
+	(void)header_field_new(h, SC_HAVE_READ_FIELD, mdir_user_name(user));
 	struct sc_msg *msg = contact_new(mdirb, h, 0);
 	header_unref(h);
 	assert(msg);

@@ -72,13 +72,9 @@ void exec_sub(struct mdir_cmd *cmd, void *user_data)
 	if (sub) {
 		subscription_reset_version(sub, version);
 		substatus = 1;	// signal that it's a reset
-	} else do {
+	} else {
 		sub = subscription_new(env, dir, version);
-		on_error {
-			substatus = 3;	// we faulted
-			break;
-		}
-	} while(0);
+	}
 	answer(env, cmd, (is_error() ? 500:200)+substatus, is_error() ? error_str():"OK");
 	error_clear();	// error dealt with
 }
@@ -103,12 +99,12 @@ void exec_unsub(struct mdir_cmd *cmd, void *user_data)
 
 // dir is the directory user name instead of dirId, because we wan't the client
 // to be able to add things to this directory before knowing it's dirId.
-static mdir_version add_header(char const *dir, struct header *h, enum mdir_action action)
+static mdir_version add_header(char const *dir, struct header *h, enum mdir_action action, struct mdir_user *user)
 {
 	debug("adding a header in dir %s", dir);
 	struct mdir *mdir = mdir_lookup(dir);
 	on_error return 0;
-	return mdir_patch(mdir, action, h, 0);
+	return mdir_patch(mdir, action, h, 0, user);
 }
 
 static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *user_data)
@@ -126,7 +122,7 @@ static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *use
 		status = 502;
 	} else {
 		header_debug(h);
-		version = add_header(dir, h, action);
+		version = add_header(dir, h, action, env->cnx.user);
 		on_error status = 502;
 	}
 	header_unref(h);

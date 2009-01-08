@@ -91,7 +91,7 @@ void ccnx_init(void)
 	conf_set_default_str("SC_FILED_HOST", "localhost");
 	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
 	on_error return;
-	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
+	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), mdir_user_name(user))) return;
 }
 
 /*

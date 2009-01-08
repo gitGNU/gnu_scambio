@@ -144,8 +144,7 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	// We handle internally the have_read mark
 	if (header_has_type(h, SC_MARK_TYPE)) {
 		struct header_field *hf = NULL;
-		char const *username = conf_get_str("SC_USERNAME");
-		if (! username) return;	// should not happen
+		char const *username = mdir_user_name(user);
 		while (NULL != (hf = header_find(h, SC_HAVE_READ_FIELD, hf))) {
 			if (0 == strcmp(username, hf->value)) {
 				mdir_version target = header_target(h);
@@ -163,6 +162,8 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 				return;
 			}
 		}
+		// If we are not marked as a reader, just ignore it.
+		return;
 	}
 
 	struct header_field *type = header_find(h, SC_TYPE_FIELD, NULL);

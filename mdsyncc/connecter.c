@@ -19,6 +19,7 @@
 #include <pth.h>
 #include "scambio.h"
 #include "scambio/cnx.h"
+#include "auth.h"
 #include "mdsyncc.h"
 
 /*
@@ -35,9 +36,9 @@ static struct mdir_syntax syntax;
  */
 void *connecter_thread(void *arg)
 {
+	(void)arg;
 	debug("Starting connecter");
-	char *username = arg;
-	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("SC_MDIRD_HOST"), conf_get_str("SC_MDIRD_PORT"), username)) {
+	if_fail (mdir_cnx_ctor_outbound(&cnx, &syntax, conf_get_str("SC_MDIRD_HOST"), conf_get_str("SC_MDIRD_PORT"), mdir_user_name(user))) {
 		error_clear();
 		return NULL;
 	}

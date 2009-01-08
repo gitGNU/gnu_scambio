@@ -219,7 +219,7 @@ static void try_apply(struct mdirc *mdirc)	// try to apply some of the stored pa
 		assert(patch->new_version > patch->old_version);
 		unsigned nb_deleted = patch->new_version - patch->old_version - 1;
 		mdir_version version;
-		if_fail (version = mdir_patch(&mdirc->mdir, patch->action, patch->header, nb_deleted)) break;
+		if_fail (version = mdir_patch(&mdirc->mdir, patch->action, patch->header, nb_deleted, user)) break;
 		assert(version == patch->new_version);
 		patch_del(patch);
 	}

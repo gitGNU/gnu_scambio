@@ -32,6 +32,7 @@ typedef void *thread_entry(void *);
 thread_entry connecter_thread, reader_thread, writer_thread;
 pth_t reader_pthid, writer_pthid;
 extern struct mdir_cnx cnx;
+extern struct mdir_user *user;
 
 void reader_begin(void);
 void reader_end(void);

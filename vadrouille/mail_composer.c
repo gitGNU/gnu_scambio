@@ -108,7 +108,7 @@ static void add_files_and_send(struct mail_composer *comp, struct header *header
 	(void)unlink(editor_fname);
 	debug("Now sending patch");
 	unless_error {
-		if (have_content) mdir_patch_request(mail_outbox, MDIR_ADD, header);
+		if (have_content) mdir_patch_request(mail_outbox, MDIR_ADD, header, user);
 		else error_push(0, "Be creative, write something !");
 	}
 }
@@ -136,7 +136,7 @@ static void add_dests(struct header *header, char const *dests)
 static struct header *header_new_from_compose(struct mail_composer *comp)
 {
 	struct header *header = header_new();
-	(void)header_field_new(header, SC_HAVE_READ_FIELD, conf_get_str("SC_USERNAME"));
+	(void)header_field_new(header, SC_HAVE_READ_FIELD, mdir_user_name(user));
 	(void)header_field_new(header, SC_TYPE_FIELD, SC_MAIL_TYPE);
 	(void)header_field_new(header, SC_START_FIELD, sc_ts2gmfield(time(NULL), true));
 	(void)header_field_new(header, SC_DESCR_FIELD, gtk_entry_get_text(GTK_ENTRY(comp->subject_entry)));

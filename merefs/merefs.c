@@ -27,6 +27,7 @@
 #include "daemon.h"
 #include "options.h"
 #include "misc.h"
+#include "auth.h"
 #include "merefs.h"
 #include "map.h"
 #include "file.h"
@@ -40,6 +41,7 @@ char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
 struct mdir_cursor mdir_cursor = MDIR_CURSOR_INITIALIZER;
+struct mdir_user *user;
 bool quit = false;
 struct chn_cnx ccnx;
 struct files current_map, next_map;
@@ -74,7 +76,7 @@ static void deinit_chn(void)
 static void init_chn(void)
 {
 	if_fail (chn_init(false)) return;
-	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), conf_get_str("SC_USERNAME"))) return;
+	if_fail (chn_cnx_ctor_outbound(&ccnx, conf_get_str("SC_FILED_HOST"), conf_get_str("SC_FILED_PORT"), mdir_user_name(user))) return;
 	if (0 != atexit(deinit_chn)) with_error(0, "atexit") return;
 }
 
@@ -87,6 +89,7 @@ static void init(void)
 	if_fail (init_log()) return;
 	if_fail (mdir_init()) return;
 	if_fail (files_begin()) return;
+	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return;
 	if_fail (init_chn()) return;
 }
 

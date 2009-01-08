@@ -24,7 +24,8 @@
 #include "scambio/mdir.h"
 
 extern bool terminate;
-struct chn_cnx ccnx;
+extern struct chn_cnx ccnx;
+extern struct mdir_user *user;
 
 void forwarder_begin(void);
 void forwarder_end(void);

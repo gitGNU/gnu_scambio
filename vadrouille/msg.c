@@ -50,7 +50,7 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirb *mdirb, struct header *h, mdir
 	msg->version = version;
 	msg->mdirb = mdirb;
 	msg->plugin = plugin;
-	msg->was_read = was_read(msg->header, conf_get_str("SC_USERNAME"));	// until proven otherwise
+	msg->was_read = was_read(msg->header, mdir_user_name(user));	// until proven otherwise
 	msg->count = 1;
 }
 
@@ -129,8 +129,9 @@ extern inline void sc_msg_unref(struct sc_msg *msg);
 
 void sc_msg_mark_read(struct sc_msg *msg)
 {
+	debug("Mark msg %"PRIversion" as read", msg->version);
 	if (! msg->was_read) {
-		if_succeed (mdir_mark_read(&msg->mdirb->mdir, conf_get_str("SC_USERNAME"), msg->version)) {
+		if_succeed (mdir_mark_read(&msg->mdirb->mdir, user, msg->version)) {
 			mdirb_refresh(msg->mdirb);
 		}
 		error_clear();
@@ -187,7 +188,7 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 	struct sc_msg *msg = get_selected_msg(view);
 	if (! msg) return;
 	if (confirm("Delete this message ?")) {
-		if_fail (mdir_del_request(&view->view.mdirb->mdir, msg->version)) {
+		if_fail (mdir_del_request(&view->view.mdirb->mdir, msg->version, user)) {
 			alert_error();
 		}
 		mdirb_refresh(view->view.mdirb);

@@ -24,6 +24,7 @@
 #include "mdsyncd.h"
 #include "digest.h"
 #include "misc.h"
+#include "auth.h"
 #include "scambio/header.h"
 
 /*
@@ -35,14 +36,16 @@ static void *subscription_thread(void *sub);
 static void subscription_ctor(struct subscription *sub, struct cnx_env *env, char const *dirId, mdir_version version)
 {
 	debug("subscription@%p, dirId=%s, version=%"PRIversion, sub, dirId, version);
-	sub->version = version;
-	sub->env = env;
 	struct mdir *mdir = mdir_lookup_by_id(dirId, false);
 	on_error return;
+	// Check read permissions
+	if (! mdir_user_can_read(env->cnx.user, mdir->permissions)) with_error(0, "No read permission") return;
+	sub->version = version;
+	sub->env = env;
 	sub->mdird = mdir2mdird(mdir);
-	LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
 	subscription_reset_version(sub, version);
 	sub->thread_id = pth_spawn(PTH_ATTR_DEFAULT, subscription_thread, sub);
+	LIST_INSERT_HEAD(&env->subscriptions, sub, env_entry);
 	LIST_INSERT_HEAD(&sub->mdird->subscriptions, sub, mdird_entry);
 }
 
@@ -51,8 +54,7 @@ struct subscription *subscription_new(struct cnx_env *env, char const *dirId, md
 	debug("for dirId = '%s'", dirId);
 	struct subscription *sub = malloc(sizeof(*sub));
 	if (! sub) with_error(ENOMEM, "malloc subscription") return NULL;
-	subscription_ctor(sub, env, dirId, version);
-	on_error {
+	if_fail (subscription_ctor(sub, env, dirId, version)) {
 		free(sub);
 		return NULL;
 	}
