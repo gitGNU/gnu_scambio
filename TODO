@@ -19,3 +19,4 @@ Code a simplier init function the init pth, error, log and conf altogether.
 
 * A mereNotifier fed by mdsyncc (from a pipe)
 
+* SNMP counters
