@@ -50,6 +50,7 @@ static struct mdir *mdirc_alloc(void)
 	if (! mdirc) with_error(ENOMEM, "malloc mdirc") return NULL;
 	mdirc->subscribed = false;
 	mdirc->nb_pending_acks = 0;
+	mdirc->quarantine = 0;
 	LIST_INIT(&mdirc->commands);
 	LIST_INIT(&mdirc->patches);
 	LIST_INIT(&mdirc->c2l_maps);

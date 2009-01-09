@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <time.h>
 #include <pth.h>
 #include "scambio/mdir.h"
 #include "command.h"
@@ -60,6 +61,7 @@ struct mdirc {
 	pth_rwlock_t command_lock;	// protects all the previous commands + command lists
 	LIST_HEAD(patches, patch) patches;
 	unsigned nb_pending_acks;
+	time_t quarantine;	// do not try to subscribe to this dir untill this time, if set
 };
 
 static inline struct mdirc *mdir2mdirc(struct mdir *mdir)

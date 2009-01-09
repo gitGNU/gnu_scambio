@@ -50,7 +50,12 @@ void finalize_sub(struct mdir_cmd *cmd, void *user_data)
 	struct command *const command = DOWNCAST(sq, sq, command);
 	int status = cmd->args[0].integer;
 	debug("subscribing to %s : %d", mdir_id(&command->mdirc->mdir), status);
-	if (status == 200) command->mdirc->subscribed = true;
+	if (status == 200) {
+		command->mdirc->subscribed = true;
+	} else {
+		info("Cannot subscribe to '%s'", mdir_id(&command->mdirc->mdir));
+		command->mdirc->quarantine = time(NULL) + 5*60;
+	}
 	command_del(command);
 }
 

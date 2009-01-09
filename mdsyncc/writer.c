@@ -106,6 +106,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	debug("parsing subdirectory '%s' of '%s' (dirId = %s)", name, (char *)parent_path, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
 	if (!mdirc->subscribed && !new) {
+		if (mdirc->quarantine > 0 && time(NULL) < mdirc->quarantine) return;
 		// This is not enough to be synched : we must ensure that we have received the patch yet
 		// (this is not fatal to subscribe twice to a dirId, but better avoid it)
 		debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
