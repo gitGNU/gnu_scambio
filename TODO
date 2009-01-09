@@ -20,3 +20,6 @@ Code a simplier init function the init pth, error, log and conf altogether.
 * A mereNotifier fed by mdsyncc (from a pipe)
 
 * SNMP counters
+
+* mdsync should move failed transient message into a .fail subdir
+
