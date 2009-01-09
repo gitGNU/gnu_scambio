@@ -21,7 +21,8 @@ vadrouille_SOURCES = \
 	contact.c \
 	contact_field.c \
 	dialog.c \
-	bookmark.c
+	bookmark.c \
+	perm.c
 
 vadrouille_LDADD = ../merelib/libgui.la ../lib/libscambio.la ../commons/libcommons.la $(GTKS_LIBS) $(GTKHTML_LIBS)
 

@@ -24,10 +24,6 @@
 #include "dialog.h"
 #include "bookmark.h"
 
-/*
- * Bookmark Message are just plain sc_msg
- */
-
 static struct sc_plugin bmark_plugin;
 
 struct bmark_msg {
