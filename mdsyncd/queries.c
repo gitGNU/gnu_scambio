@@ -127,10 +127,13 @@ static mdir_version add_header(char const *dir, struct header *h, enum mdir_acti
 			! mdir_user_can_write(user, mdir->permissions)
 		) with_error(0, "No permission") break;
 
+		bool is_new_dir = header_is_directory(h) && NULL == header_find(h, SC_DIRID_FIELD, NULL);
+		if (is_new_dir) debug("Patch will creates a new directory");
+
 		if_fail (version = mdir_patch(mdir, action, h, 0)) break;
 
 		// If it was a new directory, setup basic permissions for it
-		if (header_is_directory(h) && NULL == header_find(h, SC_DIRID_FIELD, NULL)) {
+		if (is_new_dir) {
 			char path[PATH_MAX];
 			struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
 			assert(name_field);
