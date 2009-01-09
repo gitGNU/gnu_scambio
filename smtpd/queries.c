@@ -276,7 +276,7 @@ static void process_mail(struct cnx_env *env)
 			time_t now = time(NULL);
 			(void)header_field_new(h, SC_START_FIELD, sc_tm2gmfield(localtime(&now), true));
 			// submit the header
-			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h, user)) break;
+			if_fail (mdir_patch_request(env->mailbox, MDIR_ADD, h)) break;
 		} while (0);
 		header_unref(h);
 	} while (0);

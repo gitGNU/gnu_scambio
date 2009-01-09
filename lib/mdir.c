@@ -87,19 +87,6 @@ static void update_permissions(struct mdir *mdir, struct header *header)
 	}
 }
 
-static void set_default_perms(struct mdir *mdir, struct mdir_user *user)
-{
-	struct header *perms = header_new();
-	(void)header_field_new(perms, SC_ALLOW_READ_FIELD,  mdir_user_name(user));
-	(void)header_field_new(perms, SC_ALLOW_WRITE_FIELD, mdir_user_name(user));
-	(void)header_field_new(perms, SC_ALLOW_ADMIN_FIELD, mdir_user_name(user));
-	(void)header_field_new(perms, SC_DENY_READ_FIELD,  "*");
-	(void)header_field_new(perms, SC_DENY_WRITE_FIELD, "*");
-	(void)header_field_new(perms, SC_DENY_ADMIN_FIELD, "*");
-	update_permissions(mdir, perms);
-	header_unref(perms);
-}
-
 static void mdir_empty(struct mdir *mdir)
 {
 	// Remove all journals
@@ -234,14 +221,19 @@ struct mdir *mdir_lookup(char const *name)
 /* The only case when a mdir path change is a transient mdir being synchronized to its
  * definitive dirId.
  * FIXME: other programs may still use a mdir with previous path.
- *        One solution would be to create the dirId as a symlink to the transient dir.
- *        These should be deleted when we know that no programm use them - at reboot time ?
+ *        One solution would be to create a symlink to the dirId, but we would
+ *        (seldom) need a lock.  These should be deleted when we know that no
+ *        programm use them - at reboot time ?  Anyway, when using the mdir to
+ *        send a PUT command, one still need the true name of the mdir ; which
+ *        can be obtained from the link by mdir_reload() or by the send
+ *        function.  This is irrelevant for all client programs, since only
+ *        mdsyncc actually sends commands.
  */
 static struct mdir *lookup_rename(char const *old_path, char const *new_path)
 {
-	struct mdir *mdir;
-	debug("Renaming previous mdir from '%s' to '%s'", old_path, new_path);
+	struct mdir *mdir; debug("Renaming previous mdir from '%s' to '%s'", old_path, new_path);
 	if (0 != rename(old_path, new_path)) with_error(errno, "Cannot rename mdir from %s to %s", old_path, new_path) return NULL;
+	if (0 != symlink(new_path, old_path)) with_error(errno, "Cannot symlink(%s <- %s)", new_path, old_path) return NULL;
 	if_fail (mdir = lookup_abs(old_path)) return NULL;
 	if (0 != strcmp(mdir->path, new_path)) {
 		debug("...and mdir");
@@ -349,7 +341,7 @@ struct header *mdir_read(struct mdir *mdir, mdir_version version, enum mdir_acti
  */
 
 // FIXME : on error, will left the directory in unusable state
-static void mdir_link(struct mdir *parent, struct header *h, bool transient, struct mdir_user *user)
+static void mdir_link(struct mdir *parent, struct header *h, bool transient)
 {
 	debug("Add link to mdir %s", mdir_id(parent));
 	assert(h);
@@ -401,8 +393,6 @@ static void mdir_link(struct mdir *parent, struct header *h, bool transient, str
 	} else {	// No dirId yet, we are in charge of adding one
 		debug("no dirId in header (yet)");
 		if_fail (child = mdir_create(transient)) return;
-		// Add basic permissions in child
-		if_fail (set_default_perms(child, user)) return;
 		if (! transient) {
 			if_fail ((void)header_field_new(h, SC_DIRID_FIELD, mdir_id(child))) return;
 		}
@@ -484,17 +474,10 @@ static void mdir_prepare_rem(struct mdir *mdir, struct header *header, bool tran
 	header_unref(target);
 }
 
-static void mdir_prepare_add(struct mdir *mdir, struct header *header, bool transient, struct mdir_user *user)
+static void mdir_prepare_add(struct mdir *mdir, struct header *header, bool transient)
 {
-	if (header_has_type(header, SC_PERM_TYPE)) {
-		// Check user have admin perms on mdir
-		if (! mdir_user_can_admin(user, mdir->permissions)) with_error(0, "No admin permission") return;
-	} else {
-		// Check user permissions
-		if (! mdir_user_can_write(user, mdir->permissions)) with_error(0, "No write permission") return;
-		if (header_is_directory(header)) {
-			mdir_link(mdir, header, transient, user);
-		}
+	if (header_is_directory(header)) {
+		mdir_link(mdir, header, transient);
 	}
 }
 	
@@ -515,7 +498,7 @@ static void mdir_confirm_add(struct mdir *mdir, struct header *header, mdir_vers
 	(void)close(fd);
 }
 
-mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted, struct mdir_user *user)
+mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
 {
 	debug("patch mdir %s (with %u dels)", mdir_id(mdir), nb_deleted);
 	mdir_version version = 0;
@@ -528,7 +511,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		if (action == MDIR_REM) {
 			mdir_prepare_rem(mdir, header, false);
 		} else {
-			mdir_prepare_add(mdir, header, false, user);
+			mdir_prepare_add(mdir, header, false);
 		}
 		on_error break;
 		// Either use the last journal, or create a new one
@@ -546,7 +529,7 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 	return version;
 }
 
-void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *header, struct mdir_user *user)
+void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct header *header)
 {
 	bool is_dir = header_is_directory(header);
 	struct header_field *dirId_field = is_dir ? header_find(header, SC_DIRID_FIELD, NULL) : NULL;
@@ -556,7 +539,7 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 	if (action == MDIR_REM) {
 		mdir_prepare_rem(mdir, header, true);
 	} else {
-		mdir_prepare_add(mdir, header, true, user);
+		mdir_prepare_add(mdir, header, true);
 	}
 	on_error return;
 	char temp[PATH_MAX];
@@ -571,13 +554,13 @@ void mdir_patch_request(struct mdir *mdir, enum mdir_action action, struct heade
 	(void)close(fd);
 }
 
-void mdir_del_request(struct mdir *mdir, mdir_version to_del, struct mdir_user *user)
+void mdir_del_request(struct mdir *mdir, mdir_version to_del)
 {
 	if (to_del <= 0) with_error(0, "Cannot delete transient patch") return;
 	struct header *h = header_new();
 	on_error return;
 	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(to_del));
-	unless_error mdir_patch_request(mdir, MDIR_REM, h, user);
+	unless_error mdir_patch_request(mdir, MDIR_REM, h);
 	header_unref(h);
 }
 
@@ -789,13 +772,14 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
-void mdir_mark_read(struct mdir *mdir, struct mdir_user *user, mdir_version version)
+void mdir_mark_read(struct mdir *mdir, char const *username, mdir_version version)
 {
+	debug("Marking version %"PRIversion" as read by user '%s'", version, username);
 	struct header *h = header_new();
 	(void)header_field_new(h, SC_TYPE_FIELD, SC_MARK_TYPE);
-	(void)header_field_new(h, SC_HAVE_READ_FIELD, mdir_user_name(user));
+	(void)header_field_new(h, SC_HAVE_READ_FIELD, username);
 	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(version));
-	mdir_patch_request(mdir, MDIR_ADD, h, user);
+	mdir_patch_request(mdir, MDIR_ADD, h);
 	header_unref(h);
 }
 

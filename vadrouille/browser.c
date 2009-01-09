@@ -142,7 +142,7 @@ static void deldir_cb(GtkToolButton *button, gpointer user_data)
 	debug("Asked to delete folder named '%s' in parent dir '%s', version was %"PRIversion, name, parent->mdir.path, to_del);
 	if (confirm("Aren't you afraid to remove this folder ?")) {
 		// To unmount a folder, one must delete the patch that mounted it
-		mdir_del_request(&parent->mdir, to_del, user);
+		mdir_del_request(&parent->mdir, to_del);
 		browser_refresh(browser);
 	}
 }
@@ -184,13 +184,13 @@ static void rename_cb(GtkToolButton *button, gpointer user_data)
 		(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
 		(void)header_field_new(h, SC_NAME_FIELD, gtk_entry_get_text(GTK_ENTRY(name_entry)));
 		(void)header_field_new(h, SC_DIRID_FIELD, dirId->value);
-		mdir_patch_request(&parent->mdir, MDIR_ADD, h, user);
+		mdir_patch_request(&parent->mdir, MDIR_ADD, h);
 		header_unref(h);
 		on_error {
 			alert_error();
 		} else {
 			// Remove the former one
-			mdir_del_request(&parent->mdir, old_version, user);
+			mdir_del_request(&parent->mdir, old_version);
 			browser_refresh(browser);
 		}
 	}
@@ -217,7 +217,7 @@ static void newdir_cb(GtkToolButton *button, gpointer user_data)
 		struct header *h = header_new();
 		(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
 		(void)header_field_new(h, SC_NAME_FIELD, gtk_entry_get_text(GTK_ENTRY(name_entry)));
-		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h, user);
+		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h);
 		header_unref(h);
 		on_error {
 			alert_error();

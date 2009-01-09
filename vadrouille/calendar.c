@@ -213,7 +213,7 @@ static void display_event(struct cal_msg *cmsg, struct cal_dir_view *view)
 			snprintf(hour+len, sizeof(hour)-len, " - %02uh%02u", (unsigned)cmsg->stop.hour, (unsigned)cmsg->stop.min);
 		}
 	}
-	debug("adding event '%s' : '%s'", hour, cmsg->descr);
+	debug("adding event '%s' : '%s' (version=%"PRIversion", was_read=%c, marked=%c)", hour, cmsg->descr, cmsg->msg.version, cmsg->msg.was_read?'t':'f', cmsg->marked?'t':'f');
 	GtkTreeIter iter;
 	gtk_list_store_insert_with_values(view->event_store, &iter, G_MAXINT,
 		FIELD_HOUR, hour,
@@ -224,7 +224,7 @@ static void display_event(struct cal_msg *cmsg, struct cal_dir_view *view)
 
 	// We do not call sc_msg_mark_read() because we do not want the mdir to be refreshed right now
 	if (! cmsg->msg.was_read && ! cmsg->marked) {
-		mdir_mark_read(&cmsg->msg.mdirb->mdir, user, cmsg->msg.version);
+		mdir_mark_read(&cmsg->msg.mdirb->mdir, mdir_user_name(user), cmsg->msg.version);
 		error_clear();
 		// Avoid to mark the same event several times, but we cannot mess with
 		// mdirb managed was_read flags in msg (otherwise mdirb->nb_unread would be false).
@@ -414,7 +414,7 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 		return;
 	}
 	if (confirm("Delete this event ?")) {
-		mdir_del_request(&cmsg->msg.mdirb->mdir, cmsg->msg.version, user);
+		mdir_del_request(&cmsg->msg.mdirb->mdir, cmsg->msg.version);
 		mdirb_refresh(cmsg->msg.mdirb);
 		reset_month(view);
 	}

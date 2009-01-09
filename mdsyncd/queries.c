@@ -97,14 +97,51 @@ void exec_unsub(struct mdir_cmd *cmd, void *user_data)
  * PUT/REM
  */
 
+static void set_default_perms(struct mdir *mdir, struct mdir_user *user)
+{
+	struct header *perms = header_new();
+	(void)header_field_new(perms, SC_TYPE_FIELD, SC_PERM_TYPE);
+	(void)header_field_new(perms, SC_ALLOW_READ_FIELD,  mdir_user_name(user));
+	(void)header_field_new(perms, SC_ALLOW_WRITE_FIELD, mdir_user_name(user));
+	(void)header_field_new(perms, SC_ALLOW_ADMIN_FIELD, mdir_user_name(user));
+	(void)header_field_new(perms, SC_DENY_READ_FIELD,  "*");
+	(void)header_field_new(perms, SC_DENY_WRITE_FIELD, "*");
+	(void)header_field_new(perms, SC_DENY_ADMIN_FIELD, "*");
+	(void)mdir_patch(mdir, MDIR_ADD, perms, 0);
+	header_unref(perms);
+}
+
 // dir is the directory user name instead of dirId, because we wan't the client
 // to be able to add things to this directory before knowing it's dirId.
 static mdir_version add_header(char const *dir, struct header *h, enum mdir_action action, struct mdir_user *user)
 {
-	debug("adding a header in dir %s", dir);
-	struct mdir *mdir = mdir_lookup(dir);
-	on_error return 0;
-	return mdir_patch(mdir, action, h, 0, user);
+	mdir_version version = 0;
+	do {
+		debug("adding a header in dir %s", dir);
+		struct mdir *mdir = mdir_lookup(dir);
+		on_error break;;
+	
+		debug("Check user permissions to write or admin here");
+		if (
+			(header_has_type(h, SC_PERM_TYPE) && !mdir_user_can_admin(user, mdir->permissions)) ||
+			! mdir_user_can_write(user, mdir->permissions)
+		) with_error(0, "No permission") break;
+
+		if_fail (version = mdir_patch(mdir, action, h, 0)) break;
+
+		// If it was a new directory, setup basic permissions for it
+		if (header_is_directory(h) && NULL == header_find(h, SC_DIRID_FIELD, NULL)) {
+			char path[PATH_MAX];
+			struct header_field *name_field = header_find(h, SC_NAME_FIELD, NULL);
+			assert(name_field);
+			snprintf(path, sizeof(path), "%s/%s", dir, name_field->value);
+			debug("Add basic permissions in subdir '%s'", path);
+			struct mdir *child = mdir_lookup(path);
+			if_fail (set_default_perms(child, user)) break;
+		}
+	} while (0);
+
+	return version;
 }
 
 static void exec_putrem(enum mdir_action action, struct mdir_cmd *cmd, void *user_data)

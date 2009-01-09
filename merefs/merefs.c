@@ -89,6 +89,7 @@ static void init(void)
 	if_fail (init_log()) return;
 	if_fail (mdir_init()) return;
 	if_fail (files_begin()) return;
+	if_fail (auth_init()) return;
 	if_fail (user = mdir_user_load(conf_get_str("SC_USERNAME"))) return;
 	if_fail (init_chn()) return;
 }

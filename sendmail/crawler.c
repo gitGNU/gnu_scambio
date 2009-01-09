@@ -82,13 +82,13 @@ static void move_fwd(struct forward *fwd)
 	on_error return;
 	assert(header);
 	// We then delete this message so that it will never sent again
-	if_fail (mdir_del_request(to_send, fwd->version, user)) return;
+	if_fail (mdir_del_request(to_send, fwd->version)) return;
 	// And copy it (modified) to the sent mdir
 	(void)header_field_new(header, SC_STOP_FIELD, sc_ts2gmfield(time(NULL), true));
 	char status[8];
 	snprintf(status, sizeof(status), "%d", fwd->status);
 	(void)header_field_new(header, SC_STATUS_FIELD, status);
-	mdir_patch_request(sent, MDIR_ADD, header, user);
+	mdir_patch_request(sent, MDIR_ADD, header);
 	header_unref(header);
 }
 

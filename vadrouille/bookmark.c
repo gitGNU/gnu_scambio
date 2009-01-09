@@ -128,7 +128,7 @@ static void function_add_bmark(struct mdirb *mdirb, char const *name, GtkWindow 
 		if (strlen(descr) > 0) {
 			(void)header_field_new(h, SC_DESCR_FIELD, descr);
 		}
-		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h, user);
+		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h);
 		header_unref(h);
 		on_error {
 			alert_error();

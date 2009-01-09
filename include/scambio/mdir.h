@@ -80,7 +80,6 @@ extern void (*jnl_free)(struct jnl *);
 extern struct mdir *(*mdir_alloc)(void);
 extern void (*mdir_free)(struct mdir *);
 
-struct mdir_user;
 struct header;
 void mdir_init(void);
 
@@ -89,7 +88,7 @@ void mdir_init(void);
 // plugins use mdir_patch_request instead
 // insert nb_deleted empty patches before the one given
 // returns the new version number
-mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *, unsigned nb_deleted, struct mdir_user *);
+mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *, unsigned nb_deleted);
 
 // Ask for the addition of this patch to the mdir. Actually the patch will be
 // saved in a tempfile in subfolder ".tmp" with a tempname starting with '+'
@@ -125,10 +124,10 @@ mdir_version mdir_patch(struct mdir *, enum mdir_action, struct header *, unsign
 // will prevent this to happen.  This should not be too problematic for the
 // client, since it still can add patches to this directory, even patches that
 // creates other directories, for patches are added to names and not to dirId.
-void mdir_patch_request(struct mdir *, enum mdir_action, struct header *, struct mdir_user *);
+void mdir_patch_request(struct mdir *, enum mdir_action, struct header *);
 // This is a helper to request a patch that will remove the patch identified
 // with this version
-void mdir_del_request(struct mdir *mdir, mdir_version to_del, struct mdir_user *);
+void mdir_del_request(struct mdir *mdir, mdir_version to_del);
 
 // Returns the version of the patch that created this mountpoint on mdir.
 // (usefull to delete it).
@@ -178,6 +177,6 @@ struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h);
 
 /* To mark a message as "seen", we have a special patch that say user X have seen message Y.
  */
-void mdir_mark_read(struct mdir *mdir, struct mdir_user *user, mdir_version version);
+void mdir_mark_read(struct mdir *mdir, char const *username, mdir_version version);
 
 #endif

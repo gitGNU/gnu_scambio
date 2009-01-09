@@ -87,6 +87,7 @@ void sc_msg_listener_dtor(struct sc_msg_listener *listener)
 static void notify(struct mdirb *mdirb, enum mdir_action action, struct sc_msg *msg)
 {
 	struct sc_msg_listener *listener, *tmp;
+	debug("Notify for new msg @%p", msg);
 	LIST_FOREACH_SAFE(listener, &listeners, entry, tmp) {
 		listener->cb(listener, mdirb, action, msg);
 	}

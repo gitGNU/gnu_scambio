@@ -114,7 +114,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 		if (descr) (void)header_field_new(h, SC_DESCR_FIELD, descr);
 		g_free(descr);
 		debug("sending patch");
-		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h, user);
+		mdir_patch_request(&mdirb->mdir, MDIR_ADD, h);
 	} while (0);
 	header_unref(h);
 	on_error {
@@ -124,7 +124,7 @@ static void send_cb(GtkToolButton *button, gpointer user_data)
 	// Now that the new msg is in, remove the replaced one
 	if (editor->replaced_version != 0) {
 		assert(editor->replaced_dir);
-		mdir_del_request(&editor->replaced_dir->mdir, editor->replaced_version, user);
+		mdir_del_request(&editor->replaced_dir->mdir, editor->replaced_version);
 	}
 	gtk_widget_destroy(editor->view.window);
 	mdirb_refresh(mdirb);	// refresh this mdirb

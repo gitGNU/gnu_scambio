@@ -108,7 +108,7 @@ static void add_files_and_send(struct mail_composer *comp, struct header *header
 	(void)unlink(editor_fname);
 	debug("Now sending patch");
 	unless_error {
-		if (have_content) mdir_patch_request(mail_outbox, MDIR_ADD, header, user);
+		if (have_content) mdir_patch_request(mail_outbox, MDIR_ADD, header);
 		else error_push(0, "Be creative, write something !");
 	}
 }

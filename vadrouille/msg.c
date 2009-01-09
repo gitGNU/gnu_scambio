@@ -131,7 +131,7 @@ void sc_msg_mark_read(struct sc_msg *msg)
 {
 	debug("Mark msg %"PRIversion" as read", msg->version);
 	if (! msg->was_read) {
-		if_succeed (mdir_mark_read(&msg->mdirb->mdir, user, msg->version)) {
+		if_succeed (mdir_mark_read(&msg->mdirb->mdir, mdir_user_name(user), msg->version)) {
 			mdirb_refresh(msg->mdirb);
 		}
 		error_clear();
@@ -188,7 +188,7 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 	struct sc_msg *msg = get_selected_msg(view);
 	if (! msg) return;
 	if (confirm("Delete this message ?")) {
-		if_fail (mdir_del_request(&view->view.mdirb->mdir, msg->version, user)) {
+		if_fail (mdir_del_request(&view->view.mdirb->mdir, msg->version)) {
 			alert_error();
 		}
 		mdirb_refresh(view->view.mdirb);
@@ -197,6 +197,7 @@ static void del_cb(GtkToolButton *button, gpointer user_data)
 
 static void reload_store(struct gen_dir_view *view)
 {
+	debug("Reloading msg list view store");
 	gtk_list_store_clear(view->store);
 	GtkTreeIter iter;
 	struct sc_msg *msg;
@@ -210,6 +211,7 @@ static void reload_store(struct gen_dir_view *view)
 				error_clear();
 			}
 		}
+		debug("Store msg version %"PRIversion", '%s' (%s)", msg->version, descr, msg->was_read?"not new":"new");
 		gtk_list_store_insert_with_values(view->store, &iter, G_MAXINT,
 			FIELD_DESCR, descr,
 			FIELD_DATE, date,

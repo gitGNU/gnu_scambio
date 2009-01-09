@@ -187,7 +187,7 @@ static void delete_cb(GtkToolButton *button, gpointer *user_data)
 	struct mail_msg_view *view = (struct mail_msg_view *)user_data;
 	debug("msg version = %"PRIversion, view->view.msg->version);
 	if (confirm("Are you sure, etc...?")) {
-		if_succeed (mdir_del_request(&view->view.msg->mdirb->mdir, view->view.msg->version, user)) {
+		if_succeed (mdir_del_request(&view->view.msg->mdirb->mdir, view->view.msg->version)) {
 			mdirb_refresh(view->view.msg->mdirb);
 			gtk_widget_destroy(view->view.view.window);
 		} else {
