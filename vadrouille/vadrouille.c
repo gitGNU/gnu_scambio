@@ -34,6 +34,7 @@
 #include "contact.h"
 #include "bookmark.h"
 #include "perm.h"
+#include "file.h"
 
 /*
  * Plugins
@@ -118,6 +119,7 @@ int main(int nb_args, char *args[])
 	if_fail (browser_init()) return EXIT_FAILURE;
 	if_fail (bookmark_init()) return EXIT_FAILURE;
 	if_fail (perm_init()) return EXIT_FAILURE;
+	if_fail (file_init()) return EXIT_FAILURE;
 
 	struct browser *browser = browser_new("/");
 	on_error return EXIT_FAILURE;
