@@ -30,6 +30,7 @@ enum {
 	FIELD_DATE,
 	FIELD_NEW,
 	FIELD_MSGPTR,
+	FIELD_ICON,
 	NB_FIELDS
 };
 
@@ -212,11 +213,14 @@ static void reload_store(struct gen_dir_view *view)
 			}
 		}
 		debug("Store msg version %"PRIversion", '%s' (%s)", msg->version, descr, msg->was_read?"not new":"new");
+		char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
+
 		gtk_list_store_insert_with_values(view->store, &iter, G_MAXINT,
 			FIELD_DESCR, descr,
 			FIELD_DATE, date,
 			FIELD_NEW, msg->was_read ? "":"New",
 			FIELD_MSGPTR, msg,
+			FIELD_ICON, icon ? icon : GTK_STOCK_CANCEL,
 			-1);
 		g_free(descr);
 	}
@@ -227,10 +231,16 @@ static void dir_view_ctor(struct gen_dir_view *view, struct mdirb *mdirb)
 	GtkWidget *window = make_window(WC_MSGLIST, NULL, NULL);
 	GtkWidget *page = gtk_vbox_new(FALSE, 0);
 	
-	view->store = gtk_list_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
+	view->store = gtk_list_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER, G_TYPE_STRING);
 	view->list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(view->store));
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view->list), FALSE);
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+	GtkCellRenderer *icon_renderer = gtk_cell_renderer_pixbuf_new();
+
+	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list),
+		gtk_tree_view_column_new_with_attributes("Icon", icon_renderer,
+			"stock-id", FIELD_ICON,
+			NULL));
 
 	gtk_tree_view_append_column(GTK_TREE_VIEW(view->list),
 		gtk_tree_view_column_new_with_attributes("New", renderer,
