@@ -28,6 +28,7 @@
 #include "scambio.h"
 #include "misc.h"
 #include "scambio/cmd.h"
+#include "scambio/header.h"
 #include "mdsyncc.h"
 #include "command.h"
 
@@ -41,6 +42,7 @@ static void command_ctor(struct command *cmd, char const *kw, struct mdirc *mdir
 	snprintf(cmd->filename, sizeof(cmd->filename), "%s", filename);
 	cmd->mdirc = mdirc;
 	cmd->kw = kw;
+	cmd->header = h ? header_ref(h) : NULL;	// keep a copy in case something goes wrong
 	debug("cmd @%p, folder = '%s', mdir id = '%s'", cmd, folder, mdir_id(&mdirc->mdir));
 	if_fail (mdir_cnx_query(&cnx, kw, h, &cmd->sq, folder, kw == kw_sub ? mdir_version2str(mdir_last_version(&mdirc->mdir)) : NULL, NULL)) return;
 	LIST_INSERT_HEAD(&mdirc->commands, cmd, mdirc_entry);
@@ -56,9 +58,18 @@ struct command *command_new(char const *kw, struct mdirc *mdirc, char const *fol
 	return cmd;
 }
 
+static void command_dtor(struct command *cmd)
+{
+	if (cmd->header) {
+		header_unref(cmd->header);
+		cmd->header = NULL;
+	}
+	LIST_REMOVE(cmd, mdirc_entry);
+}
+
 void command_del(struct command *cmd)
 {
-	LIST_REMOVE(cmd, mdirc_entry);
+	command_dtor(cmd);
 	free(cmd);
 }
 

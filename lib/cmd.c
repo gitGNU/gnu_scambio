@@ -54,7 +54,17 @@ static bool same_keyword(char const *a, char const *b)
 static void build_cmd(struct mdir_cmd *cmd, union mdir_cmd_arg *args)
 {
 	debug("new cmd for '%s', seqnum #%lld, %u args", cmd->def->keyword, cmd->seq, cmd->nb_args);
-	if (cmd->nb_args < cmd->def->nb_arg_min || cmd->nb_args > cmd->def->nb_arg_max) with_error(EDOM, "Bad nb args (%u)", cmd->nb_args) return;
+	if (cmd->nb_args < cmd->def->nb_arg_min) {
+		with_error(EDOM, "Bad nb args (%u)", cmd->nb_args) return;
+	}
+	if (cmd->nb_args > cmd->def->nb_arg_max &&
+		(cmd->def->nb_types < cmd->def->nb_arg_max || cmd->def->types[cmd->def->nb_arg_max-1] == CMD_STRING)) {
+		// More tokens that necessary, but the last one is a string and can swallow the others
+		while (cmd->nb_args > cmd->def->nb_arg_max) {
+			// Try to do this with any higher level language :>
+			args[--cmd->nb_args].string[-1] = ' ';
+		}
+	}
 	for (unsigned a=0; a<cmd->nb_args; a++) {	// Copy and transcode args
 		if (a < cmd->def->nb_types && cmd->def->types[a] == CMD_INTEGER) {	// transcode
 			char *end;
@@ -83,7 +93,7 @@ static int tokenize(struct varbuf *vb, union mdir_cmd_arg *tokens)
 	int nb_tokens = 0;
 	size_t c = 0;
 	do {
-		if (nb_tokens >= MAX_CMD_LINE) return -E2BIG;
+		if (nb_tokens >= CMD_MAX_ARGS) return -E2BIG;
 		while (c < vb->used && is_delimiter(vb->buf[c])) c++;	// trim left
 		if (c >= vb->used) break;
 		tokens[nb_tokens].string = vb->buf+c;

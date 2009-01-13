@@ -360,6 +360,7 @@ void header_read(struct header *h, int fd)
 
 void header_to_file(struct header *h, char const *filename)
 {
+	if_fail (Mkdir_for_file(filename)) return;
 	int fd = open(filename, O_WRONLY|O_CREAT, 0640);
 	if (fd < 0) with_error(errno, "open(%s)", filename) return;
 	header_write(h, fd);

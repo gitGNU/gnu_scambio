@@ -94,6 +94,27 @@ static bool retry_later(int status)
 	return status >= 300 && status < 400;
 }
 
+static void fin_putrem(struct command *command, int status, char const *compl)
+{
+	assert(command->filename[0] != '\0');
+	if (status == 200) {
+		remember_version_map(command->mdirc, compl, command->filename);
+		remove_local_file(command->filename);
+	} else if (! retry_later(status)) {
+		remove_local_file(command->filename);
+		// Save the error
+		char status_str[1024];
+		snprintf(status_str, sizeof(status_str), "%d; error=\"%s\"", status, compl);
+		(void)header_field_new(command->header, SC_STATUS_FIELD, status_str);
+		char *tmp = strrchr(command->filename, '.');
+		assert(tmp && tmp[1] == 't' && tmp[2] == 'm' && tmp[3] == 'p');
+		tmp[1] = 'e'; tmp[2] = 'r'; tmp[3] = 'r';
+		header_to_file(command->header, command->filename);
+	}
+	error_clear();
+	command_del(command);
+}
+
 void finalize_put(struct mdir_cmd *cmd, void *user_data)
 {
 	struct mdir_cnx *const cnx = user_data;
@@ -105,13 +126,7 @@ void finalize_put(struct mdir_cmd *cmd, void *user_data)
 	int status = cmd->args[0].integer;
 	char const *compl = cmd->args[1].string;
 	debug("put %s : %d", command->filename, status);
-	assert(command->filename[0] != '\0');
-	if (status == 200) {
-		remember_version_map(command->mdirc, compl, command->filename);
-	}
-	if (! retry_later(status)) remove_local_file(command->filename);
-	error_clear();
-	command_del(command);
+	fin_putrem(command, status, compl);
 }
 
 void finalize_rem(struct mdir_cmd *cmd, void *user_data)
@@ -125,13 +140,7 @@ void finalize_rem(struct mdir_cmd *cmd, void *user_data)
 	int status = cmd->args[0].integer;
 	char const *compl = cmd->args[1].string;
 	debug("rem %s : %d", command->filename, status);
-	assert(command->filename[0] != '\0');
-	if (status == 200) {
-		remember_version_map(command->mdirc, compl, command->filename);
-	}
-	if (! retry_later(status)) remove_local_file(command->filename);
-	error_clear();
-	command_del(command);
+	fin_putrem(command, status, compl);
 }
 
 void finalize_auth(struct mdir_cmd *cmd, void *user_data)

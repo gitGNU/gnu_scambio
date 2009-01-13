@@ -94,8 +94,8 @@ void mdir_cnx_dtor(struct mdir_cnx *cnx);
 
 // Evaluates to a mdir_cmd_def for a query answer.
 #define MDIR_CNX_ANSW_REGISTER(KEYWORD, CALLBACK) { \
-	.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = UINT_MAX, \
-	.nb_types = 1, .types = { CMD_INTEGER }, .negseq = true, \
+	.keyword = (KEYWORD), .cb = (CALLBACK), .nb_arg_min = 1, .nb_arg_max = 2, \
+	.nb_types = 2, .types = { CMD_INTEGER, CMD_STRING }, .negseq = true, \
 }
 
 /* Sends a query to the peer.

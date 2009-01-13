@@ -21,5 +21,3 @@ Code a simplier init function the init pth, error, log and conf altogether.
 
 * SNMP counters
 
-* mdsync should move failed transient message into a .fail subdir
-

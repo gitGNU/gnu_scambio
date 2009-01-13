@@ -25,6 +25,7 @@ struct command {
 	LIST_ENTRY(command) mdirc_entry;	// entry in the mdirc list
 	struct mdirc *mdirc;	// backlink
 	char const *kw;
+	struct header *header;
 	char filename[PATH_MAX];	// associated file (for put/rem)
 	struct mdir_sent_query sq;
 };
