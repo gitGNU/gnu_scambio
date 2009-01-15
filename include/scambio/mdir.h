@@ -149,6 +149,7 @@ void mdir_patch_list(
 	struct mdir *, struct mdir_cursor *, bool unsync_only,
 	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *data),
 	void (*rem_cb)(struct mdir *, mdir_version, void *),
+	void (*err_cb)(struct mdir *, struct header *, void *),
 	void *data);
 
 // Forget about previous lists to restart listing all available patches.

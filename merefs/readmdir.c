@@ -87,7 +87,7 @@ static void add_remote_file(struct mdir *mdir, struct header *header, mdir_versi
 
 void read_mdir(void)
 {
-	if_fail (mdir_patch_list(mdir, &mdir_cursor, false, add_remote_file, rem_remote_file, NULL)) return;
+	if_fail (mdir_patch_list(mdir, &mdir_cursor, false, add_remote_file, rem_remote_file, NULL, NULL)) return;
 }
 
 void unmatch_all(void)

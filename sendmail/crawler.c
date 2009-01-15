@@ -62,7 +62,7 @@ static void *crawler_thread(void *data)
 {
 	(void)data;
 	while (! is_error() && ! terminate) {
-		mdir_patch_list(to_send, &to_send_cursor, false, send_patch, NULL, NULL);
+		mdir_patch_list(to_send, &to_send_cursor, false, send_patch, NULL, NULL, NULL);
 		(void)pth_sleep(5);	// FIXME: a signal when something new is received ?
 	}
 	debug("Exiting crawler thread");

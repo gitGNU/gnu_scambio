@@ -380,8 +380,8 @@ static void browser_ctor(struct browser *browser, char const *root)
 
 	gtk_container_add(GTK_CONTAINER(browser->window), vbox);
 
-	browser_refresh(browser);
 	sc_msg_listener_ctor(&browser->msg_listener, new_message_notif);
+	browser_refresh(browser);
 
 	gtk_widget_show_all(browser->window);
 }

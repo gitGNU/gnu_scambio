@@ -28,46 +28,6 @@
 #include "mdirb.h"
 
 /*
- * MDir allocator
- */
-
-static struct mdir *mdirb_alloc(void)
-{
-	struct mdirb *mdirb = Malloc(sizeof(*mdirb));
-	LIST_INIT(&mdirb->msgs);
-	LIST_INIT(&mdirb->listeners);
-	mdirb->nb_msgs = 0;
-	mdirb->nb_unread = 0;
-	mdir_cursor_ctor(&mdirb->cursor);
-	return &mdirb->mdir;
-}
-
-static void mdirb_free(struct mdir *mdir)
-{
-	struct mdirb *mdirb = mdir2mdirb(mdir);
-	
-	struct sc_msg *msg;
-	while (NULL != (msg = LIST_FIRST(&mdirb->msgs))) {
-		LIST_REMOVE(msg, entry);
-		mdirb->nb_msgs --;
-		sc_msg_unref(msg);
-	}
-	assert(mdirb->nb_msgs == 0);
-	
-	struct mdirb_listener *listener;
-	while (NULL != (listener = LIST_FIRST(&mdirb->listeners))) {
-		LIST_REMOVE(listener, entry);
-	}
-	
-	mdir_cursor_dtor(&mdirb->cursor);
-	free(mdirb);
-}
-
-extern inline struct mdirb *mdir2mdirb(struct mdir *);
-extern inline void mdirb_listener_ctor(struct mdirb_listener *, struct mdirb *, void (*)(struct mdirb_listener *, struct mdirb *));
-extern inline void mdirb_listener_dtor(struct mdirb_listener *);
-
-/*
  * Global Notifications
  */
 
@@ -92,6 +52,52 @@ static void notify(struct mdirb *mdirb, enum mdir_action action, struct sc_msg *
 		listener->cb(listener, mdirb, action, msg);
 	}
 }
+
+/*
+ * MDir allocator
+ */
+
+static struct mdir *mdirb_alloc(void)
+{
+	struct mdirb *mdirb = Malloc(sizeof(*mdirb));
+	LIST_INIT(&mdirb->msgs);
+	LIST_INIT(&mdirb->listeners);
+	mdirb->nb_msgs = 0;
+	mdirb->nb_unread = 0;
+	mdir_cursor_ctor(&mdirb->cursor);
+	return &mdirb->mdir;
+}
+
+static void mdirb_del_all_msgs(struct mdirb *mdirb)
+{
+	struct sc_msg *msg;
+	while (NULL != (msg = LIST_FIRST(&mdirb->msgs))) {
+		LIST_REMOVE(msg, entry);
+		notify(mdirb, MDIR_REM, msg);
+		sc_msg_unref(msg);
+	}
+	mdirb->nb_unread = 0;
+	mdirb->nb_msgs = 0;
+}
+
+static void mdirb_free(struct mdir *mdir)
+{
+	struct mdirb *mdirb = mdir2mdirb(mdir);
+	
+	mdirb_del_all_msgs(mdirb);
+
+	struct mdirb_listener *listener;
+	while (NULL != (listener = LIST_FIRST(&mdirb->listeners))) {
+		LIST_REMOVE(listener, entry);
+	}
+	
+	mdir_cursor_dtor(&mdirb->cursor);
+	free(mdirb);
+}
+
+extern inline struct mdirb *mdir2mdirb(struct mdir *);
+extern inline void mdirb_listener_ctor(struct mdirb_listener *, struct mdirb *, void (*)(struct mdirb_listener *, struct mdirb *));
+extern inline void mdirb_listener_dtor(struct mdirb_listener *);
 
 /*
  * Refresh an mdir msg list & count.
@@ -198,11 +204,38 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	notify(mdirb, MDIR_ADD, msg);
 }
 
+static void err_msg(struct mdir *mdir, struct header *h, void *data)
+{
+	/* Merely displaying a dialog to warn user is not enough since the
+	 * transient message was already integrated (and may have had side effects like
+	 * tagging another message as read for instance). We must then reset this mdir's
+	 * cursor so that the user view corresponds to the reality.
+	 */
+	bool *changed = (bool *)data;
+	*changed = true;
+	struct header_field *hf_status = header_find(h, SC_STATUS_FIELD, NULL);
+	struct header_field *hf_type = header_find(h, SC_TYPE_FIELD, NULL);
+	char str[1024];
+	snprintf(str, sizeof(str), "Folder cannot be patched with message of type %s : %s",
+		hf_type ? hf_type->value : "NONE",
+		hf_status ? hf_status->value : "Reason unknown");
+	alert(GTK_MESSAGE_ERROR, str);
+	(void)mdir;
+}
+
 void mdirb_refresh(struct mdirb *mdirb)
 {
 	debug("Refreshing mdirb %s", mdirb->mdir.path);
 	bool changed = false;
-	mdir_patch_list(&mdirb->mdir, &mdirb->cursor, false, add_msg, rem_msg, &changed);
+	// First check for error
+	mdir_patch_list(&mdirb->mdir, &mdirb->cursor, false, NULL, NULL, err_msg, &changed);
+	if (changed) {
+		debug("Reseting mdir cursor");
+		mdirb_del_all_msgs(mdirb);
+		mdir_cursor_reset(&mdirb->cursor);
+	}
+	changed = false;
+	mdir_patch_list(&mdirb->mdir, &mdirb->cursor, false, add_msg, rem_msg, NULL, &changed);
 	if (changed) {
 		debug("noticing listeners because content changed");
 		struct mdirb_listener *listener, *tmp;

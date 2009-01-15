@@ -584,54 +584,60 @@ extern inline void mdir_cursor_ctor(struct mdir_cursor *cursor);
 extern inline void mdir_cursor_dtor(struct mdir_cursor *cursor);
 extern inline void mdir_cursor_reset(struct mdir_cursor *cursor);
 
-void mdir_patch_list(
-	struct mdir *mdir, struct mdir_cursor *cursor, bool unsync_only,
+static void synch_list(
+	struct mdir *mdir, struct mdir_cursor *cursor,
 	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *),
 	void (*rem_cb)(struct mdir *, mdir_version, void *),
 	void *data)
 {
-	mdir_reload(mdir);	// journals may have changed, other appended
+  	// List content of journals
 	struct jnl *jnl;
-	if (! unsync_only) { // List content of journals
-		mdir_version from = cursor->last_listed_sync + 1;
-		debug("listing synched from version %"PRIversion, from);
-		STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
-			if (jnl->version + jnl->nb_patches <= from) {
-				debug("  jnl from %"PRIversion" to %"PRIversion" is too short", jnl->version, jnl->version + jnl->nb_patches);
-				continue;
-			}
-			if (from < jnl->version) from = jnl->version;	// a gap
-			for (unsigned index = from - jnl->version; index < jnl->nb_patches; index++) {
-				enum mdir_action action;
-				struct header *h = jnl_read(jnl, index, &action);
-				on_error return;
-				if (! h) continue;
-				if (action == MDIR_REM) {
-					if (rem_cb) {
-						mdir_version target = header_target(h);
-						unless_error rem_cb(mdir, target, data);
-						else error_clear();
-					}
-				} else {	// MDIR_ADD
-					assert(action == MDIR_ADD);
-					if (rem_cb) {
-						struct header_field *localid_field = header_find(h, SC_LOCALID_FIELD, NULL);
-						if (localid_field) {	// we may already have reported it when it was present
-							mdir_version local = mdir_str2version(localid_field->value);
-							on_error error_clear();
-							else if (local <= cursor->last_listed_unsync) {	// we already reported it
-								rem_cb(mdir, -local, data);
-							}
+	mdir_version from = cursor->last_listed_sync + 1;
+	debug("listing synched from version %"PRIversion, from);
+	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
+		if (jnl->version + jnl->nb_patches <= from) {
+			debug("  jnl from %"PRIversion" to %"PRIversion" is too short", jnl->version, jnl->version + jnl->nb_patches);
+			continue;
+		}
+		if (from < jnl->version) from = jnl->version;	// a gap
+		for (unsigned index = from - jnl->version; index < jnl->nb_patches; index++) {
+			enum mdir_action action;
+			struct header *h = jnl_read(jnl, index, &action);
+			on_error return;
+			if (! h) continue;
+			if (action == MDIR_REM) {
+				if (rem_cb) {
+					mdir_version target = header_target(h);
+					unless_error rem_cb(mdir, target, data);
+					else error_clear();
+				}
+			} else {	// MDIR_ADD
+				assert(action == MDIR_ADD);
+				if (rem_cb) {
+					struct header_field *localid_field = header_find(h, SC_LOCALID_FIELD, NULL);
+					if (localid_field) {	// we may already have reported it when it was present
+						mdir_version local = mdir_str2version(localid_field->value);
+						on_error error_clear();
+						else if (local <= cursor->last_listed_unsync) {	// we already reported it
+							rem_cb(mdir, -local, data);
 						}
 					}
-					if (put_cb) put_cb(mdir, h, jnl->version + index, data);
 				}
-				header_unref(h);
-				cursor->last_listed_sync = jnl->version + index;
-				on_error return;
+				if (put_cb) put_cb(mdir, h, jnl->version + index, data);
 			}
+			header_unref(h);
+			cursor->last_listed_sync = jnl->version + index;
+			on_error return;
 		}
 	}
+}
+
+static void transient_list(
+	struct mdir *mdir, struct mdir_cursor *cursor,
+	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *),
+	void (*rem_cb)(struct mdir *, mdir_version, void *),
+	void *data)
+{
 	// List content of ".tmp" subdirectory which holds not yet acked patches.
 	// These are removed by mdsyncc when the patch is acked.
 	char temp[PATH_MAX];
@@ -674,6 +680,67 @@ void mdir_patch_list(
 		on_error break;
 	}
 	if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
+}
+
+static void err_list(
+	struct mdir *mdir,
+	void (*err_cb)(struct mdir *, struct header *, void *),
+	void *data)
+{
+	// List content of ".err" subdirectory which holds failed patches.
+	// We delete them as soon as they are reported.
+	char temp[PATH_MAX];
+	int dirlen = snprintf(temp, sizeof(temp), "%s/.err", mdir->path);
+	debug("listing %s for failed patches", temp);
+	DIR *dir = opendir(temp);
+	if (! dir) {
+		if (errno == ENOENT) return;
+		with_error(errno, "opendir(%s)", temp) return;
+	}
+	struct dirent *dirent;
+	while (NULL != (dirent = readdir(dir))) {	// will return the patches in random order
+		char const *const filename = dirent->d_name;
+		debug("  considering '%s'", filename);
+		// patch files start with the action code '+' or '-'.
+		enum mdir_action action;
+		if (filename[0] == '+') action = MDIR_ADD;
+		else if (filename[0] == '-') action = MDIR_REM;
+		else continue;
+		snprintf(temp+dirlen, sizeof(temp)-dirlen, "/%s", filename);
+		mdir_version version = 0;
+		if_fail (version = mdir_str2version(filename+1)) {
+			error("please fix %s", temp);
+			error_clear();
+			continue;
+		}
+		struct header *h = header_from_file(temp);
+		on_error break;
+		err_cb(mdir, h, data);
+		header_unref(h);
+		if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) return;
+		on_error break;
+	}
+	if (closedir(dir) < 0) with_error(errno, "closedir(%s)", temp) return;
+}
+
+void mdir_patch_list(
+	struct mdir *mdir, struct mdir_cursor *cursor, bool unsync_only,
+	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *),
+	void (*rem_cb)(struct mdir *, mdir_version, void *),
+	void (*err_cb)(struct mdir *, struct header *, void *),
+	void *data)
+{
+	mdir_reload(mdir);	// journals may have changed, other appended
+	if (put_cb || rem_cb) {
+		if (! unsync_only) {
+			if_fail (synch_list(mdir, cursor, put_cb, rem_cb, data)) return;
+		}
+
+		if_fail (transient_list(mdir, cursor, put_cb, rem_cb, data)) return;
+	}
+	if (err_cb) {
+		if_fail (err_list(mdir, err_cb, data)) return;
+	}
 }
 
 void mdir_folder_list(struct mdir *mdir, bool new_only, void (*cb)(struct mdir *, struct mdir *, bool, char const *, void *), void *data)
