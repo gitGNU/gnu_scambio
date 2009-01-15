@@ -53,7 +53,7 @@ static void ls_transients(struct mdirc *mdirc, char *folder)
 {
 	char filename[PATH_MAX];
 	int dirlen = snprintf(filename, sizeof(filename), "%s/.tmp", mdirc->mdir.path);
-	debug("Listing all transient pathes in '%s'", filename);
+	debug("Listing all transient patches in '%s'", filename);
 	DIR *dir = opendir(filename);
 	if (! dir) {
 		if (errno == ENOENT) return;

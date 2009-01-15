@@ -9,15 +9,15 @@ Code a simplier init function the init pth, error, log and conf altogether.
 
 * A console chat client for the Chat protocol
 
-* A merePIM
-
-* smtpd should unencode message content if encoded
-
-* smtpd must read all users tosend box and try to send it (to a single relay) then del and put them to users send box.
-
-* smtp messages should name the resource (using the sc-name field ? Or maybe using two parameters to the resource field, url and name - and use this as well for merefs resources)
-
-* A mereNotifier fed by mdsyncc (from a pipe)
-
 * SNMP counters
 
+* Sendmail should put send emails into mailboxes/Sent/from instead of just 
+mailboxes/Sent, so that any user may have perm to read/write his own sentBox.
+
+* A Stribution client
+
+- independant of vadrouille so that you need only one conf, and it can access 
+  all of a user folders (hint : beware of loops). One daemon for all users, 
+configured by patches that a user put in the directory where he can write 
+(these must be authentified, so mdsyncd definitively needs to add username to
+all submited patches - addition or removal).
