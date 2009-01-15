@@ -20,9 +20,22 @@
 
 char const *sc_tm2gmfield(struct tm *tm, bool with_hour);
 char const *sc_ts2gmfield(time_t ts, bool with_hour);
+
+/* Parse the header formated time string (UT) into local time components (human values, ie
+ * month and day starts at 1, etc).
+ */
 void sc_gmfield2uint(char const *str, unsigned *year, unsigned *month, unsigned *day, unsigned *hour, unsigned *min, unsigned *sec, bool *hour_set);
+
+/* Same as above but returns a local timestamp instead, plus a boolean indicating if the
+ * hour/min/sec was set (otherwise the timestamp returned is the one for 0h0m0s).
+ */
 time_t sc_gmfield2ts(char const *str, bool *hour_set);
-int month_days(unsigned year, unsigned month);	// month is from 0 to 11
+
+/* Takes a header formated time string and convert it to a human readable text string (local time).
+ */
 int sc_gmfield2str(char *buf, size_t maxlen, char const *gm);
+
+
+int month_days(unsigned year, unsigned month);	// month is from 0 to 11
 
 #endif

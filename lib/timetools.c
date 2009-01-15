@@ -132,7 +132,7 @@ int sc_gmfield2str(char *buf, size_t maxlen, char const *gm)
 	unsigned year, month, day, hour, min, sec;
 	bool hour_set;
 	if_fail (sc_gmfield2uint(gm, &year, &month, &day, &hour, &min, &sec, &hour_set)) return 0;
-	int len = snprintf(buf, maxlen, "%u-%u-%u", year, month+1, day);
+	int len = snprintf(buf, maxlen, "%04u-%02u-%02u", year, month, day);
 	// TODO: display min only if min && sec !=0, and sec only if != 0
 	if (hour_set) len += snprintf(buf+len, maxlen-len, " %uh%um%us", hour, min, sec);
 	return len;
