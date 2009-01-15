@@ -48,7 +48,7 @@ else
 	fi
 fi
 
-AC_SUBST(GTK_ICONDIR, "icons/hicolor/scalable/apps")
+AC_SUBST(GTK_ICONDIR, "icons/hicolor")
 
 # Checks for header files.
 AC_HEADER_STDC

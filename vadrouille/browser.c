@@ -332,13 +332,10 @@ static void browser_ctor(struct browser *browser, char const *root)
 	// Add per plugin global functions
 	struct sc_plugin *plugin;
 	LIST_FOREACH(plugin, &sc_plugins, entry) {
-		if (plugin->nb_global_functions == 0 && plugin->nb_dir_functions == 0) continue;
-		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), gtk_separator_tool_item_new(), -1);
-		GtkToolItem *title = gtk_tool_item_new();
-		gtk_container_add(GTK_CONTAINER(title), gtk_label_new(plugin->name));
-		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), title, -1);
 		for (unsigned f = 0; f < plugin->nb_global_functions; f++) {
-			GtkToolItem *button = gtk_tool_button_new(plugin->global_functions[f].icon, plugin->global_functions[f].label);
+			GtkWidget *icon = plugin->global_functions[f].icon_name ?
+				gtk_image_new_from_file(plugin->global_functions[f].icon_name) : NULL;
+			GtkToolItem *button = gtk_tool_button_new(icon, plugin->global_functions[f].label);
 			gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
 			COMPILE_ASSERT(sizeof_array(browser->globfunc2myself) >= sizeof_array(plugin->global_functions));
 			browser->globfunc2myself[browser->nb_g2m].function = plugin->global_functions+f;
@@ -347,7 +344,9 @@ static void browser_ctor(struct browser *browser, char const *root)
 			browser->nb_g2m++;
 		}
 		for (unsigned f = 0; f < plugin->nb_dir_functions; f++) {
-			GtkToolItem *button = gtk_tool_button_new(plugin->dir_functions[f].icon, plugin->dir_functions[f].label);
+			GtkWidget *icon = plugin->dir_functions[f].icon_name ?
+				gtk_image_new_from_file(plugin->dir_functions[f].icon_name) : NULL;
+			GtkToolItem *button = gtk_tool_button_new(icon, plugin->dir_functions[f].label);
 			gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
 			COMPILE_ASSERT(sizeof_array(browser->dirfunc2myself) >= sizeof_array(plugin->dir_functions));
 			browser->dirfunc2myself[browser->nb_d2m].function = plugin->dir_functions+f;

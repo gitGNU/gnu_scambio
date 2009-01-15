@@ -49,13 +49,13 @@ struct sc_plugin {
 	} const *ops;
 	unsigned nb_global_functions;
 	struct sc_plugin_global_function {
-		GtkWidget *icon;	// may be NULL
-		char const *label;
+		char const *icon_name;	// may be NULL
+		char const *label;	// may be NULL
 		void (*cb)(GtkWindow *);	// may be NULL
 	} global_functions[8];
 	unsigned nb_dir_functions;
 	struct sc_plugin_dir_function {
-		GtkWidget *icon;
+		char const *icon_name;
 		char const *label;
 		void (*cb)(struct mdirb *, char const *name, GtkWindow *);
 	} dir_functions[8];

@@ -608,7 +608,7 @@ static struct sc_plugin plugin = {
 	.global_functions = {},
 	.nb_dir_functions = 1,
 	.dir_functions = {
-		{ NULL, "Add", function_add_to_cal },
+		{ TOSTR(ICONDIR)"/26x26/apps/calendar.png", NULL, function_add_to_cal },
 	},
 };
 

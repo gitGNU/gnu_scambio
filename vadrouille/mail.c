@@ -310,7 +310,7 @@ static struct sc_plugin plugin = {
 	.ops = &ops,
 	.nb_global_functions = 1,
 	.global_functions = {
-		{ NULL, "New", compose_cb },
+		{ TOSTR(ICONDIR)"/26x26/apps/mail.png", NULL, compose_cb },
 	},
 	.nb_dir_functions = 0,
 	.dir_functions = {},

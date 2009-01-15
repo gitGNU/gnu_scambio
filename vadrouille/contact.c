@@ -587,7 +587,7 @@ static struct sc_plugin plugin = {
 	.global_functions = {},
 	.nb_dir_functions = 1,
 	.dir_functions = {
-		{ NULL, "New", contact_new_cb },
+		{ TOSTR(ICONDIR)"/26x26/apps/contact.png", NULL, contact_new_cb },
 	},
 };
 

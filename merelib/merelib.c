@@ -114,7 +114,7 @@ void init(char const *name, int nb_args, char *args[])
 	gtk_init(&nb_args, &args);
 #	endif
 	char icon_fname[PATH_MAX];
-	snprintf(icon_fname, sizeof(icon_fname), TOSTR(ICONDIR) "/%s.png", app_name);
+	snprintf(icon_fname, sizeof(icon_fname), TOSTR(ICONDIR) "/scalable/apps/%s.png", app_name);
 	gtk_window_set_default_icon_from_file(icon_fname, NULL);
 }
 

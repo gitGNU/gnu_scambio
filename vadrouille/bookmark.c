@@ -176,7 +176,7 @@ static struct sc_plugin bmark_plugin = {
 	.global_functions = {},
 	.nb_dir_functions = 1,
 	.dir_functions = {
-		{ NULL, "Add", function_add_bmark },
+		{ TOSTR(ICONDIR)"/26x26/apps/bmark.png", NULL, function_add_bmark },
 	},
 };
 
