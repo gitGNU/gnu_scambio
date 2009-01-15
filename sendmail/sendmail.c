@@ -40,7 +40,7 @@ static void init_conf(void)
 	conf_set_default_int("SC_LOG_LEVEL", 3);
 	conf_set_default_str("SC_FILED_HOST", "localhost");
 	conf_set_default_str("SC_FILED_PORT", DEFAULT_FILED_PORT);
-	conf_set_default_str("SC_USERNAME", "sendmail");
+	conf_set_default_str("SC_USERNAME", "smtpd");
 }
 
 static void init_log(void)
