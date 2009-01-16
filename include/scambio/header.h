@@ -228,5 +228,6 @@ mdir_version header_target(struct header *);
 #define SC_DENY_WRITE_FIELD  "sc-deny-write"
 #define SC_DENY_READ_FIELD   "sc-deny-read"
 #define SC_DENY_ADMIN_FIELD  "sc-deny-admin"
+#define SC_USER_FIELD        "sc-user"
 
 #endif
