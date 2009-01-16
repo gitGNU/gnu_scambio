@@ -74,6 +74,35 @@ static void *crawler_thread(void *data)
  * Read delivered forwards, and move the patches from to_send to sent with appropriate status.
  */
 
+static struct mdir *get_or_create_mdir(char const *sender)
+{
+	debug("for sender = '%s'", sender);
+	char sentbox[PATH_MAX];
+	int len = snprintf(sentbox, sizeof(sentbox), "%s/", sent->path);
+	char const *subdir_name = sentbox + len;
+	for (char const *c = sender; len < (int)sizeof(sentbox)-1 && *c; c++, len++) {
+		sentbox[len] = *c != '/' ? *c : '_';
+	}
+	sentbox[len] = '\0';
+	struct mdir *mdir = mdir_lookup(sentbox);
+	unless_error return mdir;
+	// Creates the mdir first
+	struct header *h = header_new();
+	(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
+	(void)header_field_new(h, SC_NAME_FIELD, subdir_name);
+	if_fail (mdir_patch_request(sent, MDIR_ADD, h)) return NULL;
+	header_unref(h);
+	// And give him to the sender
+	h = header_new();
+	(void)header_field_new(h, SC_TYPE_FIELD, SC_PERM_TYPE);
+	(void)header_field_new(h, SC_ALLOW_ADMIN_FIELD, sender);
+	(void)header_field_new(h, SC_DENY_READ_FIELD, "*");
+	if_fail (mdir_patch_request(sent, MDIR_ADD, h)) return NULL;
+	header_unref(h);
+	// Then return the mdir
+	return mdir_lookup(sentbox);
+}
+
 static void move_fwd(struct forward *fwd)
 {
 	debug("version=%"PRIversion, fwd->version);
@@ -88,7 +117,12 @@ static void move_fwd(struct forward *fwd)
 	char status[8];
 	snprintf(status, sizeof(status), "%d", fwd->status);
 	(void)header_field_new(header, SC_STATUS_FIELD, status);
-	mdir_patch_request(sent, MDIR_ADD, header);
+	// Write it to the user's sentbox
+	struct header_field *from_field = header_find(header, SC_FROM_FIELD, NULL);	// instead of the from field, use a field identifying scambio user, so we can delegate him the admin of this dir if we create it
+	if (from_field) {
+		struct mdir *sentbox = get_or_create_mdir(from_field->value);
+		unless_error mdir_patch_request(sentbox, MDIR_ADD, header);
+	}
 	header_unref(header);
 }
 

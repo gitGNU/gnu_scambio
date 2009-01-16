@@ -11,9 +11,6 @@ Code a simplier init function the init pth, error, log and conf altogether.
 
 * SNMP counters
 
-* Sendmail should put send emails into mailboxes/Sent/from instead of just 
-mailboxes/Sent, so that any user may have perm to read/write his own sentBox.
-
 * A Stribution client
 
 - independant of vadrouille so that you need only one conf, and it can access 
@@ -21,3 +18,5 @@ mailboxes/Sent, so that any user may have perm to read/write his own sentBox.
 configured by patches that a user put in the directory where he can write 
 (these must be authentified, so mdsyncd definitively needs to add username to
 all submited patches - addition or removal).
+
+* mdsyncd should add username that added a patch.
