@@ -84,7 +84,7 @@ size_t digest(char *out, size_t len, char const *in)
 size_t digest_file(char *out, char const *filename)
 {
 	debug("filename='%s'", filename);
-	size_t ret;
+	size_t ret = 0;
 	// Stupid method : read the whole file in RAM, then compute its digest
 	int fd = open(filename, O_RDONLY);
 	if (fd < 0) with_error(errno, "open(%s)", filename) return 0;

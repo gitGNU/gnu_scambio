@@ -1,23 +1,39 @@
 #!/usr/bin/make -f
 
+COMMONDIRS=commons lib
+SERVERDIRS=$(COMMONDIRS) mdsyncd filed smtpd sendmail
+CLIENTDIRS=$(COMMONDIRS) mdsyncc filec tools merefs merelib vadrouille icons
+
 build: build-stamp
 
 build-stamp:
 	mkdir -p debian/build
-	cd debian/build
-	../../configure --with-desktop=gtk && make
+	cd debian/build && ../../configure --with-desktop=gtk --prefix=/usr && make
 	touch $@
 
 binary: binary-arch binary-indep
 
 binary-arch: build
 
-binary-indep: build
-	mkdir -p debian/tmp/DEBIAN
+binary-indep: build binary-servers binary-clients
+
+binary-servers:
+	rm -rf debian/tmp && mkdir -p debian/tmp/DEBIAN
 	dpkg-gencontrol -pscambio-servers
-	make -C debian/build install DESTDIR=$(PWD)/debian/tmp/DEBIAN
-	dpkg-deb
+	for dir in $(SERVERDIRS) ; do \
+		make -C debian/build/$$dir install DESTDIR=$(PWD)/debian/tmp/DEBIAN ; \
+	done
+	dpkg-deb -b debian/tmp .
+
+binary-clients:
+	rm -rf debian/tmp && mkdir -p debian/tmp/DEBIAN
+	dpkg-gencontrol -pscambio-clients
+	for dir in $(CLIENTDIRS) ; do \
+		make -C debian/build/$$dir install DESTDIR=$(PWD)/debian/tmp/DEBIAN ; \
+	done
+	dpkg-deb -b debian/tmp .
 
 clean:
 	rm -f build-stamp
-	rm -rf debian/build
+	rm -rf debian/build debian/tmp
+
