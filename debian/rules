@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+
+build: build-stamp
+
+build-stamp:
+	mkdir -p debian/build
+	cd debian/build
+	../../configure --with-desktop=gtk && make
+	touch $@
+
+binary: binary-arch binary-indep
+
+binary-arch: build
+
+binary-indep: build
+	mkdir -p debian/tmp/DEBIAN
+	dpkg-gencontrol -pscambio-servers
+	make -C debian/build install DESTDIR=$(PWD)/debian/tmp/DEBIAN
+	dpkg-deb
+
+clean:
+	rm -f build-stamp
+	rm -rf debian/build
