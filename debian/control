@@ -1,0 +1,26 @@
+Source: scambio
+Maintainer: Cedric Cellier <rixed@free.fr>
+Section: contrib/comm
+Priority: extra
+Standards-Version: 3.8.0
+Build-Depends: libpth-dev libpth20 libgnutls-dev uuid-dev libgtk2.0-dev libglib2.0-dev libgtkhtml3.14-dev
+Homepage: http://www.nongnu.org/scambio
+
+Package: scambio-servers
+Architecture: any
+Depends: libpth20 libgnutls26 libuuid1
+Description: Collection of servers handling Scambio "cloud" service.
+ Scambio is constitued from two main server : mdsyncd which handle message synchronization,
+ and filed which handle file synchronization (both being independant). User client interface
+ only connect to these two.
+ .
+ On top of these, gateways are a special kind of client implementing other protocols (like SMTP).
+ They are also designed to lie on the server side, although not necessarily on the same host
+ then neither mdsyncd nor filed.
+
+Package: scambio-clients
+Architecture: any
+Depends: libpth20 libgnutls26 libuuid1 libgtk2.0-0 libglib2.0-0 libgtkhtml3.14-19
+Description: Client interfaces to Scambio "cloud" service.
+ Stop telneting to your scambio servers !
+ Install these powerfull tools to create new messages instead !
