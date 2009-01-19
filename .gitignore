@@ -21,3 +21,4 @@ config.h.in~
 ylwrap
 core
 .*.swp
+build-stamp
