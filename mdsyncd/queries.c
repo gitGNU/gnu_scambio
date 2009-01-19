@@ -76,8 +76,8 @@ void exec_sub(struct mdir_cmd *cmd, void *user_data)
 		sub = subscription_new(env, dir, version);
 		on_error status = 403;	// forbidden
 	}
-	error_clear();	// error dealt with
 	answer(env, cmd, status, is_error() ? error_str():"OK");
+	error_clear();	// error dealt with
 }
 
 void exec_unsub(struct mdir_cmd *cmd, void *user_data)

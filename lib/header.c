@@ -177,11 +177,7 @@ static void header_ctor(struct header *h)
 struct header *header_new(void)
 {
 	struct header *h = Malloc(sizeof(*h));
-	if (! h) with_error(errno, "Cannot malloc header") return NULL;
-	if_fail (header_ctor(h)) {
-		free(h);
-		h = NULL;
-	}
+	header_ctor(h);
 	return h;
 }
 

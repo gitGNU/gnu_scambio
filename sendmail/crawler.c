@@ -78,7 +78,7 @@ static struct mdir *get_or_create_mdir(char const *sender)
 {
 	debug("for sender = '%s'", sender);
 	char sentbox[PATH_MAX];
-	int len = snprintf(sentbox, sizeof(sentbox), "%s/", sent->path);
+	int len = snprintf(sentbox, sizeof(sentbox), "%s/", mdir_id(sent));
 	char const *subdir_name = sentbox + len;
 	for (char const *c = sender; len < (int)sizeof(sentbox)-1 && *c; c++, len++) {
 		sentbox[len] = *c != '/' ? *c : '_';
@@ -86,6 +86,7 @@ static struct mdir *get_or_create_mdir(char const *sender)
 	sentbox[len] = '\0';
 	struct mdir *mdir = mdir_lookup(sentbox);
 	unless_error return mdir;
+	error_clear();
 	// Creates the mdir first
 	struct header *h = header_new();
 	(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
@@ -93,14 +94,16 @@ static struct mdir *get_or_create_mdir(char const *sender)
 	if_fail (mdir_patch_request(sent, MDIR_ADD, h)) return NULL;
 	header_unref(h);
 	// And give him to the sender
+	if_fail (mdir = mdir_lookup(sentbox)) return NULL;
 	h = header_new();
 	(void)header_field_new(h, SC_TYPE_FIELD, SC_PERM_TYPE);
 	(void)header_field_new(h, SC_ALLOW_ADMIN_FIELD, sender);
+	(void)header_field_new(h, SC_ALLOW_WRITE_FIELD, conf_get_str("SC_USERNAME"));
 	(void)header_field_new(h, SC_DENY_READ_FIELD, "*");
-	if_fail (mdir_patch_request(sent, MDIR_ADD, h)) return NULL;
+	if_fail (mdir_patch_request(mdir, MDIR_ADD, h)) return NULL;
 	header_unref(h);
 	// Then return the mdir
-	return mdir_lookup(sentbox);
+	return mdir;
 }
 
 static void move_fwd(struct forward *fwd)
@@ -110,7 +113,7 @@ static void move_fwd(struct forward *fwd)
 	struct header *header = mdir_read(to_send, fwd->version, NULL);
 	on_error return;
 	assert(header);
-	// We then delete this message so that it will never sent again
+	// We then delete this message so that it will never be sent again
 	if_fail (mdir_del_request(to_send, fwd->version)) return;
 	// And copy it (modified) to the sent mdir
 	(void)header_field_new(header, SC_STOP_FIELD, sc_ts2gmfield(time(NULL), true));
