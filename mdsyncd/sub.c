@@ -52,8 +52,7 @@ static void subscription_ctor(struct subscription *sub, struct cnx_env *env, cha
 struct subscription *subscription_new(struct cnx_env *env, char const *dirId, mdir_version version)
 {
 	debug("for dirId = '%s'", dirId);
-	struct subscription *sub = malloc(sizeof(*sub));
-	if (! sub) with_error(ENOMEM, "malloc subscription") return NULL;
+	struct subscription *sub = Malloc(sizeof(*sub));
 	if_fail (subscription_ctor(sub, env, dirId, version)) {
 		free(sub);
 		return NULL;

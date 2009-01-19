@@ -69,6 +69,8 @@ static inline struct mdirc *mdir2mdirc(struct mdir *mdir)
 	return DOWNCAST(mdir, mdir, mdirc);
 }
 
+bool mdirc_hidden(struct mdirc *);
+
 void push_path(char const *path);
 
 #endif

@@ -27,6 +27,10 @@
 #include <assert.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <pth.h>
 #include "scambio/queue.h"
 #include "scambio.h"
@@ -70,6 +74,20 @@ static void mdirc_free(struct mdir *mdir)
 		c2l_del(c2l);
 	}
 	free(mdirc);
+}
+
+bool mdirc_hidden(struct mdirc *mdirc)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/.hide", mdirc->mdir.path);
+	int fd = open(path, O_RDONLY);
+	if (fd > 0) {
+		(void)close(fd);
+		return true;
+	}
+	if (errno == ENOENT) return false;
+	error_push(errno, "Cannot open '%s'", path);
+	return false;
 }
 
 /*

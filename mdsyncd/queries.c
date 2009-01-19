@@ -66,17 +66,18 @@ void exec_sub(struct mdir_cmd *cmd, void *user_data)
 	char const *const dir = cmd->args[0].string;
 	mdir_version const version = mdir_str2version(cmd->args[1].string);
 	debug("doing SUB for '%s', last version %"PRIversion, dir, version);
-	int substatus = 0;
+	int status = 200;
 	// Check if we are already registered
 	struct subscription *sub = subscription_find(env, dir);
 	if (sub) {
 		subscription_reset_version(sub, version);
-		substatus = 1;	// signal that it's a reset
+		status = 304;	// signal that it's a reset
 	} else {
 		sub = subscription_new(env, dir, version);
+		on_error status = 403;	// forbidden
 	}
-	answer(env, cmd, (is_error() ? 500:200)+substatus, is_error() ? error_str():"OK");
 	error_clear();	// error dealt with
+	answer(env, cmd, status, is_error() ? error_str():"OK");
 }
 
 void exec_unsub(struct mdir_cmd *cmd, void *user_data)

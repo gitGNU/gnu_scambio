@@ -28,7 +28,6 @@
 #include <unistd.h>
 #include <pth.h>
 #include "misc.h"
-#include "hide.h"
 #include "scambio.h"
 #include "mdsyncc.h"
 #include "scambio/header.h"
@@ -105,7 +104,7 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	Make_path(path, sizeof(path), (char *)parent_path, name, NULL);
 	debug("parsing subdirectory '%s' of '%s' (dirId = %s)", name, (char *)parent_path, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
-	if (!mdirc->subscribed && !new) {
+	if (!mdirc->subscribed && !new && !mdirc_hidden(mdirc)) {
 		if (mdirc->quarantine > 0 && time(NULL) < mdirc->quarantine) return;
 		// This is not enough to be synched : we must ensure that we have received the patch yet
 		// (this is not fatal to subscribe twice to a dirId, but better avoid it)
@@ -145,10 +144,8 @@ void *writer_thread(void *arg)
 
 void writer_begin(void)
 {
-	hide_begin();
 }
 
 void writer_end(void)
 {
-	hide_end();
 }
