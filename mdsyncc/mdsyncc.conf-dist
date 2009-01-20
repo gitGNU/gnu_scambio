@@ -14,6 +14,9 @@
 #export SC_MDIRD_HOST=localhost
 #export SC_MDIRD_PORT=21435
 
+## USER
+#export SC_USERNAME=Alice
+
 ## System user/group to setuid to
 #export SC_RUNASUSER=scambio
 #export SC_RUNASGROUP=scambio

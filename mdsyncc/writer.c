@@ -105,17 +105,18 @@ static void parse_dir_rec(struct mdir *parent, struct mdir *mdir, bool new, char
 	debug("parsing subdirectory '%s' of '%s' (dirId = %s)", name, (char *)parent_path, mdir_id(&mdirc->mdir));
 	// Subscribe to the directory if its not already done
 	if (!mdirc->subscribed && !new && !mdirc_hidden(mdirc)) {
-		if (mdirc->quarantine > 0 && time(NULL) < mdirc->quarantine) return;
-		// This is not enough to be synched : we must ensure that we have received the patch yet
-		// (this is not fatal to subscribe twice to a dirId, but better avoid it)
-		debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
-		struct command *cmd = command_get_by_path(mdirc, kw_sub, "");
-		if (cmd) {
-			debug("already subscribing to %s", mdir_id(&mdirc->mdir));
-		} else {
-			(void)command_new(kw_sub, mdirc, mdir_id(&mdirc->mdir), "", NULL);
+		if (mdirc->quarantine == 0 || time(NULL) >= mdirc->quarantine) {
+			// This is not enough to be synched : we must ensure that we have received the patch yet
+			// (this is not fatal to subscribe twice to a dirId, but better avoid it)
+			debug("subscribing to dir %s", mdir_id(&mdirc->mdir));
+			struct command *cmd = command_get_by_path(mdirc, kw_sub, "");
+			if (cmd) {
+				debug("already subscribing to %s", mdir_id(&mdirc->mdir));
+			} else {
+				(void)command_new(kw_sub, mdirc, mdir_id(&mdirc->mdir), "", NULL);
+			}
+			on_error return;
 		}
-		on_error return;
 	}
 	// Synchronize up its content
 	debug("list patches");
