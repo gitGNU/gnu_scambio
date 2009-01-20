@@ -158,19 +158,23 @@ static bool check_user_perms(struct mdir_user *user, struct header *header, char
 	return check_user_perms(user, default_perms, allow_field, deny_field);
 }
 
+bool mdir_user_can_admin(struct mdir_user *user, struct header *header)
+{
+	return check_user_perms(user, header, SC_ALLOW_ADMIN_FIELD, SC_DENY_ADMIN_FIELD);
+}
+
 bool mdir_user_can_read(struct mdir_user *user, struct header *header)
 {
-	return check_user_perms(user, header, SC_ALLOW_READ_FIELD, SC_DENY_READ_FIELD);
+	return
+		check_user_perms(user, header, SC_ALLOW_READ_FIELD, SC_DENY_READ_FIELD) ||
+		mdir_user_can_admin(user, header);
 }
 
 bool mdir_user_can_write(struct mdir_user *user, struct header *header)
 {
-	return check_user_perms(user, header, SC_ALLOW_WRITE_FIELD, SC_DENY_WRITE_FIELD);
-}
-
-bool mdir_user_can_admin(struct mdir_user *user, struct header *header)
-{
-	return check_user_perms(user, header, SC_ALLOW_ADMIN_FIELD, SC_DENY_ADMIN_FIELD);
+	return
+		check_user_perms(user, header, SC_ALLOW_WRITE_FIELD, SC_DENY_WRITE_FIELD) ||
+		mdir_user_can_admin(user, header);
 }
 
 /*
