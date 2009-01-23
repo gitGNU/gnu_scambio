@@ -119,31 +119,97 @@ static void refresh_cb(GtkToolButton *button, gpointer user_data)
 	browser_refresh(browser);
 }
 
-static void deldir_cb(GtkToolButton *button, gpointer user_data)
+static void cut_cb(GtkToolButton *button, gpointer user_data)
 {
 	(void)button;
 	struct browser *browser = (struct browser *)user_data;
-	char name[PATH_MAX];
 	struct mdirb *parent;
-	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name, &parent);
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(browser->clipboard_name), browser->clipboard_name, &parent);
 	if (! mdirb) {
-		alert(GTK_MESSAGE_ERROR, "Select first a folder as parent");
+		alert(GTK_MESSAGE_ERROR, "Select first a folder to cut");
 		return;
 	}
 	if (! parent) {
 		alert(GTK_MESSAGE_ERROR, "You must not delete the root folder");
 		return;
 	}
-	mdir_version to_del = mdir_get_folder_version(&parent->mdir, name);
+	mdir_version to_del = mdir_get_folder_version(&parent->mdir, browser->clipboard_name);
 	on_error {
 		alert_error();
 		return;
 	}
-	debug("Asked to delete folder named '%s' in parent dir '%s', version was %"PRIversion, name, parent->mdir.path, to_del);
+	debug("Asked to delete folder named '%s' in parent dir '%s', version was %"PRIversion, browser->clipboard_name, parent->mdir.path, to_del);
 	if (confirm("Aren't you afraid to remove this folder ?")) {
 		// To unmount a folder, one must delete the patch that mounted it
 		mdir_del_request(&parent->mdir, to_del);
+		browser->clipboard = mdirb;
 		browser_refresh(browser);
+	} else {
+		browser->clipboard = NULL;
+	}
+}
+
+static void copy_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(browser->clipboard_name), browser->clipboard_name, NULL);
+	if (! mdirb) {
+		alert(GTK_MESSAGE_ERROR, "Select a folder to copy");
+		return;
+	}
+	debug("Asked to copy folder #%s", mdir_id(&mdirb->mdir));
+	browser->clipboard = mdirb;
+}
+
+static bool mount_dirId(struct browser *browser, struct mdirb *parent, char const *dirId, char const *default_name)
+{
+	bool ret = false;
+
+	GtkWidget *name_entry = gtk_entry_new();
+	if (default_name) gtk_entry_set_text(GTK_ENTRY(name_entry), default_name);
+	struct sc_dialog *dialog = sc_dialog_new("Folder's name",
+		GTK_WINDOW(browser->window),
+		make_labeled_hbox("New name", name_entry));
+
+	if (sc_dialog_accept(dialog)) {
+		debug("Mount dirId '%s' into '%s' as '%s'", dirId, mdir_id(&parent->mdir), gtk_entry_get_text(GTK_ENTRY(name_entry)));
+		// Create first the new mount point
+		struct header *h = header_new();
+		(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
+		(void)header_field_new(h, SC_NAME_FIELD, gtk_entry_get_text(GTK_ENTRY(name_entry)));
+		(void)header_field_new(h, SC_DIRID_FIELD, dirId);
+		mdir_patch_request(&parent->mdir, MDIR_ADD, h);
+		header_unref(h);
+		on_error {
+			alert_error();
+			error_clear();
+		} else {
+			ret = true;
+		}
+	}
+	sc_dialog_del(dialog);
+
+	return ret;
+}
+
+static void paste_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	struct browser *browser = (struct browser *)user_data;
+	if (! browser->clipboard) {
+		alert(GTK_MESSAGE_ERROR, "Your clipboard is empty");
+		return;
+	}
+	char name[PATH_MAX];
+	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(name), name, NULL);
+	if (! mdirb) {
+		alert(GTK_MESSAGE_ERROR, "Select a folder to copy clipboard into");
+		return;
+	}
+	debug("Asked to insert folder #%s into #%s", mdir_id(&browser->clipboard->mdir), mdir_id(&mdirb->mdir));
+	if (mount_dirId(browser, mdirb, mdir_id(&browser->clipboard->mdir), browser->clipboard_name)) {
+		browser->clipboard = NULL;
 	}
 }
 
@@ -153,48 +219,33 @@ static void rename_cb(GtkToolButton *button, gpointer user_data)
 	struct browser *browser = (struct browser *)user_data;
 	char old_name[PATH_MAX];
 	struct mdirb *parent;
+	
 	struct mdirb *mdirb = get_selected_mdirb(browser, sizeof(old_name), old_name, &parent);
 	if (! mdirb) {
 		alert(GTK_MESSAGE_ERROR, "Rename what folder ?");
 		return;
 	}
+	
 	mdir_version old_version = mdir_get_folder_version(&parent->mdir, old_name);
 	on_error {
 		alert_error();
 		return;
 	}
+	
 	struct header *old_mount_point = mdir_read(&parent->mdir, old_version, NULL);
 	on_error {
 		alert_error();
 		return;
 	}
+	
 	struct header_field *dirId = header_find(old_mount_point, SC_DIRID_FIELD, NULL);
 	if (! dirId) {
 		alert(GTK_MESSAGE_ERROR, "Cannot find dirId of this mount point !");
-		return;
+	} else if (mount_dirId(browser, parent, dirId->value, NULL)) {
+		// Remove the former one
+		mdir_del_request(&parent->mdir, old_version);
+		browser_refresh(browser);
 	}
-	GtkWidget *name_entry = gtk_entry_new();
-	struct sc_dialog *dialog = sc_dialog_new("Rename folder",
-		GTK_WINDOW(browser->window),
-		make_labeled_hbox("New name", name_entry));
-	if (sc_dialog_accept(dialog)) {
-		debug("Rename folder '%s' to name : '%s'", old_name, gtk_entry_get_text(GTK_ENTRY(name_entry)));
-		// Create first the new mount point
-		struct header *h = header_new();
-		(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
-		(void)header_field_new(h, SC_NAME_FIELD, gtk_entry_get_text(GTK_ENTRY(name_entry)));
-		(void)header_field_new(h, SC_DIRID_FIELD, dirId->value);
-		mdir_patch_request(&parent->mdir, MDIR_ADD, h);
-		header_unref(h);
-		on_error {
-			alert_error();
-		} else {
-			// Remove the former one
-			mdir_del_request(&parent->mdir, old_version);
-			browser_refresh(browser);
-		}
-	}
-	sc_dialog_del(dialog);
 	header_unref(old_mount_point);
 }
 
@@ -298,6 +349,7 @@ static void browser_ctor(struct browser *browser, char const *root)
 	browser->iter = NULL;
 	browser->nb_d2m = 0;
 	browser->nb_g2m = 0;
+	browser->clipboard = NULL;
 
 	browser->store = gtk_tree_store_new(NB_FIELDS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
 	browser->tree = gtk_tree_view_new_with_model(GTK_TREE_MODEL(browser->store));
@@ -323,8 +375,10 @@ static void browser_ctor(struct browser *browser, char const *root)
 
 	browser->window = make_window(WC_FOLDERS, unref_win, browser);
 
-	GtkWidget *toolbar = make_toolbar(5,
-		GTK_STOCK_DELETE,  deldir_cb,  browser,
+	GtkWidget *toolbar = make_toolbar(7,
+		GTK_STOCK_CUT,     cut_cb,     browser,
+		GTK_STOCK_COPY,    copy_cb,    browser,
+		GTK_STOCK_PASTE,   paste_cb,   browser,
 		GTK_STOCK_REFRESH, refresh_cb, browser,
 		GTK_STOCK_NEW,     newdir_cb,  browser,
 		GTK_STOCK_CONVERT, rename_cb,  browser,
@@ -419,7 +473,7 @@ void browser_del(struct browser *browser)
  * Refresh
  */
 
-static void add_subfolder_rec(struct browser *browser, char const *name);
+static void add_subfolder_rec(struct browser *, char const *, struct mdirb *);
 static void add_subfolder_cb(struct mdir *parent, struct mdir *child, bool synched, char const *name, void *data)
 {
 	(void)parent;
@@ -429,11 +483,11 @@ static void add_subfolder_cb(struct mdir *parent, struct mdir *child, bool synch
 	// Recursive call
 	struct mdirb *prev_mdirb = browser->mdirb;
 	browser->mdirb = mdir2mdirb(child);
-	add_subfolder_rec(browser, name);
+	add_subfolder_rec(browser, name, prev_mdirb);
 	browser->mdirb = prev_mdirb;
 }
 
-static void add_subfolder_rec(struct browser *browser, char const *name)
+static void add_subfolder_rec(struct browser *browser, char const *name, struct mdirb *parent)
 {
 	// Add this name as a child of the given iterator
 	mdirb_refresh(browser->mdirb);
@@ -455,7 +509,7 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 		-1);
 	g_free(size_str);
 
-	if (browser->previously_selected == browser->mdirb) {
+	if (browser->previously_selected == browser->mdirb && browser->previous_parent == parent) {
 		// We cannot merely select the iter her, since addition of new rows will
 		// empty the selection (!)
 		// So we save the iterator for later
@@ -473,10 +527,10 @@ static void add_subfolder_rec(struct browser *browser, char const *name)
 
 void browser_refresh(struct browser *browser)
 {
-	browser->previously_selected = get_selected_mdirb(browser, 0, NULL, NULL);
+	browser->previously_selected = get_selected_mdirb(browser, 0, NULL, &browser->previous_parent);
 	browser->selected_iter_set = false;
 	gtk_tree_store_clear(browser->store);
-	add_subfolder_rec(browser, "root");
+	add_subfolder_rec(browser, "root", NULL);
 	gtk_tree_view_expand_all(GTK_TREE_VIEW(browser->tree));
 	if (browser->selected_iter_set) {
 		debug("Setting selection back to previous");

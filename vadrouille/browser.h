@@ -26,7 +26,7 @@ struct browser {
 	GtkWidget *tree;
 	GtkTreeStore *store;
 	// Used while recursively traversing the folders tree
-	struct mdirb *mdirb, *previously_selected;
+	struct mdirb *mdirb, *previously_selected, *previous_parent;
 	GtkTreeIter *iter;
 	GtkTreeIter selected_iter;
 	bool selected_iter_set;
@@ -45,6 +45,9 @@ struct browser {
 		struct sc_plugin_global_function *function;
 		struct browser *myself;
 	} globfunc2myself[16];
+	// We store the last cut or copied mdir here
+	struct mdirb *clipboard;	// mdirb are not refcounted, since never deleted.
+	char clipboard_name[PATH_MAX];	// name under which this folder was known (used as default for new mount points).
 };
 
 void browser_init(void);
