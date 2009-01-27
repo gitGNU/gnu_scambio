@@ -208,7 +208,7 @@ struct header_field *header_find(struct header const *h, char const *name, struc
 		hf != NULL;
 		hf = TAILQ_NEXT(hf, entry)
 	) {
-		if (0 == strcasecmp(hf->name, name)) {
+		if (!name || 0 == strcasecmp(hf->name, name)) {
 			debug("  found, value = %s", hf->value);
 			return hf;
 		}

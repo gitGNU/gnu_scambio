@@ -122,6 +122,7 @@ static inline void header_unref(struct header *h)
  * If previous is not NULL, will return the first matching. If previous
  * is set, will return the next field with this name.
  * If no (more) fields have this name, return NULL.
+ * name may be NULL, in which case all fields are returned.
  * Throws no error.
  */
 struct header_field *header_find(struct header const *, char const *name, struct header_field *prev);
