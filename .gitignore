@@ -22,3 +22,7 @@ ylwrap
 core
 .*.swp
 build-stamp
+debian/files
+debian/tmp
+scambio-clients_*.deb
+scambio-servers_*.deb

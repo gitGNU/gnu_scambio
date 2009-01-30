@@ -189,6 +189,7 @@ static struct sc_view *perm_editor_new(struct header *header, char const *name, 
 	GtkWidget *global_vbox = gtk_vbox_new(FALSE, 0);
 
 	// A title
+	// TODO: Check that user_can_admin this directory, and if not display a warning
 	GtkWidget *title = gtk_label_new(NULL);
 	char *markup = g_markup_printf_escaped("Edit permissions for folder <span style=\"italic\">%s</span>", name);
 	gtk_label_set_markup(GTK_LABEL(title), markup);
@@ -202,7 +203,7 @@ static struct sc_view *perm_editor_new(struct header *header, char const *name, 
 			t < sizeof_array(type2select) && editor->nb_rows < sizeof_array(editor->rows);
 			t++
 		) {
-			if (0 != strcmp(hf->value, type2select[t].field)) continue;
+			if (0 != strcmp(hf->name, type2select[t].field)) continue;
 			editor_add_row(editor, hf, t);
 			break;
 		}
@@ -220,8 +221,15 @@ static void set_perms(struct mdirb *mdirb, char const *name, GtkWindow *parent)
 {
 	(void)parent;
 	(void)name;
-	struct header *header = header_new();
-	(void)header_field_new(header, SC_TYPE_FIELD, SC_PERM_TYPE);
+	struct header *header;
+	if (mdirb->mdir.permissions) {
+		debug("Editing known permissions");
+		header = header_ref(mdirb->mdir.permissions);
+	} else {
+		debug("Editing unknown permissions");
+		header = header_new();
+		(void)header_field_new(header, SC_TYPE_FIELD, SC_PERM_TYPE);
+	}
 	(void)perm_editor_new(header, name, mdirb);
 	on_error alert_error();
 	header_unref(header);

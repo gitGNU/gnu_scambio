@@ -483,19 +483,24 @@ static void mdir_prepare_add(struct mdir *mdir, struct header *header, bool tran
 	
 static void mdir_confirm_add(struct mdir *mdir, struct header *header, mdir_version version)
 {
-	if (! header_is_directory(header)) return;
-	// Store the relation from name to version so that we can know what patch created what mount point
-	// Note : we must do that after patching (to have version number), but we must mdir_link
-	// _before_ patching, to rename transient dir instead of having jnl_patch create new dirs.
-	char path[PATH_MAX];
-	struct header_field *name_field = header_find(header, SC_NAME_FIELD, NULL);
-	assert(name_field);	// added by mdir_link is missing
-	debug("Add version info for mountpoint '%s' of '%s'", name_field->value, mdir->path);
-	snprintf(path, sizeof(path), "%s/.versionOf_%s", mdir->path, name_field->value);
-	int fd = creat(path, 0444);
-	if (fd < 0) with_error(errno, "creat(%s)", path) return;
-	Write_strs(fd, mdir_version2str(version), NULL);
-	(void)close(fd);
+	if (header_is_directory(header)) {
+		// Store the relation from name to version so that we can know what patch created what mount point
+		// Note : we must do that after patching (to have version number), but we must mdir_link
+		// _before_ patching, to rename transient dir instead of having jnl_patch create new dirs.
+		char path[PATH_MAX];
+		struct header_field *name_field = header_find(header, SC_NAME_FIELD, NULL);
+		assert(name_field);	// added by mdir_link is missing
+		debug("Add version info for mountpoint '%s' of '%s'", name_field->value, mdir->path);
+		snprintf(path, sizeof(path), "%s/.versionOf_%s", mdir->path, name_field->value);
+		int fd = creat(path, 0444);
+		if (fd < 0) with_error(errno, "creat(%s)", path) return;
+		Write_strs(fd, mdir_version2str(version), NULL);
+		(void)close(fd);
+	} else if (header_has_type(header, SC_PERM_TYPE)) {
+		// TODO: add the version as a field in the saved perm file, so that it's easier to replace
+		update_permissions(mdir, header);
+		// Note : Deleting a perm patch have no influence on actual permissions
+	}
 }
 
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
@@ -521,8 +526,6 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		// FIXME: if these fails we end up with an incomplete patch in the journal
 		if (action == MDIR_ADD) {
 			if_fail (mdir_confirm_add(mdir, header, version)) break;
-			if (header_has_type(header, SC_PERM_TYPE)) update_permissions(mdir, header);
-			// Note : Deleting a perm patch have no influence on actual permissions
 		}
 	} while (0);
 	(void)pth_rwlock_release(&mdir->rwlock);
