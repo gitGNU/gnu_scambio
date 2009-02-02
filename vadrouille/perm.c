@@ -201,6 +201,11 @@ static void apply_cb(GtkToolButton *button, gpointer user_data)
 		(void)header_field_new(h, type2select[field].field, username);
 	}
 
+	// Check it
+	if (! mdir_user_can_admin(user, h) && !confirm("You will have no permission to administrate this folder after that !")) {
+		return;
+	}
+
 	// Write it
 	if_fail (mdir_patch_request(&editor->mdirb->mdir, MDIR_ADD, h)) {
 		alert_error();
@@ -239,6 +244,7 @@ static struct sc_view *perm_editor_new(struct header *header, char const *name, 
 			break;
 		}
 	}
+	if (editor->nb_rows == 0) editor_add_row(editor, NULL, 0);
 
 	GtkWidget *window = make_window(WC_EDITOR, NULL, NULL);
 	gtk_box_pack_start(GTK_BOX(global_vbox), make_scrollable(editor->vbox), TRUE, TRUE, 0);
