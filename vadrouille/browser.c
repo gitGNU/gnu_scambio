@@ -312,6 +312,9 @@ static void new_message_notif(struct sc_msg_listener *listener, struct mdirb *md
 		// We want new stuff only
 		if (msg->was_read) return;
 
+		// We are not interrested in PERM messages
+		if (header_has_type(msg->header, SC_PERM_TYPE)) return;
+
 		char *descr = msg->plugin->ops->msg_descr(msg);
 		char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
 
