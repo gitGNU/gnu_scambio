@@ -180,6 +180,37 @@ static void editor_add_row(struct perm_editor *editor, struct header_field *hf, 
 	gtk_widget_show_all(row->hbox);
 }
 
+static void apply_cb(GtkToolButton *button, gpointer user_data)
+{
+	(void)button;
+	assert(! is_error());
+	struct perm_editor *editor = (struct perm_editor *)user_data;
+
+	// Build a header from the widget values
+	struct header *h = header_new();
+	(void)header_field_new(h, SC_TYPE_FIELD, SC_PERM_TYPE);
+	for (unsigned r = 0; r < editor->nb_rows; r++) {
+		unsigned field = gtk_combo_box_get_active(GTK_COMBO_BOX(editor->rows[r].combo));
+		assert(field < sizeof_array(type2select));
+		char const *username = gtk_entry_get_text(GTK_ENTRY(editor->rows[r].entry));
+		if (! username) {
+			alert(GTK_MESSAGE_ERROR, "Username field must not be blank (use '*' for all)");
+			header_unref(h);
+			return;
+		}
+		(void)header_field_new(h, type2select[field].field, username);
+	}
+
+	// Write it
+	if_fail (mdir_patch_request(&editor->mdirb->mdir, MDIR_ADD, h)) {
+		alert_error();
+	} else {
+		mdirb_refresh(editor->mdirb);
+		gtk_widget_destroy(editor->view.window);
+	}
+	header_unref(h);
+}
+
 static struct sc_view *perm_editor_new(struct header *header, char const *name, struct mdirb *mdirb)
 {
 	struct perm_editor *editor = Malloc(sizeof(*editor));
@@ -208,11 +239,16 @@ static struct sc_view *perm_editor_new(struct header *header, char const *name, 
 			break;
 		}
 	}
-	editor_add_row(editor, NULL, 0);
 
 	GtkWidget *window = make_window(WC_EDITOR, NULL, NULL);
 	gtk_box_pack_start(GTK_BOX(global_vbox), make_scrollable(editor->vbox), TRUE, TRUE, 0);
 	gtk_container_add(GTK_CONTAINER(window), global_vbox);
+	
+	GtkWidget *toolbar = make_toolbar(2,
+		GTK_STOCK_APPLY,  apply_cb, editor,
+		GTK_STOCK_CANCEL, close_cb, window);
+	gtk_box_pack_end(GTK_BOX(global_vbox), toolbar, FALSE, FALSE, 0);
+
 	sc_view_ctor(&editor->view, perm_editor_del, window);
 	return &editor->view;
 }
