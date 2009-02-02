@@ -99,6 +99,7 @@ static mdir_version parse_version(char const *filename)
 }
 static void jnl_ctor(struct jnl *jnl, struct mdir *mdir, char const *filename)
 {
+	debug("jnl@%p, mdir='%s', filename='%s'", jnl, mdir->path, filename);
 	// Check filename
 	jnl->version = parse_version(filename);
 	on_error return;
@@ -162,6 +163,7 @@ static void may_close(int *fd)
 
 static void jnl_dtor(struct jnl *jnl)
 {
+	debug("jnl@%p", jnl);
 	STAILQ_REMOVE(&jnl->mdir->jnls, jnl, jnl, entry);
 	may_close(&jnl->repatch_fd);
 	may_close(&jnl->patch_fd);
