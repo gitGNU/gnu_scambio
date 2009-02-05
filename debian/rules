@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-COMMONDIRS=commons lib
+COMMONDIRS=. commons lib
 SERVERDIRS=$(COMMONDIRS) mdsyncd filed smtpd sendmail
 CLIENTDIRS=$(COMMONDIRS) mdsyncc filec tools merefs merelib vadrouille icons
 
