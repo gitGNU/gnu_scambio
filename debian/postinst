@@ -1,28 +1,17 @@
 #!/bin/sh
 set -e
 
-function configure {
+configure() {
+	echo "Refreshing GTK icon cache"
 	gtk-update-icon-cache -f /usr/share/icons/hicolor/ || true
 	maemo-select-menu-location vadrouille.desktop || true
 }
 
-function abortupgrade {
-	true
-}
-
-function abortremove {
-	true
-}
-
-function abortdeconfigure {
-	true
-}
-
 case $1 in
 	("configure")         configure $2 ;;
-	("abort-upgrade")     abortupgrade $2 ;;
-	("abort-remove")      abortremove $2 $3 $4 ;;
-	("abort-deconfigure") abortdeconfigure $2 $2 $4 ;;
+	("abort-upgrade")     true ;;
+	("abort-remove")      true ;;
+	("abort-deconfigure") true ;;
 	("*") exit 1
 esac
 

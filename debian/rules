@@ -29,6 +29,7 @@ binary-servers: build
 binary-clients: build
 	rm -rf debian/tmp && mkdir -p debian/tmp/DEBIAN
 	dpkg-gencontrol -pscambio-clients
+	cp debian/postinst debian/tmp/DEBIAN
 	for dir in $(CLIENTDIRS) ; do \
 		make -C debian/build/$$dir install DESTDIR=$(PWD)/debian/tmp ; \
 	done
