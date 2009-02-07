@@ -3,7 +3,7 @@ set -e
 
 function configure {
 	gtk-update-icon-cache -f /usr/share/icons/hicolor/ || true
-	maemo-select-menu-location vadrouille.desktop
+	maemo-select-menu-location vadrouille.desktop || true
 }
 
 function abortupgrade {

@@ -1,14 +1,15 @@
 #!/usr/bin/make -f
 
-COMMONDIRS=. commons lib
-SERVERDIRS=$(COMMONDIRS) mdsyncd filed smtpd sendmail
-CLIENTDIRS=$(COMMONDIRS) mdsyncc filec tools merefs merelib vadrouille icons
+COMMONDIRS = . commons lib
+SERVERDIRS = $(COMMONDIRS) mdsyncd filed smtpd sendmail
+CLIENTDIRS = $(COMMONDIRS) mdsyncc filec tools merefs merelib vadrouille icons
+DESKTOP ?= gtk
 
 build: build-stamp
 
 build-stamp:
 	mkdir -p debian/build
-	cd debian/build && ../../configure --with-desktop=gtk --prefix=/usr && make
+	cd debian/build && ../../configure --with-desktop=$(DESKTOP) --prefix=/usr && make
 	touch $@
 
 binary: binary-arch binary-indep
