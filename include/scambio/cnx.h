@@ -19,6 +19,7 @@
 #define CNX_H_081016
 #include <scambio/cmd.h>
 #include <limits.h>
+#include <pth.h>
 
 /* These store the keywords usefull for the mdir protocol.
  * Keyword are compared by address so it's usefull to have all these here.
@@ -74,7 +75,10 @@ struct mdir_cnx {
 	struct mdir_user *user;
 	struct mdir_syntax *syntax;
 	LIST_HEAD(sent_queries, mdir_sent_query) sent_queries;
-	bool client;
+	bool client, authed;
+	// Following infos are for clients only
+	pth_t connecter_thread;
+	char const *username, *host, *service;
 };
 
 /* Connect to given host:port (send auth if username is given)

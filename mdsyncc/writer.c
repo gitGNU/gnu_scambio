@@ -133,11 +133,14 @@ void *writer_thread(void *arg)
 	debug("starting writer thread");
 	terminate_writer = false;
 	struct mdir *root = mdir_lookup("/");
+	on_error return NULL;
 	// Traverse folders
 	do {
-		on_error break;
 		parse_dir_rec(NULL, root, false, "", "");
-		on_error break;
+		on_error {
+			error_clear();
+			pth_sleep(10);
+		}
 		wait_signal();
 	} while (! terminate_writer);
 	return NULL;
