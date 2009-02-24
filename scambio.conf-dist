@@ -48,3 +48,5 @@ export SC_MEREFS_PATH=$HOME/scambio/shared
 ## The corresponding mdir
 export SC_MEREFS_MDIR=files
 
+## Display web pages with this command line (%s being replaced by URL)
+#export SC_URL_VIEWER="www-browser '%s'"

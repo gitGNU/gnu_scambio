@@ -74,20 +74,13 @@ static void bmark_msg_del(struct sc_msg *msg_)
  * View a Bookmark
  */
 
-static char const *url_view_cmd_fmt;
-
 static struct sc_msg_view *bookmark_view_new(struct sc_msg *msg_)
 {
 	struct bmark_msg *msg = msg2bmark(msg_);
 
-	if (! url_view_cmd_fmt) {
-		alert(GTK_MESSAGE_ERROR, "No URL viewer defined.");
-		return NULL;
-	}
-	
 	// We do not show the bookmark, but run an external web browser
 	char cmd[PATH_MAX];	// Should be enough
-	snprintf(cmd, sizeof(cmd), url_view_cmd_fmt, msg->url);
+	snprintf(cmd, sizeof(cmd), conf_get_str("SC_URL_VIEWER"), msg->url);
 	if_fail (RunAsShell(cmd)) alert_error();
 
 	// Mark the bookmark as visited
@@ -182,11 +175,6 @@ static struct sc_plugin bmark_plugin = {
 
 void bookmark_init(void)
 {
-	struct header_field *hf = header_find(mdir_user_header(user), "url-viewer", NULL);
-	if (hf) {
-		url_view_cmd_fmt = hf->value;
-	} else {
-		warning("No command defined to view URLs");
-	}
+	conf_set_default_str("SC_URL_VIEWER", "www-browser '%s'");
 	sc_plugin_register(&bmark_plugin);
 }
