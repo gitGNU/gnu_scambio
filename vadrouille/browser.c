@@ -312,8 +312,11 @@ static void new_message_notif(struct sc_msg_listener *listener, struct mdirb *md
 		// We want new stuff only
 		if (msg->was_read) return;
 
-		// We are not interrested in PERM messages
-		if (header_has_type(msg->header, SC_PERM_TYPE)) return;
+		// We are not interrested in these types of message
+		static char *const skip_types[] = { SC_DIR_TYPE, SC_FILE_TYPE, SC_MARK_TYPE, SC_PERM_TYPE };
+		for (unsigned i = 0; i < sizeof_array(skip_types); i++) {
+			if (header_has_type(msg->header, skip_types[i])) return;
+		}
 
 		char *descr = msg->plugin->ops->msg_descr(msg);
 		char *icon = msg->plugin->ops->msg_icon ? msg->plugin->ops->msg_icon(msg) : NULL;
