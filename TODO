@@ -17,5 +17,14 @@ Code a simplier init function the init pth, error, log and conf altogether.
   all of a user folders (hint : beware of loops). One daemon for all users, 
 configured by patches that a user put in the directory where he can write 
 (these must be authentified, so mdsyncd definitively needs to add username to
-all submited patches - addition or removal).
+all submitted patches - addition or removal). Problem, then : all messages 
+moved by stribution will be tagged with stribution username :-( Or stribution 
+logs in as the user's name -> no need to check rights, then. Stribution may 
+then be another daemon that runs on the client host, or be part of mdsyncc 
+itself ?
 
+If so, then we will need something like mdirb, with additional global state 
+(the stribution conf for each mdir). Implement this mdirc as part of 
+libscambio !
+
+* Fix smtpd
