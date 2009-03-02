@@ -131,6 +131,7 @@ static mdir_version add_header(char const *dir, struct header *h, enum mdir_acti
 	if (is_new_dir) debug("Patch will creates a new directory");
 
 	// Add username to the patch
+	if (NULL != header_find(h, SC_USER_FIELD, NULL)) with_error(0, "Header already has username") return 0;
 	(void)header_field_new(h, SC_USER_FIELD, mdir_user_name(user));
 
 	// Patch
