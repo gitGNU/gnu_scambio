@@ -12,7 +12,9 @@ libscambio_la_SOURCES = \
 	cnx.c \
 	channel.c \
 	stream.c \
-	timetools.c
+	timetools.c \
+	mdirc.c \
+	msg.c
 
 libscambio_la_LIBADD = ../commons/libcommons.la
 
