@@ -21,7 +21,6 @@
 #include <time.h>
 #include "scambio.h"
 #include "scambio/mdir.h"
-#include "merelib.h"
 
 struct sc_msg;
 struct mdirb;
@@ -34,7 +33,7 @@ struct mdirb {
 	struct mdir_cursor cursor;
 	unsigned nb_msgs, nb_unread;
 	LIST_HEAD(msgs, sc_msg) msgs;
-	/* We keep track of all the dir_views that uses this, so that they all get noticed when
+	/* We keep track of all the dir_views that uses this, so that they all get notified when
 	 * the mdir content changes. msg_views are not noticed because they hold a ref on their
 	 * message anyway (if the message is deleted everything in it remains valid).
 	 */

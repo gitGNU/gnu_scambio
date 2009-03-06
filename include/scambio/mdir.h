@@ -17,8 +17,7 @@
  */
 /*
  * Interface to folders.
- * Beware that many threads may access those files concurrently,
- * although they are non preemptibles.
+ * Beware that many threads may access those files concurrently.
  */
 #ifndef MDIR_H_080912
 #define MDIR_H_080912

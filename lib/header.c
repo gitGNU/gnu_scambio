@@ -202,7 +202,7 @@ extern inline void header_unref(struct header *);
 
 struct header_field *header_find(struct header const *h, char const *name, struct header_field *prev)
 {
-	debug("looking for %s in header @%p", name, h);
+	debug("looking for %s in header @%p", name ? name : "anything", h);
 	for (
 		struct header_field *hf = prev ? TAILQ_NEXT(prev, entry) : TAILQ_FIRST(&h->fields);
 		hf != NULL;

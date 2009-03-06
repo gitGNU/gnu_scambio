@@ -27,6 +27,7 @@ struct chn_cnx ccnx;
  */
 
 #include "mdirb.h"
+#include "merelib.h"
 
 struct sc_view;
 struct sc_msg_view;
