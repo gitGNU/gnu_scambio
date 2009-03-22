@@ -35,7 +35,7 @@ static void sc_msg_default_del(struct sc_msg *msg)
 }
 
 // Throws no error.
-void sc_msg_ctor(struct sc_msg *msg, struct mdirc *mdirc, struct header *h, mdir_version version)
+void sc_msg_ctor(struct sc_msg *msg, struct mdirc *mdirc, struct header *h, mdir_version version, int status, struct sc_msg *marked)
 {
 	debug("msg@%p, version %"PRIversion, msg, version);
 	static struct sc_msg_ops const my_ops = {
@@ -45,8 +45,12 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirc *mdirc, struct header *h, mdir
 	msg->mdirc = mdirc;
 	msg->header = header_ref(h);
 	msg->version = version;
-	msg->error_status = 0;
+	msg->status = status;
 	LIST_INIT(&msg->marks);
+	msg->marked = marked;
+	if (marked) {
+		LIST_INSERT_HEAD(&marked->marks, msg, marks_entry);	// no ordering of marks ?
+	}
 	msg->count = 1;
 }
 
@@ -63,10 +67,17 @@ void sc_msg_dtor(struct sc_msg *msg)
 	assert(msg->count <= 0);
 	header_unref(msg->header);
 	msg->header = NULL;
+	//  Cascade the del to all the marks
 	struct sc_msg *mark;
 	while (NULL != (mark = LIST_FIRST(&msg->marks))) {
 		LIST_REMOVE(mark, marks_entry);
+		mark->marked = NULL;
 		sc_msg_unref(mark);
+	}
+	// And if I'm a mark myself, remove me from my parent marks
+	if (msg->marked) {
+		LIST_REMOVE(msg, marks_entry);
+		msg->marked = NULL;
 	}
 }
 

@@ -687,7 +687,7 @@ static void transient_list(
 
 static void err_list(
 	struct mdir *mdir,
-	void (*err_cb)(struct mdir *, struct header *, void *),
+	void (*err_cb)(struct mdir *, struct header *, mdir_version, void *),
 	void *data)
 {
 	// List content of ".err" subdirectory which holds failed patches.
@@ -718,7 +718,7 @@ static void err_list(
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
-		err_cb(mdir, h, data);
+		err_cb(mdir, h, data);	// FIXME: add the version (the <0 transient one)
 		header_unref(h);
 		if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) return;
 		on_error break;
@@ -730,7 +730,7 @@ void mdir_patch_list(
 	struct mdir *mdir, struct mdir_cursor *cursor, bool unsync_only,
 	void (*put_cb)(struct mdir *, struct header *, mdir_version, void *),
 	void (*rem_cb)(struct mdir *, mdir_version, void *),
-	void (*err_cb)(struct mdir *, struct header *, void *),
+	void (*err_cb)(struct mdir *, struct header *, mdir_version, void *),
 	void *data)
 {
 	mdir_reload(mdir);	// journals may have changed, other appended
@@ -738,7 +738,6 @@ void mdir_patch_list(
 		if (! unsync_only) {
 			if_fail (synch_list(mdir, cursor, put_cb, rem_cb, data)) return;
 		}
-
 		if_fail (transient_list(mdir, cursor, put_cb, rem_cb, data)) return;
 	}
 	if (err_cb) {

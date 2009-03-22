@@ -24,32 +24,6 @@
 #include "misc.h"
 
 /*
- * Global Notifications
- */
-
-static LIST_HEAD(listeners, sc_msg_listener) listeners = LIST_HEAD_INITIALIZER(&listeners);
-
-void sc_msg_listener_ctor(struct sc_msg_listener *listener, void (*cb)(struct sc_msg_listener *, struct mdirc *, enum mdir_action, struct sc_msg *))
-{
-	listener->cb = cb;
-	LIST_INSERT_HEAD(&listeners, listener, entry);
-}
-
-void sc_msg_listener_dtor(struct sc_msg_listener *listener)
-{
-	LIST_REMOVE(listener, entry);
-}
-
-static void notify(struct mdirc *mdirc, enum mdir_action action, struct sc_msg *msg)
-{
-	struct sc_msg_listener *listener, *tmp;
-	debug("Notify for new msg @%p", msg);
-	LIST_FOREACH_SAFE(listener, &listeners, entry, tmp) {
-		listener->cb(listener, mdirc, action, msg);
-	}
-}
-
-/*
  * Construct/Destruct
  */
 
@@ -72,7 +46,6 @@ static void mdirc_del_all_msgs(struct mdirc *mdirc)
 	struct sc_msg *msg;
 	while (NULL != (msg = LIST_FIRST(&mdirc->msgs))) {
 		LIST_REMOVE(msg, mdirc_entry);
-		notify(mdirc, MDIR_REM, msg);
 		sc_msg_unref(msg);
 	}
 	mdirc->nb_msgs = 0;
@@ -122,7 +95,6 @@ static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 	// Remove it
 	LIST_REMOVE(msg, mdirc_entry);
 	msg->mdirc->nb_msgs --;
-	notify(mdirc, MDIR_REM, msg);
 	sc_msg_unref(msg);
 	*changed = true;
 	
@@ -160,14 +132,14 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 		if_fail (msg = sc_msg_new(mdirc, h, version)) return;
 		LIST_INSERT_HEAD(&mdirc->msgs, msg, mdirc_entry);
 		mdirc->nb_msgs ++;
-		notify(mdirc, MDIR_ADD, msg);
 	}
 }
 
-static void err_msg(struct mdir *mdir, struct header *h, void *data)
+static void err_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
 	(void)mdir;
 	(void)data;
+	(void)version;
 	struct header_field *hf_status = header_find(h, SC_STATUS_FIELD, NULL);
 	struct header_field *hf_type = header_find(h, SC_TYPE_FIELD, NULL);
 	error("Folder cannot be patched with message of type %s : %s",

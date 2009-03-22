@@ -27,7 +27,7 @@ struct mdirc {
 	struct mdir mdir;
 	struct mdir_cursor cursor;
 	unsigned nb_msgs;
-	LIST_HEAD(msgs, sc_msg) msgs;
+	TAILQ_HEAD(msgs, sc_msg) msgs;	// only toplevel msgs are here (not marks)
 };
 
 static inline struct mdirc *mdir2mdirc(struct mdir *mdir)
@@ -42,15 +42,5 @@ struct mdir *mdirc_default_alloc(void);
 void mdirc_default_free(struct mdir *);
 
 void mdirc_update(struct mdirc *);
-
-// To be notified whenever a message is created anywhere
-
-struct sc_msg_listener {
-	LIST_ENTRY(sc_msg_listener) entry;
-	void (*cb)(struct sc_msg_listener *, struct mdirc *, enum mdir_action, struct sc_msg *);
-};
-
-void sc_msg_listener_ctor(struct sc_msg_listener *, void (*cb)(struct sc_msg_listener *, struct mdirc *, enum mdir_action, struct sc_msg *));
-void sc_msg_listener_dtor(struct sc_msg_listener *);
 
 #endif
