@@ -32,7 +32,7 @@ struct sc_msg_ops {
 
 struct sc_msg {
 	struct sc_msg_ops const *ops;
-	LIST_ENTRY(sc_msg) mdirc_entry;
+	TAILQ_ENTRY(sc_msg) mdirc_entry;
 	LIST_ENTRY(sc_msg) marks_entry;
 	struct mdirc *mdirc;	// backlink
 	struct header *header;	// original header
@@ -41,20 +41,12 @@ struct sc_msg {
 	LIST_HEAD(sc_marks, sc_msg) marks;	// list of marks referencing this message
 	struct sc_msg *marked;
 	int count;
-	/* FIXME : 
-	 * no ref count -> mdir creates/deletes the msgs when he puts em / remove em
-	 * from the mdir. If the user wants to keep em, he manages the count.
-	 * no way because we may want to keep erroneous msgs in order to resubmit em.
-	 * but we want mdir to only manage its list of valid messages. So, why not two
-	 * lists : one of good messages and another one for bad ones, with a notif when
-	 * a msg goes from valid to invalid ?
-	 */
 };
 
 // You may want to change the default builder :
-extern struct sc_msg *(*sc_msg_new)(struct mdirc *, struct header *, mdir_versioni, int status);
+extern struct sc_msg *(*sc_msg_new)(struct mdirc *, struct header *, mdir_version, int, struct sc_msg *);
 
-void sc_msg_ctor(struct sc_msg *, struct mdirc *, struct header *, mdir_version);
+void sc_msg_ctor(struct sc_msg *, struct mdirc *, struct header *, mdir_version, int, struct sc_msg *);
 void sc_msg_dtor(struct sc_msg *);
 
 static inline struct sc_msg *sc_msg_ref(struct sc_msg *msg)

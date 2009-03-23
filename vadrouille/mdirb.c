@@ -204,13 +204,14 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	notify(mdirb, MDIR_ADD, msg);
 }
 
-static void err_msg(struct mdir *mdir, struct header *h, void *data)
+static void err_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
 	/* Merely displaying a dialog to warn user is not enough since the
 	 * transient message was already integrated (and may have had side effects like
 	 * tagging another message as read for instance). We must then reset this mdir's
 	 * cursor so that the user view corresponds to the reality.
 	 */
+	(void)version;
 	bool *changed = (bool *)data;
 	*changed = true;
 	struct header_field *hf_status = header_find(h, SC_STATUS_FIELD, NULL);

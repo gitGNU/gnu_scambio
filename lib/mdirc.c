@@ -29,7 +29,7 @@
 
 void mdirc_ctor(struct mdirc *mdirc)
 {
-	LIST_INIT(&mdirc->msgs);
+	TAILQ_INIT(&mdirc->msgs);
 	mdirc->nb_msgs = 0;
 	mdir_cursor_ctor(&mdirc->cursor);
 }
@@ -44,8 +44,8 @@ struct mdir *mdirc_default_alloc(void)
 static void mdirc_del_all_msgs(struct mdirc *mdirc)
 {
 	struct sc_msg *msg;
-	while (NULL != (msg = LIST_FIRST(&mdirc->msgs))) {
-		LIST_REMOVE(msg, mdirc_entry);
+	while (NULL != (msg = TAILQ_FIRST(&mdirc->msgs))) {
+		TAILQ_REMOVE(&mdirc->msgs, msg, mdirc_entry);
 		sc_msg_unref(msg);
 	}
 	mdirc->nb_msgs = 0;
@@ -75,7 +75,7 @@ static struct sc_msg *find_msg_by_version(struct mdirc *mdirc, mdir_version vers
 {
 	debug("searching version %"PRIversion" amongst messages", version);
 	struct sc_msg *msg;
-	LIST_FOREACH(msg, &mdirc->msgs, mdirc_entry) {	// TODO: hash me using version please
+	TAILQ_FOREACH(msg, &mdirc->msgs, mdirc_entry) {	// TODO: hash me using version please
 		if (msg->version == version) {
 			debug("...found!");
 			return msg;
@@ -86,30 +86,28 @@ static struct sc_msg *find_msg_by_version(struct mdirc *mdirc, mdir_version vers
 
 static void rem_msg(struct mdir *mdir, mdir_version version, void *data)
 {
-	bool *changed = (bool *)data;
+	(void)data;
 	struct mdirc *mdirc = mdir2mdirc(mdir);
 
 	struct sc_msg *msg = find_msg_by_version(mdirc, version);
 	if (! msg) return;
 
 	// Remove it
-	LIST_REMOVE(msg, mdirc_entry);
+	TAILQ_REMOVE(&mdirc->msgs, msg, mdirc_entry);
 	msg->mdirc->nb_msgs --;
 	sc_msg_unref(msg);
-	*changed = true;
 	
 	debug("nb_msgs in %s is now %u", mdirc->mdir.path, mdirc->nb_msgs);
 }
 
 static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
+	(void)data;
 	struct mdirc *mdirc = mdir2mdirc(mdir);
-	bool *changed = (bool *)data;
 
 	if (header_is_directory(h)) return;
 
 	debug("try to add msg version %"PRIversion, version);
-	*changed = true;
 	struct sc_msg *msg;
 
 	// We handle markers in a special way
@@ -124,13 +122,11 @@ static void add_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 		if (! msg) {
 			debug("No such message");
 		} else {
-			struct sc_msg *mark;
-			if_fail (mark = sc_msg_new(mdirc, h, version)) return;
-			LIST_INSERT_HEAD(&msg->marks, mark, marks_entry);	// give the ref to the main msg
+			if_fail ((void)sc_msg_new(mdirc, h, version, 0, msg)) return;
 		}
 	} else {
-		if_fail (msg = sc_msg_new(mdirc, h, version)) return;
-		LIST_INSERT_HEAD(&mdirc->msgs, msg, mdirc_entry);
+		if_fail (msg = sc_msg_new(mdirc, h, version, 0, NULL)) return;
+		TAILQ_INSERT_TAIL(&mdirc->msgs, msg, mdirc_entry);
 		mdirc->nb_msgs ++;
 	}
 }
@@ -140,11 +136,17 @@ static void err_msg(struct mdir *mdir, struct header *h, mdir_version version, v
 	(void)mdir;
 	(void)data;
 	(void)version;
+	struct mdirc *mdirc = mdir2mdirc(mdir);
 	struct header_field *hf_status = header_find(h, SC_STATUS_FIELD, NULL);
 	struct header_field *hf_type = header_find(h, SC_TYPE_FIELD, NULL);
-	error("Folder cannot be patched with message of type %s : %s",
+	error("Folder cannot be patched with message #%"PRIversion" of type %s : %s",
+		version,
 		hf_type ? hf_type->value : "NONE",
 		hf_status ? hf_status->value : "Reason unknown");
+	struct sc_msg *msg = find_msg_by_version(mdirc, version);
+	if (msg) {
+		msg->status = hf_status ? strtol(hf_status->value, NULL, 0) : -1;
+	}
 }
 
 void mdirc_update(struct mdirc *mdirc)

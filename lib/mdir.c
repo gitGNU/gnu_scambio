@@ -718,7 +718,7 @@ static void err_list(
 		}
 		struct header *h = header_from_file(temp);
 		on_error break;
-		err_cb(mdir, h, data);	// FIXME: add the version (the <0 transient one)
+		err_cb(mdir, h, -version, data);
 		header_unref(h);
 		if (0 != unlink(temp)) with_error(errno, "unlink(%s)", temp) return;
 		on_error break;

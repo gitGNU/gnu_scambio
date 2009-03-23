@@ -54,10 +54,10 @@ void sc_msg_ctor(struct sc_msg *msg, struct mdirc *mdirc, struct header *h, mdir
 	msg->count = 1;
 }
 
-static struct sc_msg *default_msg_new(struct mdirc *mdirc, struct header *h, mdir_version version)
+static struct sc_msg *default_msg_new(struct mdirc *mdirc, struct header *h, mdir_version version, int status, struct sc_msg *marked)
 {
 	struct sc_msg *msg = Malloc(sizeof(*msg));
-	sc_msg_ctor(msg, mdirc, h, version);
+	sc_msg_ctor(msg, mdirc, h, version, status, marked);
 	return msg;
 }
 
@@ -81,7 +81,7 @@ void sc_msg_dtor(struct sc_msg *msg)
 	}
 }
 
-struct sc_msg *(*sc_msg_new)(struct mdirc *, struct header *, mdir_version) = default_msg_new;
+struct sc_msg *(*sc_msg_new)(struct mdirc *, struct header *, mdir_version, int, struct sc_msg *) = default_msg_new;
 
 extern inline struct sc_msg *sc_msg_ref(struct sc_msg *msg);
 extern inline void sc_msg_unref(struct sc_msg *msg);
@@ -116,7 +116,7 @@ void sc_msg_cursor_next(struct sc_msg_cursor *cursor, char const *name)
 		msg = cursor->msg;
 		next_msg = LIST_FIRST(&msg->marks);
 	}
-	cursor->hf = msg->error_status == 0 ? header_find(msg->header, name, cursor->hf) : NULL;
+	cursor->hf = msg->status == 0 ? header_find(msg->header, name, cursor->hf) : NULL;
 	if (cursor->hf) return;
 	// not found in this msg, try next.
 	if (cursor->mark) sc_msg_unref(cursor->mark);
