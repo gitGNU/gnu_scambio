@@ -26,6 +26,9 @@ export SC_LOG_DIR=$HOME/scambio/log
 ## Notifier to send new patches to (to stdin)
 #export SC_NOTIFIER_CMD=/usr/bin/merenotifier
 
+## Dialer to use for phone calls (run with %s replaced by phone number)
+#export SC_DIALER_CMD="Xdialog --msgbox 'Cannot dial %s' 5 25"
+
 ## Where the meta-data are stored
 export SC_MDIR_ROOT_DIR=$HOME/scambio/mdir
 

@@ -252,6 +252,31 @@ static void del_field_cb(GtkWidget *widget, gpointer data)
 	}
 }
 
+static void dial_cb(GtkWidget *widget, gpointer data)
+{
+	(void)widget;
+	struct cat_value *cat_value = (struct cat_value *)data;
+	char cmd[PATH_MAX];	// Should be enough
+	snprintf(cmd, sizeof(cmd), conf_get_str("SC_DIALER_CMD"), cat_value->value);
+	if_fail (RunAsShell(cmd)) alert_error();
+}
+
+static GtkWidget *make_value_actions(struct cat_value *cat_value)
+{
+	GtkWidget *label = gtk_label_new(cat_value->value);
+	if (0 != strcasecmp(cat_value->hf->name, "phone")) {	// TODO: use a regex on value to find out if it can be dialed
+		return label;
+	}
+	GtkWidget *hbox = gtk_hbox_new(FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
+	GtkWidget *dial_button = gtk_button_new();
+	GtkWidget *phone_image = gtk_image_new_from_file(TOSTR(ICONDIR)"/26x26/apps/phone.png");
+	gtk_button_set_image(GTK_BUTTON(dial_button), phone_image);
+	g_signal_connect(dial_button, "clicked", G_CALLBACK(dial_cb), cat_value);
+	gtk_box_pack_start(GTK_BOX(hbox), dial_button, FALSE, FALSE, 0);
+	return hbox;
+}
+
 static GtkWidget *category_widget(struct category *cat, bool editable)
 {
 	GtkWidget *table = gtk_table_new(editable ? 4:2, cat->nb_values, FALSE);
@@ -260,8 +285,10 @@ static GtkWidget *category_widget(struct category *cat, bool editable)
 		char *markup = g_markup_printf_escaped("<i>%s</i> : ", cat->values[v].hf->name);
 		gtk_label_set_markup(GTK_LABEL(field_label), markup);
 		g_free(markup);
+		
 		gtk_table_attach(GTK_TABLE(table), field_label, 0, 1, v, v+1, GTK_SHRINK|GTK_FILL, GTK_SHRINK|GTK_FILL, 0, 0);
-		gtk_table_attach(GTK_TABLE(table), gtk_label_new(cat->values[v].value), 1, 2, v, v+1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 0, 0);
+		gtk_table_attach(GTK_TABLE(table), make_value_actions(cat->values+v), 1, 2, v, v+1, GTK_EXPAND|GTK_FILL, GTK_EXPAND|GTK_FILL, 0, 0);
+
 		if (editable) {
 			GtkWidget *edit_button = gtk_button_new_from_stock(GTK_STOCK_EDIT);
 			g_signal_connect(edit_button, "clicked", G_CALLBACK(edit_cb), cat->values+v);
@@ -593,5 +620,6 @@ static struct sc_plugin plugin = {
 
 void contact_init(void)
 {
+	conf_set_default_str("SC_DIALER_CMD", "echo 'No way to dial %s - Maybe you should set SC_DIALER_CMD ?'");
 	sc_plugin_register(&plugin);
 }
