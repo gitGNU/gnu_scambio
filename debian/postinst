@@ -3,8 +3,8 @@ set -e
 
 configure() {
 	echo "Refreshing GTK icon cache"
-	gtk-update-icon-cache -f /usr/share/icons/hicolor/ || true
-	maemo-select-menu-location vadrouille.desktop || true
+	gtk-update-icon-cache -f /usr/share/icons/hicolor/ 2>/dev/null || true
+	maemo-select-menu-location vadrouille.desktop 2>/dev/null || true
 }
 
 case $1 in
