@@ -313,19 +313,18 @@ static void command_ctor(struct chn_cnx *cnx, struct command *command, char cons
 	command->tx = NULL;
 	mdir_sent_query_ctor(&command->sq);
 	if (stream) stream_ref(stream);
-	debug("locking condition mutex");
-	pth_cond_init(&command->cond);
-	pth_mutex_init(&command->condmut);
-	(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
-	mdir_cnx_query(&cnx->cnx, kw, NULL, &command->sq, resource, kw == kw_write && rt ? "*":NULL, NULL);
+	if_succeed (mdir_cnx_query(&cnx->cnx, kw, NULL, &command->sq, resource, kw == kw_write && rt ? "*":NULL, NULL)) {
+		pth_cond_init(&command->cond);
+		pth_mutex_init(&command->condmut);
+		(void)pth_mutex_acquire(&command->condmut, FALSE, NULL);
+	}
 }
 
 // The command is returned with the lock taken, so that the condition cannot be signaled
 // before the caller wait for it. It's thus the caller that must release it (by waiting).
 static struct command *command_new(struct chn_cnx *cnx, char const *kw, char const *resource, struct stream *stream, bool rt)
 {
-	struct command *command = malloc(sizeof(*command));
-	if (! command) with_error(ENOMEM, "malloc(command)") return NULL;
+	struct command *command = Malloc(sizeof(*command));
 	if_fail (command_ctor(cnx, command, kw, resource, stream, rt)) {
 		free(command);
 		command = NULL;
