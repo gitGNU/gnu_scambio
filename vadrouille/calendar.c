@@ -509,7 +509,7 @@ static void cal_dir_view_ctor(struct cal_dir_view *view, struct mdirb *mdirb)
 	GtkCalendarDisplayOptions flags = GTK_CALENDAR_SHOW_HEADING|GTK_CALENDAR_SHOW_DAY_NAMES|GTK_CALENDAR_SHOW_WEEK_NUMBERS;
 #	ifdef HAVE_CAL_DETAILS
 	flags |= GTK_CALENDAR_SHOW_DETAILS;
-	gtk_calendar_set_detail_func(GTK_CALENDAR(calendar), cal_details, NULL, NULL);
+	gtk_calendar_set_detail_func(GTK_CALENDAR(view->calendar), cal_details, NULL, NULL);
 #	endif
 	gtk_calendar_set_display_options(GTK_CALENDAR(view->calendar), flags);
 	g_signal_connect(G_OBJECT(view->calendar), "day-selected",  G_CALLBACK(day_changed_cb), view);
