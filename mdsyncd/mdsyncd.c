@@ -40,8 +40,9 @@ static sig_atomic_t terminate = 0;
  * We overload mdir into mdird
  */
 
-static struct mdir *mdird_alloc(void)
+static struct mdir *mdird_alloc(char const *path)
 {
+	(void)path;
 	struct mdird *mdird = malloc(sizeof(*mdird));
 	if (! mdird) with_error(ENOMEM, "malloc mdird") return NULL;
 	LIST_INIT(&mdird->subscriptions);

@@ -45,15 +45,16 @@ static char const *mdir_root;
 static LIST_HEAD(mdirs, mdir) mdirs;
 static struct persist dirid_seq;
 static struct persist transient_version;
-struct mdir *(*mdir_alloc)(void);
+struct mdir *(*mdir_alloc)(char const *path);
 void (*mdir_free)(struct mdir *);
 
 /*
  * Default allocator
  */
 
-static struct mdir *mdir_alloc_default(void)
+static struct mdir *mdir_alloc_default(char const *path)
 {
+	(void)path;
 	struct mdir *mdir = malloc(sizeof(*mdir));
 	if (! mdir) error_push(ENOMEM, "malloc mdir");
 	return mdir;
@@ -125,9 +126,9 @@ static void mdir_reload(struct mdir *mdir)
 }
 
 // path must be mdir_root + "/" + id
-static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
+static void mdir_ctor(struct mdir *mdir, char const *path, bool create)
 {
-	snprintf(mdir->path, sizeof(mdir->path), "%s/%s", mdir_root, id);
+	snprintf(mdir->path, sizeof(mdir->path), "%s", path);
 	if (create) {
 		Mkdir(mdir->path);
 		on_error return;
@@ -141,9 +142,11 @@ static void mdir_ctor(struct mdir *mdir, char const *id, bool create)
 
 static struct mdir *mdir_new(char const *id, bool create)
 {
-	struct mdir *mdir = mdir_alloc();
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", mdir_root, id);
+	struct mdir *mdir = mdir_alloc(path);
 	on_error return NULL;
-	mdir_ctor(mdir, id, create);
+	mdir_ctor(mdir, path, create);
 	on_error {
 		mdir_free(mdir);
 		return NULL;
@@ -583,9 +586,10 @@ mdir_version mdir_get_folder_version(struct mdir *mdir, char const *name)
  * List
  */
 
-extern inline void mdir_cursor_ctor(struct mdir_cursor *cursor);
-extern inline void mdir_cursor_dtor(struct mdir_cursor *cursor);
-extern inline void mdir_cursor_reset(struct mdir_cursor *cursor);
+extern inline void mdir_cursor_ctor(struct mdir_cursor *);
+extern inline void mdir_cursor_dtor(struct mdir_cursor *);
+extern inline void mdir_cursor_reset(struct mdir_cursor *);
+static inline void mdir_cursor_seek(struct mdir_cursor *, mdir_version);
 
 static void synch_list(
 	struct mdir *mdir, struct mdir_cursor *cursor,

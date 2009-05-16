@@ -7,7 +7,6 @@
 #include <log.h>
 #include "scambio.h"
 #include "stribution.h"
-#include "header.h"
  
 extern int lineno;
 void yyerror(char const *);

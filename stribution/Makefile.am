@@ -6,14 +6,13 @@ pkgsysconfdir=$(sysconfdir)/@PACKAGE@
 docdir=$(prefix)/share/doc/@PACKAGE@
 
 sbin_PROGRAMS   = sc_stribution
-pkgsysconf_DATA = stribution.conf-dist
-doc_SCRIPTS     = sc_stribution-dist
 
 sc_stribution_SOURCES = \
-	strib_cache.c \
-	strib_lexer.l \
+	main.c main.h \
+	strib_cache.c strib_cache.h \
 	strib_parser.y \
-	stribution.c
+	strib_lexer.l \
+	stribution.c stribution.h
 
 sc_stribution_LDADD = ../lib/libscambio.la ../commons/libcommons.la
 

@@ -19,8 +19,8 @@
 #define CONF_CACHE_H_080603
 
 #include <time.h>
-#include <queue.h>
 #include <limits.h>
+#include "scambio.h"
 #include "stribution.h"
 
 struct strib_cached {

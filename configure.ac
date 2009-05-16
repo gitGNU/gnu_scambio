@@ -79,6 +79,7 @@ AC_CONFIG_FILES([
 	vadrouille/vadrouille.desktop
 	vadrouille/org.happyleptic.vadrouille.service
 	merenotifier/Makefile
+	stribution/Makefile
 	tools/Makefile
 	icons/Makefile
 	icons/26x26/Makefile

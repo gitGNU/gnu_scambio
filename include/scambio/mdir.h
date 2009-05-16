@@ -73,10 +73,15 @@ static inline void mdir_cursor_reset(struct mdir_cursor *cursor)
 	cursor->last_listed_sync = cursor->last_listed_unsync = 0;
 }
 
+static inline void mdir_cursor_seek(struct mdir_cursor *cursor, mdir_version last)
+{
+	cursor->last_listed_sync = last;
+}
+
 // provides these allocators for previous structures (default ones being malloc/free)
 extern struct jnl *(*jnl_alloc)(void);
 extern void (*jnl_free)(struct jnl *);
-extern struct mdir *(*mdir_alloc)(void);
+extern struct mdir *(*mdir_alloc)(char const *path);
 extern void (*mdir_free)(struct mdir *);
 
 struct header;

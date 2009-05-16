@@ -48,8 +48,9 @@
 
 extern inline struct mdirc *mdir2mdirc(struct mdir *mdir);
 
-static struct mdir *mdirc_alloc(void)
+static struct mdir *mdirc_alloc(char const *path)
 {
+	(void)path;
 	struct mdirc *mdirc = malloc(sizeof(*mdirc));
 	if (! mdirc) with_error(ENOMEM, "malloc mdirc") return NULL;
 	mdirc->subscribed = false;
