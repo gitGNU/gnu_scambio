@@ -92,6 +92,7 @@ struct header {
 
 /* Build an empty header.
  * The caller is the only reference owner.
+ * Throws no error.
  */
 struct header *header_new(void);
 

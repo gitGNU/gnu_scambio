@@ -115,9 +115,6 @@ static void client_begin(void)
 	if_fail (mdir_init()) return;
 	mdir_alloc = mdirc_alloc;
 	mdir_free = mdirc_free;
-	conf_set_default_str("SC_MDIRD_HOST", "127.0.0.1");
-	conf_set_default_str("SC_MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
-	on_error return;
 	if_fail (writer_begin()) return;
 	if_fail (reader_begin()) goto q1;
 	if_fail (connecter_begin()) goto q2;
@@ -134,6 +131,8 @@ static void init_conf(void)
 {
 	conf_set_default_str("SC_LOG_DIR", "/var/log/scambio");
 	conf_set_default_int("SC_LOG_LEVEL", 3);
+	conf_set_default_str("SC_MDIRD_HOST", "127.0.0.1");
+	conf_set_default_str("SC_MDIRD_PORT", TOSTR(DEFAULT_MDIRD_PORT));
 }
 
 static void init_log(void)
