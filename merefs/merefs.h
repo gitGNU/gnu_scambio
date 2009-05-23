@@ -25,7 +25,7 @@
 #include "scambio/channel.h"
 #include "file.h"
 
-extern char const *mdir_name;
+extern char const *tracked_mdir_name;
 extern char const *local_path;
 extern unsigned local_path_len;
 extern struct mdir *mdir;

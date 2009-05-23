@@ -185,6 +185,7 @@ void header_digest(struct header *, size_t, char *buffer);
 #define SC_BOOKMARK_TYPE "bookmark"
 #define SC_MARK_TYPE     "mark"
 #define SC_PERM_TYPE     "perms"
+#define SC_STRIB_TYPE    "stribution"
 
 /* Tells wether this header has a specific type.
  */

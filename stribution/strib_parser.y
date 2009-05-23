@@ -82,7 +82,7 @@ static char *copystring(char const *str)
 
 %}
 
-%token NUMBER SEPARATOR STRING FIELDNAME EOL ALWAYS UNARYOP BINARYOP DISCARD DESTACTION DEREF
+%token NUMBER SEPARATOR STRING FIELDNAME EOL ALWAYS UNARYOP BINARYOP DELETE DESTACTION DEREF
 %debug
 %%
 
@@ -145,8 +145,8 @@ value:
 	;
 
 action:
-	DISCARD {
-		TEST.action.type = ACTION_DISCARD;
+	DELETE {
+		TEST.action.type = ACTION_DELETE;
 	}
 	| DESTACTION dest {
 		TEST.action.type = str2destaction($1);

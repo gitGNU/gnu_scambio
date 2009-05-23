@@ -145,6 +145,9 @@ void mdir_patch_request_abort(struct mdir *, enum mdir_action, mdir_version vers
 struct mdir *mdir_lookup(char const *name);
 struct mdir *mdir_lookup_by_id(char const *id, bool create);
 
+// returns the name of a mdir relative to root
+char const *mdir_name(struct mdir *);
+
 // list all patches of a mdir. When called again, list only new patches.
 // (will also list unconfirmed patches, once, with a unique version < 0)
 // (will also list directory patches - otherwise you'd never know when a

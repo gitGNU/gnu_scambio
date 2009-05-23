@@ -15,7 +15,7 @@ int lineno;
 always              return ALWAYS;
 unset|set           yylval = yytext; return UNARYOP;
 \<|\<=|\>|\>=|=~|=  yylval = yytext; return BINARYOP;
-discard             return DISCARD;
+dielete             return DELETE;
 copyto|moveto       yylval = yytext; return DESTACTION;
 \"[^"]*\"           yylval = yytext; return STRING;
 [a-zA-Z][-a-zA-Z0-9:_/.@]* yylval = yytext; return FIELDNAME;

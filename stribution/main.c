@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <limits.h>
 #include <assert.h>
 #include "scambio/header.h"
@@ -7,6 +8,7 @@
 #include "scambio.h"
 #include "daemon.h"
 #include "auth.h"
+#include "stribution.h"
 
 /* For each mdir, we have a secret file storing the last known
  * stribution config with its version, and another one telling us the last
@@ -38,6 +40,7 @@ static struct mdir *smdir_alloc(char const *path)
 	struct strib_mdir *smdir = Malloc(sizeof(*smdir));
 	smdir->conf = NULL;
 	smdir->thread = NULL;
+	smdir->stribution = NULL;
 
 	// First, read the secret header file
 	char filename[PATH_MAX];
@@ -62,7 +65,7 @@ static struct mdir *smdir_alloc(char const *path)
 	return &smdir->mdir;
 
 fail:
-	if (smdir->conf) header_del(smdir->conf);
+	if (smdir->conf) header_unref(smdir->conf);
 	free(smdir);
 	return NULL;
 }
@@ -95,14 +98,106 @@ static void smdir_free(struct mdir *mdir)
 	if_fail (header_to_file(smdir->conf, filename)) {
 		error_clear();	// show must go on
 	}
+
+	// Free the stribution
+	if (smdir->stribution) {
+		strib_del(smdir->stribution);
+		smdir->stribution = NULL;
+	}
+
+	// Actual free
+	free(smdir);
 }
 
 /*
  * MDIR thread
  */
 
+struct action_param {
+	struct mdir *mdir;
+	mdir_version version;
+	struct header *object, *subject;
+};
+
+static void do_delete(struct action_param const *param)
+{
+	mdir_del_request(param->mdir, param->version);
+}
+
+static void create_folder(struct mdir *parent, char const *relname)
+{
+	struct header *h = header_new();
+	(void)header_field_new(h, SC_TYPE_FIELD, SC_DIR_TYPE);
+	(void)header_field_new(h, SC_NAME_FIELD, relname);
+	if_fail (mdir_patch_request(parent, MDIR_ADD, h)) return;
+}
+
+static void do_copy_string(struct action_param const *param, char const *relname)
+{
+	// Name is relative to parent
+	char absname[PATH_MAX];
+	snprintf(absname, sizeof(absname), "%s/%s", mdir_name(param->mdir), relname);
+
+	struct mdir *destdir = mdir_lookup(absname);
+	on_error {	// create it then
+		error_clear();
+		if_fail (create_folder(param->mdir, relname)) return;
+		if_fail (destdir = mdir_lookup(absname)) return;
+	}
+
+	mdir_patch_request(destdir, MDIR_ADD, param->object);
+}
+
+static void do_copy_deref(struct action_param const *param, struct strib_deref const *deref)
+{
+	// We take the subfolder's name from on of the subject header fields
+	struct header_field *hf = header_find(param->subject, deref->name, NULL);
+	if (! hf) {
+		with_error(0, "Should use subfolder name from message field '%s' which is unset!", deref->name)
+			return;
+	}
+	do_copy_string(param, hf->value);
+}
+
+static void do_copy(struct action_param const *param, struct strib_action const *action)
+{
+	switch (action->dest_type) {
+		case DEST_STRING: do_copy_string(param, action->dest.string); break;
+		case DEST_DEREF:  do_copy_deref(param, &action->dest.deref); break;
+		default:          assert(0);
+	}
+}
+
+static void action_cb(struct header const *subject, struct strib_action const *action, void *data)
+{
+	(void)subject;
+	struct action_param const *param = data;
+
+	switch (action->type) {
+		case ACTION_DELETE: do_delete(param); break;
+		case ACTION_COPY:   do_copy(param, action); break;
+		case ACTION_MOVE:   if_succeed (do_copy(param, action)) { do_delete(param); } break;
+		default:            assert(0);
+	}
+}
+
+static void process_message(struct strib_mdir *smdir, struct header *subject, struct header *object, mdir_version version)
+{
+	assert(smdir->conf);
+	if (! smdir->stribution) return;
+
+	struct action_param param = {
+		.mdir = &smdir->mdir,
+		.version = version,
+		.object = object,
+		.subject = subject
+	};
+	strib_eval(smdir->stribution, subject, action_cb, &param);
+}
+
 static void process_put(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
+	(void)data;
 	struct strib_mdir *smdir = DOWNCAST(mdir, mdir, strib_mdir);
 	/* FIXME: we will not see transient msg again, so we can not reliably process locally generated
 	 *        messages. To fix this, we could add a flag to mdir_path_list() to list only synched msgs.
@@ -110,9 +205,37 @@ static void process_put(struct mdir *mdir, struct header *h, mdir_version versio
 	if (version < 0) return;
 
 	debug("Stributing message %"PRIversion, version);
-	(void)h;
-	(void)data;
 	smdir->last_done_version = version;
+
+	smdir->last_done_version = version;
+	smdir->last_done_version = version;
+	struct header *h_alternate = NULL;	// the header to use as subject to conf
+	// Find out message's type
+	struct header_field *hf_type = header_find(h, SC_TYPE_FIELD, NULL);
+	if (hf_type) {
+		if (0 == strcmp(hf_type->value, SC_DIR_TYPE)) return;	// Skip directories
+		if (0 == strcmp(hf_type->value, SC_STRIB_TYPE)) {
+			// For now we merely change the last_conf. Later, optionaly reset the cursor.
+			struct stribution *strib = strib_new(h);
+			on_error {	// just ignore this msg
+				return;
+			}
+			smdir->last_conf_version = version;
+			header_unref(smdir->conf);
+			smdir->conf = header_ref(h);
+			if (smdir->stribution) strib_del(smdir->stribution);
+			smdir->stribution = strib;
+			return;
+		}
+		if (0 == strcmp(hf_type->value, SC_MARK_TYPE)) {
+			if_fail (h_alternate = mdir_get_targeted_header(mdir, h)) return;	// FIXME: change this to return even deleted messages
+		}
+	}
+	
+	// Process h with smdir->stribution (if any), using h_alternate if set
+	process_message(smdir, h_alternate ? h_alternate : h, h, version);
+
+	if (h_alternate) header_unref(h_alternate);
 }
 
 static void *smdir_thread(void *arg)

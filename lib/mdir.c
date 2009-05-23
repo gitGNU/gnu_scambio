@@ -246,6 +246,14 @@ static struct mdir *lookup_rename(char const *old_path, char const *new_path)
 	return mdir;
 }
 
+char const *mdir_name(struct mdir *mdir)
+{
+	char const *name = mdir->path + mdir_root_len + 6;
+	if (name[0] == '\0') name = "/";
+	debug("mdir_name of '%s' is '%s'", mdir->path, name);
+	return name;
+}
+
 /*
  * Init
  */

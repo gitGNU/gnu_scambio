@@ -11,6 +11,7 @@ struct strib_mdir {
 	mdir_version last_done_version;
 	pth_t thread;	// may be NULL
 	struct mdir_cursor cursor;
+	struct stribution *stribution;	// may be NULL at start
 };
 
 #define STRIB_SECRET_FILE ".stribution"
@@ -18,5 +19,6 @@ struct strib_mdir {
 // Field names used in strib headers
 #define STRIB_LAST_CONF_VERSION "strib-last-conf-version"
 #define STRIB_LAST_DONE_VERSION "strib-last-done-version"
+#define STRIB_STANZA "strib-stanza"
 
 #endif

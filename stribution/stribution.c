@@ -20,8 +20,8 @@
 #include <string.h>
 #include <log.h>
 #include <assert.h>
+#include "scambio/header.h"
 #include "stribution.h"
-#include "header.h"
 
 /*
  * Data Definitions
@@ -52,9 +52,9 @@ static char const *op2str(enum strib_op op)
 static char const *action2str(enum action_type type)
 {
 	switch (type) {
-		case ACTION_DISCARD: return "discard";
-		case ACTION_COPY:    return "copyto";
-		case ACTION_MOVE:    return "moveto";
+		case ACTION_DELETE: return "delete";
+		case ACTION_COPY:   return "copyto";
+		case ACTION_MOVE:   return "moveto";
 	}
 	return "INVALID";
 }
@@ -76,7 +76,7 @@ static bool is_binary(enum strib_op op)
 
 static bool has_dest(enum action_type type)
 {
-	return type != ACTION_DISCARD;
+	return type != ACTION_DELETE;
 }
 
 static void test_dump(struct strib_test *test, void (*printer)(char const *fmt, ...))
@@ -138,7 +138,7 @@ static void strib_condition_dtor(struct strib_condition *cond)
 static void strib_action_dtor(struct strib_action *a)
 {
 	switch (a->type) {
-		case ACTION_DISCARD:
+		case ACTION_DELETE:
 			break;
 		case ACTION_COPY:
 		case ACTION_MOVE:
@@ -299,7 +299,7 @@ unsigned strib_eval(struct stribution *stribution, struct header const *head, st
 	for (unsigned t=0; t<stribution->nb_tests; t++) {
 		if (condition_eval(&stribution->tests[t].condition, head)) {
 			actions[nb_actions++] = &stribution->tests[t].action;
-			// TODO: break once a final state is reached (discard or move)
+			// TODO: break once a final state is reached (delete or move)
 		}
 	}
 	return nb_actions;

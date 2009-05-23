@@ -38,7 +38,7 @@ struct strib_test {
 		regex_t re_match;
 	} condition;
 	struct strib_action {
-		enum action_type { ACTION_DISCARD, ACTION_COPY, ACTION_MOVE } type;
+		enum action_type { ACTION_DELETE, ACTION_COPY, ACTION_MOVE } type;
 		enum dest_type { DEST_STRING, DEST_DEREF } dest_type;
 		union strib_dest {
 			char *string;
@@ -54,11 +54,10 @@ struct stribution {
 	struct strib_test tests[];	// Variable size
 };
 
-struct stribution *strib_new(char const *path);
-void strib_del(struct stribution *);
-void strib_dump(struct stribution *, void (*printer)(char const *fmt, ...));
-// Returns the length of actions
 struct header;
-unsigned strib_eval(struct stribution *, struct header const *, struct strib_action const *actions[]);
+struct stribution *strib_new(struct header const *);
+void strib_del(struct stribution *);
+void strib_dump(struct stribution const *, void (*printer)(char const *fmt, ...));
+void strib_eval(struct stribution const *, struct header const *, void (*action)(struct header const *, struct strib_action const *, void *data), void *data);
 
 #endif

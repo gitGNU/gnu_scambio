@@ -37,7 +37,7 @@ struct sc_msg {
 	struct mdirc *mdirc;	// backlink
 	struct header *header;	// original header
 	mdir_version version;
-	int status;	// 0 if the message is OK
+	int status;	// 0 if the message is OK, >0 for any error while uploading, -1 if properly deleted
 	LIST_HEAD(sc_marks, sc_msg) marks;	// list of marks referencing this message
 	struct sc_msg *marked;
 	int count;

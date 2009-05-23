@@ -36,7 +36,7 @@
  * Data Definitions
  */
 
-char const *mdir_name;
+char const *tracked_mdir_name;
 char const *local_path;
 unsigned local_path_len;
 struct mdir *mdir;
@@ -119,11 +119,11 @@ static void loop(void)
 int main(int nb_args, char const **args)
 {
 	if_fail (init()) return EXIT_FAILURE;
-	mdir_name = conf_get_str("SC_MEREFS_MDIR");
+	tracked_mdir_name = conf_get_str("SC_MEREFS_MDIR");
 	local_path = conf_get_str("SC_MEREFS_PATH");
 	struct option const options[] = {
 		{
-			'm', "mdir", OPT_STRING, &mdir_name, "The mdir path to track", {},
+			'm', "mdir", OPT_STRING, &tracked_mdir_name, "The mdir path to track", {},
 		}, {
 			'p', "path", OPT_STRING, &local_path, "The local path to synch it with", {},
 		}, {
@@ -131,17 +131,17 @@ int main(int nb_args, char const **args)
 		}
 	};
 	if_fail (option_parse(nb_args, args, options, sizeof_array(options))) return EXIT_FAILURE;
-	if (! mdir_name) option_missing("mdir");
+	if (! tracked_mdir_name) option_missing("mdir");
 	if (! local_path) option_missing("path");
 	if_fail (Mkdir(local_path)) return EXIT_FAILURE;
 	if (background) {
 		if_fail (daemonize("sc_merefs")) return EXIT_FAILURE;
 	}
 
-	debug("Keeping mdir '%s' in synch with path '%s'", mdir_name, local_path);
+	debug("Keeping mdir '%s' in synch with path '%s'", tracked_mdir_name, local_path);
 	local_path_len = strlen(local_path);
 	while (local_path_len>0 && local_path[local_path_len-1] == '/') local_path_len--;
-	if_fail (mdir = mdir_lookup(mdir_name)) return EXIT_FAILURE;
+	if_fail (mdir = mdir_lookup(tracked_mdir_name)) return EXIT_FAILURE;
 
 	if_fail (loop()) return EXIT_FAILURE;
 	return EXIT_SUCCESS;

@@ -9,7 +9,6 @@ sbin_PROGRAMS   = sc_stribution
 
 sc_stribution_SOURCES = \
 	main.c main.h \
-	strib_cache.c strib_cache.h \
 	strib_parser.y \
 	strib_lexer.l \
 	stribution.c stribution.h
