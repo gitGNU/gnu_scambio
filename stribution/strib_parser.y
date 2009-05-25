@@ -6,7 +6,10 @@
 #include <errno.h>
 #include <log.h>
 #include "scambio.h"
+#include "scambio/header.h"
+#include "misc.h"
 #include "stribution.h"
+#include "main.h"
  
 extern int lineno;
 void yyerror(char const *);
@@ -180,26 +183,44 @@ int yywrap()
 	return 1;
 } 
 
-int strib_parse(char const *filename, struct stribution *c)
+static void conf_write(struct header const *h, int fd)
+{
+	struct header_field *hf = NULL;
+	while (NULL != (hf = header_find(h, STRIB_STANZA, hf))) {
+		Write_strs(fd, hf->value, "\n", NULL);
+	}
+	Write(fd, "\n", 1);
+}
+
+void strib_parse(struct header const *h, struct stribution *c)
 {
 	stribution = c;
-	FILE *file = fopen(filename, "r");
+
+	char tmpf[] = "/tmp/strib_XXXXXX";
+	int fd = mkstemp(tmpf);
+	if_fail (conf_write(h, fd)) return;
+	debug("Using temp file '%s'", tmpf);
+
+	FILE *file = fdopen(fd, "r");
 	if (! file) {
-		error("Cannot open configuration file '%s' : %s", filename, strerror(errno));
-		return -1;
+		with_error(errno, "Cannot open configuration file '%s'", tmpf) return;
 	}
+	rewind(file);
+
 	yyin = file;
 	yydebug = 1;
 	lineno = 1;
-	int ret = 0;
 	do {
 		if (0 != yyparse()) {
-			ret = -1;
+			error_push(0, "Parse error");
 			break;
 		}
 	} while (!feof(yyin));
-	fclose(file);
+
 	yyin = NULL;
-	return ret;
+	(void)fclose(file);
+	(void)unlink(tmpf);
+
+	return;
 }
 

@@ -21,13 +21,14 @@
 #include <log.h>
 #include <assert.h>
 #include "scambio/header.h"
+#include "misc.h"
 #include "stribution.h"
 
 /*
  * Data Definitions
  */
 
-int strib_parse(char const *filename, struct stribution *c);
+void strib_parse(struct header const *, struct stribution *);
 
 /*
  * Private Functions
@@ -79,7 +80,7 @@ static bool has_dest(enum action_type type)
 	return type != ACTION_DELETE;
 }
 
-static void test_dump(struct strib_test *test, void (*printer)(char const *fmt, ...))
+static void test_dump(struct strib_test const *test, void (*printer)(char const *fmt, ...))
 {
 	if (is_constant(test->condition.op)) {
 		printer("%s", op2str(test->condition.op));
@@ -208,6 +209,13 @@ static int str2num(long long *num, char const *str)
 	return *end == '\0' ? 0:-1;
 }
 
+static char const *header_search(struct header const *h, char const *name)
+{
+	struct header_field *hf = header_find(h, name, NULL);
+	if (! hf) return NULL;
+	return hf->value;
+}
+
 static bool field_is_set(char const *field_name, struct header const *head)
 {
 	return NULL != header_search(head, field_name);
@@ -260,20 +268,16 @@ static bool condition_eval(struct strib_condition *cond, struct header const *he
  * Public Functions
  */
 
-struct stribution *strib_new(char const *filename)
+struct stribution *strib_new(struct header const *h)
 {
-	struct stribution *c = calloc(1, sizeof(*c) + NB_MAX_TESTS*sizeof(c->tests[0]));
-	if (! c) {
-		error("Cannot alloc a stribution for '%s'", filename);
-		return NULL;
-	}
-	if (0 != strib_parse(filename, c)) {
+	struct stribution *c = Calloc(sizeof(*c) + NB_MAX_TESTS*sizeof(c->tests[0]));
+	if_fail (strib_parse(h, c)) {
 		free(c);
 		return NULL;
 	}
+
 	struct stribution *smaller_c = realloc(c, sizeof(*c) + c->nb_tests*sizeof(c->tests[0]));
 	if (! smaller_c) {
-		warning("Cannot resize stribution for '%s'", filename);
 		return c;
 	}
 	return smaller_c;
@@ -285,7 +289,7 @@ void strib_del(struct stribution *stribution)
 	free(stribution);
 }
 
-void strib_dump(struct stribution *stribution, void (*printer)(char const *fmt, ...))
+void strib_dump(struct stribution const *stribution, void (*printer)(char const *fmt, ...))
 {
 	printer("Configuration :\n");
 	for (unsigned t=0; t<stribution->nb_tests; t++) {
