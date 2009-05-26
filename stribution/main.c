@@ -195,6 +195,40 @@ static void process_message(struct strib_mdir *smdir, struct header *subject, st
 	strib_eval(smdir->stribution, subject, action_cb, &param);
 }
 
+static void process_put_rec(struct strib_mdir *smdir, struct header *subject, struct header *object, mdir_version object_version)
+{
+	// Find out message's type
+	struct header_field *hf_type = header_find(subject, SC_TYPE_FIELD, NULL);
+	if (hf_type) {
+		if (0 == strcmp(hf_type->value, SC_DIR_TYPE)) return;	// Skip directories
+		if (0 == strcmp(hf_type->value, SC_STRIB_TYPE)) {
+			if (object != subject) {
+				// when dealing with a mark, just skip everything if the original message
+				// is a strib message
+				return;
+			}
+			// Otherwise, update the current configuration
+			struct stribution *strib = strib_new(subject);
+			on_error return;	// just ignore this msg
+			smdir->last_conf_version = object_version;
+			header_unref(smdir->conf);
+			smdir->conf = header_ref(subject);
+			if (smdir->stribution) strib_del(smdir->stribution);
+			smdir->stribution = strib;
+			return;
+		}
+		if (0 == strcmp(hf_type->value, SC_MARK_TYPE)) {
+			struct header *alt_subject = mdir_get_targeted_header(&smdir->mdir, subject);	// FIXME: change this to return even deleted messages
+			on_error return;
+			process_put_rec(smdir, alt_subject, object, object_version);
+			header_unref(alt_subject);
+			return;
+		}
+	}
+	
+	process_message(smdir, subject, object, object_version);
+}
+
 static void process_put(struct mdir *mdir, struct header *h, mdir_version version, void *data)
 {
 	(void)data;
@@ -206,36 +240,8 @@ static void process_put(struct mdir *mdir, struct header *h, mdir_version versio
 
 	debug("Stributing message %"PRIversion, version);
 	smdir->last_done_version = version;
-
-	smdir->last_done_version = version;
-	smdir->last_done_version = version;
-	struct header *h_alternate = NULL;	// the header to use as subject to conf
-	// Find out message's type
-	struct header_field *hf_type = header_find(h, SC_TYPE_FIELD, NULL);
-	if (hf_type) {
-		if (0 == strcmp(hf_type->value, SC_DIR_TYPE)) return;	// Skip directories
-		if (0 == strcmp(hf_type->value, SC_STRIB_TYPE)) {
-			// For now we merely change the last_conf. Later, optionaly reset the cursor.
-			struct stribution *strib = strib_new(h);
-			on_error {	// just ignore this msg
-				return;
-			}
-			smdir->last_conf_version = version;
-			header_unref(smdir->conf);
-			smdir->conf = header_ref(h);
-			if (smdir->stribution) strib_del(smdir->stribution);
-			smdir->stribution = strib;
-			return;
-		}
-		if (0 == strcmp(hf_type->value, SC_MARK_TYPE)) {
-			if_fail (h_alternate = mdir_get_targeted_header(mdir, h)) return;	// FIXME: change this to return even deleted messages
-		}
-	}
 	
-	// Process h with smdir->stribution (if any), using h_alternate if set
-	process_message(smdir, h_alternate ? h_alternate : h, h, version);
-
-	if (h_alternate) header_unref(h_alternate);
+	process_put_rec(smdir, h, h, version);
 }
 
 static void *smdir_thread(void *arg)
