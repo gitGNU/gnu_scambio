@@ -57,8 +57,9 @@ static void notify(struct mdirb *mdirb, enum mdir_action action, struct sc_msg *
  * MDir allocator
  */
 
-static struct mdir *mdirb_alloc(void)
+static struct mdir *mdirb_alloc(char const *path)
 {
+	(void)path;
 	struct mdirb *mdirb = Malloc(sizeof(*mdirb));
 	LIST_INIT(&mdirb->msgs);
 	LIST_INIT(&mdirb->listeners);
