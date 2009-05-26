@@ -297,15 +297,12 @@ void strib_dump(struct stribution const *stribution, void (*printer)(char const 
 	}
 }
 
-unsigned strib_eval(struct stribution *stribution, struct header const *head, struct strib_action const *actions[])
+void strib_eval(struct stribution *stribution, struct header const *h, void (*cb)(struct header const *, struct strib_action const *, void *), void *data)
 {
-	unsigned nb_actions = 0;
 	for (unsigned t=0; t<stribution->nb_tests; t++) {
-		if (condition_eval(&stribution->tests[t].condition, head)) {
-			actions[nb_actions++] = &stribution->tests[t].action;
-			// TODO: break once a final state is reached (delete or move)
+		if (condition_eval(&stribution->tests[t].condition, h)) {
+			cb(h, &stribution->tests[t].action, data);
 		}
 	}
-	return nb_actions;
 }
 

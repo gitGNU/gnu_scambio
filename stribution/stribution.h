@@ -58,6 +58,6 @@ struct header;
 struct stribution *strib_new(struct header const *);
 void strib_del(struct stribution *);
 void strib_dump(struct stribution const *, void (*printer)(char const *fmt, ...));
-void strib_eval(struct stribution const *, struct header const *, void (*action)(struct header const *, struct strib_action const *, void *data), void *data);
+void strib_eval(struct stribution *, struct header const *, void (*action)(struct header const *, struct strib_action const *, void *data), void *data);
 
 #endif
