@@ -209,7 +209,11 @@ static void process_put_rec(struct strib_mdir *smdir, struct header *subject, st
 			}
 			// Otherwise, update the current configuration
 			struct stribution *strib = strib_new(subject);
-			on_error return;	// just ignore this msg
+			on_error {
+				error_clear();
+				mdir_mark_error(&smdir->mdir, object_version, "Cannot parse strib config");
+				return;	// just ignore this msg
+			}
 			smdir->last_conf_version = object_version;
 			header_unref(smdir->conf);
 			smdir->conf = header_ref(subject);
