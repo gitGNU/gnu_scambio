@@ -224,6 +224,7 @@ mdir_version header_target(struct header *);
 #define SC_STATUS_FIELD      "sc-status"
 #define SC_URL_FIELD         "sc-url"
 #define SC_HAVE_READ_FIELD   "sc-read"
+#define SC_ERRMSG_FIELD      "sc-errmsg"
 #define SC_ALIAS_FIELD       "sc-alias"
 #define SC_ALLOW_WRITE_FIELD "sc-allow-write"
 #define SC_ALLOW_READ_FIELD  "sc-allow-read"

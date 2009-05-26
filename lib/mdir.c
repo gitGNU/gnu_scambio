@@ -853,14 +853,23 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
-void mdir_mark_read(struct mdir *mdir, char const *username, mdir_version version)
+void mdir_mark(struct mdir *mdir, mdir_version version, char const *field, char const *value)
 {
-	debug("Marking version %"PRIversion" as read by user '%s'", version, username);
+	debug("Marking version %"PRIversion" with '%s: %s'", version, field, value);
 	struct header *h = header_new();
 	(void)header_field_new(h, SC_TYPE_FIELD, SC_MARK_TYPE);
-	(void)header_field_new(h, SC_HAVE_READ_FIELD, username);
 	(void)header_field_new(h, SC_TARGET_FIELD, mdir_version2str(version));
+	(void)header_field_new(h, field, value);
 	mdir_patch_request(mdir, MDIR_ADD, h);
 	header_unref(h);
 }
 
+void mdir_mark_read(struct mdir *mdir, mdir_version version, char const *username)
+{
+	mdir_mark(mdir, version, SC_HAVE_READ_FIELD, username);
+}
+
+void mdir_mark_error(struct mdir *mdir, mdir_version version, char const *msg)
+{
+	mdir_mark(mdir, version, SC_ERRMSG_FIELD, msg);
+}

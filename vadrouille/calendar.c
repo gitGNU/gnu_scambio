@@ -224,7 +224,7 @@ static void display_event(struct cal_msg *cmsg, struct cal_dir_view *view)
 
 	// We do not call sc_msg_mark_read() because we do not want the mdir to be refreshed right now
 	if (! cmsg->msg.was_read && ! cmsg->marked) {
-		mdir_mark_read(&cmsg->msg.mdirb->mdir, mdir_user_name(user), cmsg->msg.version);
+		mdir_mark_read(&cmsg->msg.mdirb->mdir, cmsg->msg.version, mdir_user_name(user));
 		error_clear();
 		// Avoid to mark the same event several times, but we cannot mess with
 		// mdirb managed was_read flags in msg (otherwise mdirb->nb_unread would be false).

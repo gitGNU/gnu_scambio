@@ -132,7 +132,7 @@ void sc_msg_mark_read(struct sc_msg *msg)
 {
 	debug("Mark msg %"PRIversion" as read", msg->version);
 	if (! msg->was_read) {
-		if_succeed (mdir_mark_read(&msg->mdirb->mdir, mdir_user_name(user), msg->version)) {
+		if_succeed (mdir_mark_read(&msg->mdirb->mdir, msg->version, mdir_user_name(user))) {
 			mdirb_refresh(msg->mdirb);
 		}
 		error_clear();

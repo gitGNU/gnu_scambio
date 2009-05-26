@@ -183,8 +183,13 @@ enum mdir_action mdir_str2action(char const *str);
 bool mdir_is_transient(struct mdir *mdir);
 struct header *mdir_get_targeted_header(struct mdir *mdir, struct header *h);
 
-/* To mark a message as "seen", we have a special patch that say user X have seen message Y.
- */
-void mdir_mark_read(struct mdir *mdir, char const *username, mdir_version version);
+// To mark a message as "seen", we have a special patch that say user X have seen message Y.
+void mdir_mark_read(struct mdir *mdir, mdir_version version, char const *username);
+
+// To mark a message as erroneous, use this.
+void mdir_mark_error(struct mdir *mdir, mdir_version version, char const *msg);
+
+// Or use this generic version.
+void mdir_mark(struct mdir *mdir, mdir_version version, char const *field, char const *value);
 
 #endif
