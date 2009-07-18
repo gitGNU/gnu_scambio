@@ -176,6 +176,7 @@ void header_digest(struct header *, size_t, char *buffer);
  */
 
 // Common values for type field (SC_TYPE_FIELD)
+// FIXME: This is dead stupid to have a type field while promoting duck-typing.
 #define SC_DIR_TYPE      "dir"
 #define SC_MAIL_TYPE     "mail"
 #define SC_CAL_TYPE      "cal"
@@ -189,11 +190,11 @@ void header_digest(struct header *, size_t, char *buffer);
 
 /* Tells wether this header has a specific type.
  */
-bool header_has_type(struct header *, char const *type);
+bool header_has_type(struct header const *, char const *type);
 
 /* Specifically, is it a directory (as used by Scambio for its message directory tree) ?
  */
-bool header_is_directory(struct header *);
+bool header_is_directory(struct header const *);
 
 /* Some headers are used by Scambio to reference other headers (notably, to delete
  * a header we add a new header which targets the header to be deleted).
@@ -201,7 +202,7 @@ bool header_is_directory(struct header *);
  * or throws an error.
  */
 #include "scambio/mdir.h"
-mdir_version header_target(struct header *);
+mdir_version header_target(struct header const *);
 
 /*
  * Some "well known" header field names used by Scambio.

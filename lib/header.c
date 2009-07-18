@@ -425,18 +425,18 @@ void header_digest(struct header *h, size_t size, char *buffer)
 	varbuf_dtor(&vb);
 }
 
-bool header_has_type(struct header *h, char const *type)
+bool header_has_type(struct header const *h, char const *type)
 {
 	struct header_field *hf = header_find(h, SC_TYPE_FIELD, NULL);
 	return hf && 0==strcmp(hf->value, type);
 }
 
-bool header_is_directory(struct header *h)
+bool header_is_directory(struct header const *h)
 {
 	return header_has_type(h, SC_DIR_TYPE);
 }
 
-mdir_version header_target(struct header *h)
+mdir_version header_target(struct header const *h)
 {
 	struct header_field *hf = header_find(h, SC_TARGET_FIELD, NULL);
 	if (! hf) with_error(0, "Header lacks a target") return 0;

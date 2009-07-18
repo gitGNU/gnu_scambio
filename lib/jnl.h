@@ -34,7 +34,11 @@ mdir_version jnl_patch(struct jnl *, enum mdir_action, struct header *);
 void jnl_mark_del(struct jnl *, mdir_version to_del);
 mdir_version jnl_patch_blank(struct jnl *jnl);
 // Will return NULL if header was deleted
-struct header *jnl_read(struct jnl *, unsigned index, enum mdir_action *action);
+struct header *jnl_read(struct jnl *, unsigned index, enum mdir_action *);
 bool is_jnl_file(char const *filename);
+// Return the jnl containing this patch, or throw an error.
+struct jnl *jnl_get_by_version(struct mdir *, mdir_version);
+// Write the given version as this index last_mark, and return the previous one.
+mdir_version jnl_replace_last_mark(struct jnl *, unsigned index, mdir_version);
 
 #endif

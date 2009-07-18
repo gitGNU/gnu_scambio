@@ -333,15 +333,10 @@ struct header *mdir_read_next(struct mdir *mdir, mdir_version *version, enum mdi
 
 struct header *mdir_read(struct mdir *mdir, mdir_version version, enum mdir_action *action)
 {
-	struct jnl *jnl;
 	struct header *header;
-	// Look for the jnl
-	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
-		if (jnl->version <= version && jnl->version + jnl->nb_patches > version) {
-			break;
-		}
-	}
-	if (! jnl) with_error(0, "No such version (%"PRIversion")", version) return NULL;
+	struct jnl *jnl;
+	// Find the proper journal
+	if_fail (jnl = jnl_get_by_version(mdir, version)) return NULL;
 	// Extract header and action
 	if_fail (header = jnl_read(jnl, version-jnl->version, action)) return NULL;
 	return header;
@@ -514,6 +509,18 @@ static void mdir_confirm_add(struct mdir *mdir, struct header *header, mdir_vers
 	}
 }
 
+// Return the version number refered to in header, or 0 if header is not a mark.
+static mdir_version is_mark_for(struct header const *header)
+{
+	if (! header_has_type(header, SC_MARK_TYPE)) return 0;
+	mdir_version target = header_target(header);
+	on_error {
+		error_clear();
+		return 0;
+	}
+	return target;
+}
+
 mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct header *header, unsigned nb_deleted)
 {
 	debug("patch mdir %s (with %u dels)", mdir_id(mdir), nb_deleted);
@@ -531,12 +538,19 @@ mdir_version mdir_patch(struct mdir *mdir, enum mdir_action action, struct heade
 		}
 		on_error break;
 		// Either use the last journal, or create a new one
-		struct jnl *jnl = last_jnl(mdir);
-		on_error break;
+		struct jnl *jnl, *target_jnl;
+		if_fail (jnl = last_jnl(mdir)) break;
 		if_fail (version = jnl_patch(jnl, action, header)) break;
 		// FIXME: if these fails we end up with an incomplete patch in the journal
 		if (action == MDIR_ADD) {
 			if_fail (mdir_confirm_add(mdir, header, version)) break;
+		}
+		// Handle mark index
+		mdir_version const marked = is_mark_for(header);
+		if (marked) {	// update target mark index, which can be located in another journal
+			if_fail (target_jnl = jnl_get_by_version(mdir, marked)) break;
+			mdir_version last_mark = jnl_replace_last_mark(target_jnl, marked-target_jnl->version, version);
+			(void)jnl_replace_last_mark(jnl, version-jnl->version, last_mark);
 		}
 	} while (0);
 	(void)pth_rwlock_release(&mdir->rwlock);
@@ -853,6 +867,7 @@ bool mdir_is_transient(struct mdir *mdir)
 	return mdir_id(mdir)[0] == '_';
 }
 
+// Request that a new mark be appended to a message
 void mdir_mark(struct mdir *mdir, mdir_version version, char const *field, char const *value)
 {
 	debug("Marking version %"PRIversion" with '%s: %s'", version, field, value);
@@ -864,11 +879,13 @@ void mdir_mark(struct mdir *mdir, mdir_version version, char const *field, char 
 	header_unref(h);
 }
 
+// Mark a message as read
 void mdir_mark_read(struct mdir *mdir, mdir_version version, char const *username)
 {
 	mdir_mark(mdir, version, SC_HAVE_READ_FIELD, username);
 }
 
+// Mark a message as erroneous
 void mdir_mark_error(struct mdir *mdir, mdir_version version, char const *msg)
 {
 	mdir_mark(mdir, version, SC_ERRMSG_FIELD, msg);

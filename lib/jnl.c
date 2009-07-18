@@ -43,6 +43,7 @@ void (*jnl_free)(struct jnl *);
 
 struct index_entry {
 	off_t offset;
+	mdir_version last_mark;	// order reversed (we insert at list head). 0 for none.
 };
 
 /*
@@ -187,19 +188,26 @@ struct jnl *jnl_new_empty(struct mdir *mdir, mdir_version start_version)
  * Patch
  */
 
-// read index file to find patch offset
+static void jnl_idx_read(struct jnl *jnl, unsigned index, struct index_entry *ies, unsigned nb_entries)
+{
+	ReadFrom(ies, jnl->idx_fd, index*sizeof(*ies), nb_entries*sizeof(*ies));
+}
+
+static void jnl_idx_write(struct jnl *jnl, unsigned index, struct index_entry *ie)
+{
+	WriteTo(jnl->idx_fd, index*sizeof(*ie), ie, sizeof(*ie));
+}
+
+// read index file to find patch offset and size
 static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 {
 	struct index_entry ie[2];
 	if (size) *size = 0;
 	if (index < jnl->nb_patches - 1) {	// can read 2 entires
-		ReadFrom(ie, jnl->idx_fd, index*sizeof(*ie), 2*sizeof(*ie));
-		on_error return 0;
+		if_fail (jnl_idx_read(jnl, index, ie, 2)) return 0;
 	} else {	// at end of index file, will need log file size
-		ReadFrom(ie, jnl->idx_fd, index*sizeof(*ie), 1*sizeof(*ie));
-		on_error return 0;
-		ie[1].offset = filesize(jnl->patch_fd);
-		on_error return 0;
+		if_fail (jnl_idx_read(jnl, index, ie, 1)) return 0;
+		if_fail (ie[1].offset = filesize(jnl->patch_fd)) return 0;
 	}
 	assert(ie[1].offset > ie[0].offset);
 	if (size) *size = ie[1].offset - ie[0].offset;
@@ -209,6 +217,7 @@ static off_t jnl_offset_size(struct jnl *jnl, unsigned index, size_t *size)
 mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *header)
 {
 	struct index_entry ie;
+	ie.last_mark = 0;
 	if_fail (ie.offset = filesize(jnl->patch_fd)) return 0;
 	// Write the index
 	if_fail (Write(jnl->idx_fd, &ie, sizeof(ie))) return 0;	// FIXME: on short writes, truncate
@@ -218,6 +227,16 @@ mdir_version jnl_patch(struct jnl *jnl, enum mdir_action action, struct header *
 	unless_error jnl->nb_patches ++;
 	// FIXME: triggers all listeners that something was appended
 	return jnl->version + jnl->nb_patches -1;
+}
+
+mdir_version jnl_replace_last_mark(struct jnl *jnl, unsigned index, mdir_version new_last_mark)
+{
+	struct index_entry ie;
+	if_fail (jnl_idx_read(jnl, index, &ie, 1)) return 0;
+	mdir_version prev = ie.last_mark;
+	ie.last_mark = new_last_mark;
+	jnl_idx_write(jnl, index, &ie);
+	return prev;
 }
 
 void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
@@ -239,6 +258,7 @@ void jnl_mark_del(struct jnl *jnl, mdir_version to_del)
 mdir_version jnl_patch_blank(struct jnl *jnl)
 {
 	struct index_entry ie;
+	ie.last_mark = 0;
 	if_fail (ie.offset = filesize(jnl->patch_fd)) return 0;
 	// Write the index
 	if_fail (Write(jnl->idx_fd, &ie, sizeof(ie))) return 0; // FIXME: on short writes, truncate
@@ -298,4 +318,15 @@ bool is_jnl_file(char const *filename)
 	int len = strlen(filename);
 	if (len < 4) return false;
 	return 0 == strcmp(".log", filename+len-4);
+}
+
+struct jnl *jnl_get_by_version(struct mdir *mdir, mdir_version version)
+{
+	struct jnl *jnl;
+	STAILQ_FOREACH(jnl, &mdir->jnls, entry) {
+		if (jnl->version <= version && jnl->version + jnl->nb_patches > version) {
+			return jnl;
+		}
+	}
+	with_error(0, "No such version (%"PRIversion")", version) return NULL;
 }
