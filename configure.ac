@@ -3,9 +3,10 @@
 
 AC_PREREQ(2.59)
 AC_INIT(scambio, 0.1, rixed@free.fr)
+AC_CONFIG_AUX_DIR([build-aux])
+AM_INIT_AUTOMAKE([-Wall foreign])
 AC_CONFIG_SRCDIR([mdsyncd])
 AC_CONFIG_HEADER([commons/config.h])
-AM_INIT_AUTOMAKE
 
 # Checks for programs.
 AM_PROG_LEX
